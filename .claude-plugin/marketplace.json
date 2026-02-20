@@ -1,8 +1,7 @@
 {
   "name": "claude-quest",
   "owner": {
-    "name": "MechanicalTyler",
-    "email": ""
+    "name": "MechanicalTyler"
   },
   "metadata": {
     "description": "Claude Code plugins for software development teams"
