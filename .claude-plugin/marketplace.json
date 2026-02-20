@@ -1,0 +1,39 @@
+{
+  "name": "claude-quest",
+  "owner": {
+    "name": "MechanicalTyler",
+    "email": ""
+  },
+  "metadata": {
+    "description": "Claude Code plugins for software development teams"
+  },
+  "plugins": [
+    {
+      "name": "audit-trail",
+      "source": {
+        "source": "github",
+        "repo": "MechanicalTyler/claude-plugin-audit-trail"
+      },
+      "description": "Logs every Claude Code tool call (input and output) to JSON files in ~/.claude/logs/ for auditability and debugging",
+      "version": "1.0.0"
+    },
+    {
+      "name": "notifications",
+      "source": {
+        "source": "github",
+        "repo": "MechanicalTyler/claude-plugin-notifications"
+      },
+      "description": "System notifications when Claude completes tasks or needs your attention (macOS + Slack)",
+      "version": "1.0.0"
+    },
+    {
+      "name": "dev-workflow",
+      "source": {
+        "source": "github",
+        "repo": "MechanicalTyler/claude-plugin-dev-workflow"
+      },
+      "description": "Role-based development workflow subagents with pluggable PM and notes adapters",
+      "version": "1.0.0"
+    }
+  ]
+}
