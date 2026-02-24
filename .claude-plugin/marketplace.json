@@ -14,7 +14,7 @@
         "repo": "MechanicalTyler/claude-plugin-audit-trail"
       },
       "description": "Logs every Claude Code tool call (input and output) to JSON files in ~/.claude/logs/ for auditability and debugging",
-      "version": "1.0.0"
+      "version": "1.0.1"
     },
     {
       "name": "notifications",
@@ -23,7 +23,7 @@
         "repo": "MechanicalTyler/claude-plugin-notifications"
       },
       "description": "System notifications when Claude completes tasks or needs your attention (macOS + Slack)",
-      "version": "1.0.0"
+      "version": "1.0.1"
     },
     {
       "name": "dev-workflow",
@@ -41,7 +41,7 @@
         "repo": "MechanicalTyler/claude-plugin-guardrails-git"
       },
       "description": "Git and GitHub safety guards: branch protection, commit boilerplate blocking, PR boilerplate blocking, timeout enforcement for git/gh commands",
-      "version": "1.0.0"
+      "version": "1.0.1"
     },
     {
       "name": "guardrails-bash",
@@ -50,7 +50,7 @@
         "repo": "MechanicalTyler/claude-plugin-guardrails-bash"
       },
       "description": "Bash and shell safety guards: blocks rm -rf, /tmp usage, cat/echo file writes, cd outside repo, and unsafe gradle commands",
-      "version": "1.0.0"
+      "version": "1.0.1"
     },
     {
       "name": "guardrails-docker",
@@ -59,7 +59,7 @@
         "repo": "MechanicalTyler/claude-plugin-guardrails-docker"
       },
       "description": "Docker safety guards: enforces timeout on docker build commands",
-      "version": "1.0.0"
+      "version": "1.0.1"
     },
     {
       "name": "guardrails-xcode",
@@ -68,7 +68,7 @@
         "repo": "MechanicalTyler/claude-plugin-guardrails-xcode"
       },
       "description": "Xcode safety guards: enforces timeout on xcodebuild commands",
-      "version": "1.0.0"
+      "version": "1.0.1"
     }
   ]
 }
