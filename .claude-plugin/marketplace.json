@@ -23,7 +23,7 @@
         "repo": "MechanicalTyler/claude-plugin-notifications"
       },
       "description": "System notifications when Claude completes tasks or needs your attention (macOS + Slack)",
-      "version": "1.1.0"
+      "version": "1.1.1"
     },
     {
       "name": "dev-workflow",
@@ -32,7 +32,7 @@
         "repo": "MechanicalTyler/claude-plugin-dev-workflow"
       },
       "description": "Role-based development workflow subagents with pluggable PM and notes adapters",
-      "version": "1.5.1"
+      "version": "1.5.2"
     },
     {
       "name": "guardrails-git",
