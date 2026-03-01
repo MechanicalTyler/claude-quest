@@ -32,7 +32,7 @@
         "repo": "MechanicalTyler/claude-plugin-dev-workflow"
       },
       "description": "Role-based development workflow subagents with pluggable PM and notes adapters",
-      "version": "1.5.2"
+      "version": "1.5.3"
     },
     {
       "name": "guardrails-git",
