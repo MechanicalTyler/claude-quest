@@ -1,0 +1,105 @@
+name: Sync Plugin Version
+
+on:
+  repository_dispatch:
+    types: [plugin-version-bump]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: sync-plugin-${{ github.event.client_payload.plugin }}
+      cancel-in-progress: false
+    env:
+      PLUGIN: ${{ github.event.client_payload.plugin }}
+      VERSION: ${{ github.event.client_payload.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify plugin exists in marketplace.json
+        run: |
+          MATCH=$(jq --arg name "$PLUGIN" '[.plugins[] | select(.name == $name)] | length' .claude-plugin/marketplace.json)
+          if [ "$MATCH" -eq 0 ]; then
+            echo "::error::Plugin '$PLUGIN' not found in .claude-plugin/marketplace.json"
+            exit 1
+          fi
+
+      - name: Check if version already matches
+        id: version-check
+        run: |
+          CURRENT=$(jq -r --arg name "$PLUGIN" '.plugins[] | select(.name == $name) | .version' .claude-plugin/marketplace.json)
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          if [ "$CURRENT" = "$VERSION" ]; then
+            echo "Version already matches ($VERSION), nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Patch marketplace.json
+        if: steps.version-check.outputs.skip == 'false'
+        run: |
+          jq --arg name "$PLUGIN" --arg ver "$VERSION" \
+            '.plugins |= map(if .name == $name then .version = $ver else . end)' \
+            .claude-plugin/marketplace.json > updated.json
+          mv updated.json .claude-plugin/marketplace.json
+
+      - name: Configure git
+        if: steps.version-check.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Delete stale branch if exists
+        if: steps.version-check.outputs.skip == 'false'
+        # Handles the case where a previous run for this plugin+version failed after
+        # pushing the branch but before merging. Safe for race conditions: if two
+        # dispatches arrive simultaneously, the second run will have already been
+        # stopped by the version-check skip=true path once the first run merges.
+        run: |
+          git push origin --delete "chore/bump-$PLUGIN-$VERSION" 2>/dev/null || true
+
+      - name: Commit and push
+        if: steps.version-check.outputs.skip == 'false'
+        run: |
+          git checkout -b "chore/bump-$PLUGIN-$VERSION"
+          git add .claude-plugin/marketplace.json
+          git commit -m "chore: bump $PLUGIN to $VERSION"
+          git push origin "chore/bump-$PLUGIN-$VERSION"
+
+      - name: Determine change type
+        if: steps.version-check.outputs.skip == 'false'
+        id: change-type
+        env:
+          OLD: ${{ steps.version-check.outputs.current }}
+        run: |
+          SMALLEST=$(printf '%s\n' "$OLD" "$VERSION" | sort -V | head -1)
+          if [ "$SMALLEST" = "$VERSION" ]; then
+            echo "type=downgrade" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=upgrade" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR
+        if: steps.version-check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGE_TYPE: ${{ steps.change-type.outputs.type }}
+          OLD: ${{ steps.version-check.outputs.current }}
+        run: |
+          gh pr create \
+            --title "chore: bump $PLUGIN to $VERSION" \
+            --body "Automated $CHANGE_TYPE: \`$PLUGIN\` $OLD → $VERSION" \
+            --base main \
+            --head "chore/bump-$PLUGIN-$VERSION"
+
+      - name: Merge PR
+        if: steps.version-check.outputs.skip == 'false'
+        run: |
+          gh pr merge "chore/bump-$PLUGIN-$VERSION" --squash --delete-branch
+        env:
+          GH_TOKEN: ${{ github.token }}
