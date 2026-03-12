@@ -11,12 +11,17 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    concurrency:
+      group: sync-plugin-${{ github.event.client_payload.plugin }}
+      cancel-in-progress: false
+    env:
+      PLUGIN: ${{ github.event.client_payload.plugin }}
+      VERSION: ${{ github.event.client_payload.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Verify plugin exists in marketplace.json
         run: |
-          PLUGIN="${{ github.event.client_payload.plugin }}"
           MATCH=$(jq --arg name "$PLUGIN" '[.plugins[] | select(.name == $name)] | length' .claude-plugin/marketplace.json)
           if [ "$MATCH" -eq 0 ]; then
             echo "::error::Plugin '$PLUGIN' not found in .claude-plugin/marketplace.json"
@@ -26,22 +31,18 @@ jobs:
       - name: Check if version already matches
         id: version-check
         run: |
-          PLUGIN="${{ github.event.client_payload.plugin }}"
-          VERSION="${{ github.event.client_payload.version }}"
           CURRENT=$(jq -r --arg name "$PLUGIN" '.plugins[] | select(.name == $name) | .version' .claude-plugin/marketplace.json)
-          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           if [ "$CURRENT" = "$VERSION" ]; then
             echo "Version already matches ($VERSION), nothing to do."
-            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Patch marketplace.json
         if: steps.version-check.outputs.skip == 'false'
         run: |
-          PLUGIN="${{ github.event.client_payload.plugin }}"
-          VERSION="${{ github.event.client_payload.version }}"
           jq --arg name "$PLUGIN" --arg ver "$VERSION" \
             '.plugins |= map(if .name == $name then .version = $ver else . end)' \
             .claude-plugin/marketplace.json > updated.json
@@ -60,15 +61,11 @@ jobs:
         # dispatches arrive simultaneously, the second run will have already been
         # stopped by the version-check skip=true path once the first run merges.
         run: |
-          PLUGIN="${{ github.event.client_payload.plugin }}"
-          VERSION="${{ github.event.client_payload.version }}"
           git push origin --delete "chore/bump-$PLUGIN-$VERSION" 2>/dev/null || true
 
       - name: Commit and push
         if: steps.version-check.outputs.skip == 'false'
         run: |
-          PLUGIN="${{ github.event.client_payload.plugin }}"
-          VERSION="${{ github.event.client_payload.version }}"
           git checkout -b "chore/bump-$PLUGIN-$VERSION"
           git add .claude-plugin/marketplace.json
           git commit -m "chore: bump $PLUGIN to $VERSION"
@@ -79,18 +76,15 @@ jobs:
         id: change-type
         run: |
           OLD="${{ steps.version-check.outputs.current }}"
-          NEW="${{ github.event.client_payload.version }}"
-          if printf '%s\n' "$OLD" "$NEW" | sort -V | head -1 | grep -q "^$NEW$"; then
-            echo "type=downgrade" >> $GITHUB_OUTPUT
+          if printf '%s\n' "$OLD" "$VERSION" | sort -V | head -1 | grep -qF "$VERSION"; then
+            echo "type=downgrade" >> "$GITHUB_OUTPUT"
           else
-            echo "type=upgrade" >> $GITHUB_OUTPUT
+            echo "type=upgrade" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Open PR
         if: steps.version-check.outputs.skip == 'false'
         run: |
-          PLUGIN="${{ github.event.client_payload.plugin }}"
-          VERSION="${{ github.event.client_payload.version }}"
           OLD="${{ steps.version-check.outputs.current }}"
           gh pr create \
             --title "chore: bump $PLUGIN to $VERSION" \
@@ -104,8 +98,6 @@ jobs:
       - name: Merge PR
         if: steps.version-check.outputs.skip == 'false'
         run: |
-          PLUGIN="${{ github.event.client_payload.plugin }}"
-          VERSION="${{ github.event.client_payload.version }}"
           gh pr merge "chore/bump-$PLUGIN-$VERSION" --squash --delete-branch
         env:
           GH_TOKEN: ${{ github.token }}
