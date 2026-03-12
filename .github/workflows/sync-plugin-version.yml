@@ -74,9 +74,11 @@ jobs:
       - name: Determine change type
         if: steps.version-check.outputs.skip == 'false'
         id: change-type
+        env:
+          OLD: ${{ steps.version-check.outputs.current }}
         run: |
-          OLD="${{ steps.version-check.outputs.current }}"
-          if printf '%s\n' "$OLD" "$VERSION" | sort -V | head -1 | grep -qF "$VERSION"; then
+          SMALLEST=$(printf '%s\n' "$OLD" "$VERSION" | sort -V | head -1)
+          if [ "$SMALLEST" = "$VERSION" ]; then
             echo "type=downgrade" >> "$GITHUB_OUTPUT"
           else
             echo "type=upgrade" >> "$GITHUB_OUTPUT"
@@ -84,16 +86,16 @@ jobs:
 
       - name: Open PR
         if: steps.version-check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGE_TYPE: ${{ steps.change-type.outputs.type }}
+          OLD: ${{ steps.version-check.outputs.current }}
         run: |
-          OLD="${{ steps.version-check.outputs.current }}"
           gh pr create \
             --title "chore: bump $PLUGIN to $VERSION" \
             --body "Automated $CHANGE_TYPE: \`$PLUGIN\` $OLD → $VERSION" \
             --base main \
             --head "chore/bump-$PLUGIN-$VERSION"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CHANGE_TYPE: ${{ steps.change-type.outputs.type }}
 
       - name: Merge PR
         if: steps.version-check.outputs.skip == 'false'
