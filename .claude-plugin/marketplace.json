@@ -69,6 +69,12 @@
       },
       "description": "Xcode safety guards: enforces timeout on xcodebuild commands",
       "version": "1.0.1"
+    },
+    {
+      "name": "claude-quest",
+      "source": "./plugins/quest-utils",
+      "description": "Skills and utilities for maintaining and integrating with the claude-quest plugin marketplace",
+      "version": "1.0.0"
     }
   ]
 }
