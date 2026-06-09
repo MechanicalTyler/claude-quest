@@ -50,7 +50,7 @@
         "repo": "MechanicalTyler/claude-plugin-guardrails-bash"
       },
       "description": "Bash and shell safety guards: blocks rm -rf, /tmp usage, cat/echo file writes, cd outside repo, and unsafe gradle commands",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "name": "guardrails-docker",
