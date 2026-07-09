@@ -1,0 +1,9 @@
+{
+  "name": "guardrails-docker",
+  "version": "1.0.1",
+  "description": "Docker safety guards for Claude: enforces timeout on docker build commands",
+  "license": "MIT",
+  "hooks": {
+    "PreToolUse": "hooks/guardrails_docker_pre_tool_use.py"
+  }
+}

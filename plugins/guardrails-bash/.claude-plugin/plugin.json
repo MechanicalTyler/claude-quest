@@ -1,0 +1,10 @@
+{
+  "name": "guardrails-bash",
+  "description": "Bash and shell safety guards for Claude: blocks rm -rf, /tmp usage, and unsafe gradle commands",
+  "version": "1.2.0",
+  "author": {
+    "name": "MechanicalTyler"
+  },
+  "license": "MIT",
+  "keywords": ["guardrails", "safety", "bash", "shell", "hooks", "rm", "filesystem"]
+}

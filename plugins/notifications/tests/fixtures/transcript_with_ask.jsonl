@@ -1,0 +1,2 @@
+{"message": {"role": "user", "content": "Can you help me choose?"}}
+{"message": {"role": "assistant", "content": [{"type": "text", "text": "Sure, let me ask."}, {"type": "tool_use", "name": "AskUserQuestion", "id": "toolu_01", "input": {"questions": [{"question": "Which option?", "header": "Choice", "options": [{"label": "A", "description": "Option A"}, {"label": "B", "description": "Option B"}], "multiSelect": false}]}}]}}

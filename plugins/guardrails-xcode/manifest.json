@@ -1,0 +1,9 @@
+{
+  "name": "guardrails-xcode",
+  "version": "1.0.1",
+  "description": "Xcode safety guards for Claude: enforces timeout on xcodebuild commands",
+  "license": "MIT",
+  "hooks": {
+    "PreToolUse": "hooks/guardrails_xcode_pre_tool_use.py"
+  }
+}

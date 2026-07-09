@@ -1,0 +1,2 @@
+{"message": {"role": "user", "content": "Run a bash command for me"}}
+{"message": {"role": "assistant", "content": [{"type": "tool_use", "id": "tu_1", "name": "Bash", "input": {"command": "ls -la"}}]}}

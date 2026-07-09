@@ -1,0 +1,10 @@
+{
+  "name": "guardrails-git",
+  "description": "Git and GitHub safety guards for Claude: branch protection (checkout/switch/branch/worktree forms), commit boilerplate blocking, PR boilerplate blocking, timeout enforcement for git/gh commands",
+  "version": "1.1.0",
+  "author": {
+    "name": "MechanicalTyler"
+  },
+  "license": "MIT",
+  "keywords": ["guardrails", "safety", "git", "github", "hooks", "branch-protection"]
+}
