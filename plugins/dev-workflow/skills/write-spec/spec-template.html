@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--
+    write-spec reference template (dev-workflow plugin)
+
+    HOW TO USE: copy this document as the shell for a generated spec, then replace
+    every {{PLACEHOLDER}} token and every block marked "SLOT:" with story-specific
+    content. Delete example callouts/badges that are not needed. Do not add external
+    assets of any kind — this file must stay fully standalone and offline-capable.
+
+    Placeholders:
+      {{STORY_TITLE}}  — story title
+      {{STORY_ID}}     — e.g. sc-1065
+      {{STATUS}}       — Draft | Approved
+      {{REPO_NAME}}    — repo being specced
+      {{STORY_TYPE}}   — feature | bug | chore
+      {{DATE}}         — YYYY-MM-DD
+  -->
+  <title>Claude Instructions: {{STORY_TITLE}}</title>
+  <style>
+    /* ---------- Semantic color tokens: light theme, auto dark below ---------- */
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --surface: #f6f8fa;
+      --fg: #1f2328;
+      --muted: #59636e;
+      --border: #d1d9e0;
+      --accent: #0969da;
+      --accent-soft: #ddf4ff;
+      --note: #0969da;    --note-bg: #ddf4ff;
+      --tip: #1a7f37;     --tip-bg: #dafbe1;
+      --warn: #9a6700;    --warn-bg: #fff8c5;
+      --danger: #cf222e;  --danger-bg: #ffebe9;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161b22;          /* never pure black */
+        --surface: #1f242d;
+        --fg: #e6edf3;
+        --muted: #9198a1;
+        --border: #3d444d;
+        --accent: #4493f8;
+        --accent-soft: #14233a;
+        --note: #4493f8;    --note-bg: #14233a;
+        --tip: #3fb950;     --tip-bg: #15261b;
+        --warn: #d29922;    --warn-bg: #2a2210;
+        --danger: #f85149;  --danger-bg: #2c1618;
+      }
+    }
+
+    /* ---------- Base typography: system fonts, capped line length ---------- */
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 1rem;
+      line-height: 1.65;
+    }
+    main { max-width: 70ch; min-width: 0; }
+    main > * + * { margin-top: 1rem; }
+    h1, h2, h3 { line-height: 1.25; }
+    h2 { margin-top: 2.5rem; padding-bottom: .3rem; border-bottom: 1px solid var(--border); }
+    h3 { margin-top: 1.8rem; }
+    /* Headings need to land below nothing sticky in main column, but keep a breathing offset */
+    h2, h3 { scroll-margin-top: 1.25rem; }
+    code {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: .1rem .3rem;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .9em;
+    }
+    table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+    th, td { border: 1px solid var(--border); padding: .4rem .7rem; text-align: left; vertical-align: top; }
+    th { background: var(--surface); }
+    ul, ol { padding-left: 1.4rem; }
+    a { color: var(--accent); }
+
+    /* ---------- Header meta bar ---------- */
+    .meta-bar {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 1.5rem;
+    }
+    .meta-bar-inner { max-width: 72rem; margin: 0 auto; }
+    .meta-bar h1 { margin: 0 0 .6rem; font-size: 1.6rem; }
+    .pills { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0; padding: 0; list-style: none; }
+    .pill {
+      display: inline-block;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: .1rem .7rem;
+      font-size: .8rem;
+      color: var(--muted);
+      background: var(--bg);
+    }
+    .pill-status { color: var(--tip); border-color: var(--tip); font-weight: 600; }
+
+    /* ---------- Two-column layout: sticky TOC rail + content ---------- */
+    .layout {
+      display: grid;
+      grid-template-columns: 15rem minmax(0, 1fr);
+      gap: 3rem;
+      max-width: 72rem;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      align-items: start;
+    }
+    .toc { position: sticky; top: 1.25rem; font-size: .9rem; }
+    .toc summary { cursor: pointer; font-weight: 600; margin-bottom: .4rem; }
+    .toc ol { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--border); }
+    .toc li a {
+      display: block;
+      padding: .25rem .8rem;
+      color: var(--muted);
+      text-decoration: none;
+      border-left: 2px solid transparent;
+      margin-left: -2px;
+    }
+    .toc li a:hover { color: var(--fg); }
+    .toc li a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+    @media (max-width: 60rem) {
+      .layout { grid-template-columns: 1fr; gap: 1rem; }
+      .toc { position: static; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .8rem 1rem; }
+    }
+
+    /* ---------- TL;DR card + key facts strip ---------- */
+    .tldr {
+      background: var(--accent-soft);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+    }
+    .tldr .label { font-weight: 700; color: var(--accent); text-transform: uppercase; font-size: .8rem; letter-spacing: .05em; display: block; margin-bottom: .3rem; }
+    .tldr p { margin: 0; }
+    .key-facts { display: flex; flex-wrap: wrap; gap: .8rem; margin: 1rem 0 0; padding: 0; }
+    .key-facts > div { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .5rem .9rem; flex: 1 1 10rem; }
+    .key-facts dt { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0; }
+    .key-facts dd { margin: .1rem 0 0; font-weight: 600; }
+
+    /* ---------- Callouts ---------- */
+    .callout { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: .7rem 1rem; margin: 1rem 0; }
+    .callout .callout-label { display: block; font-weight: 700; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .2rem; }
+    .callout p { margin: 0; }
+    .callout-note   { border-color: var(--note);   background: var(--note-bg); }   .callout-note .callout-label   { color: var(--note); }
+    .callout-tip    { border-color: var(--tip);    background: var(--tip-bg); }    .callout-tip .callout-label    { color: var(--tip); }
+    .callout-warning{ border-color: var(--warn);   background: var(--warn-bg); }   .callout-warning .callout-label{ color: var(--warn); }
+    .callout-danger { border-color: var(--danger); background: var(--danger-bg); } .callout-danger .callout-label { color: var(--danger); }
+
+    /* ---------- Badges ---------- */
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 0 .55rem;
+      font-size: .75rem;
+      font-weight: 700;
+      vertical-align: middle;
+    }
+    .badge-required { background: var(--danger-bg); color: var(--danger); }
+    .badge-optional { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+    .badge-p0 { background: var(--danger-bg); color: var(--danger); }
+    .badge-p1 { background: var(--warn-bg); color: var(--warn); }
+    .badge-info { background: var(--note-bg); color: var(--note); }
+
+    /* ---------- Anchor-linked headings ---------- */
+    .hl { margin-left: .35rem; text-decoration: none; opacity: 0; font-weight: 400; }
+    h2:hover .hl, h3:hover .hl, .hl:focus { opacity: 1; }
+
+    /* ---------- Collapsible supporting detail ---------- */
+    details.supporting { border: 1px solid var(--border); border-radius: 8px; padding: .6rem 1rem; margin: 1rem 0; background: var(--surface); }
+    details.supporting summary { cursor: pointer; font-weight: 600; }
+    details.supporting[open] summary { margin-bottom: .5rem; }
+
+    /* ---------- Static (non-interactive) checklists ---------- */
+    .check { list-style: none; padding-left: 0; }
+    .check li::before { content: "\2610  "; }
+
+    /* ---------- Interactive validation checklist ---------- */
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist li { margin: .3rem 0; }
+    .checklist label { display: flex; gap: .6rem; align-items: baseline; cursor: pointer; }
+    .checklist input[type="checkbox"] { accent-color: var(--accent); transform: translateY(.12rem); }
+    .checklist input:checked + span { color: var(--muted); text-decoration: line-through; }
+    .progress { color: var(--muted); font-size: .9rem; margin-top: .6rem; }
+
+    /* ---------- Print: expand everything, hide chrome, black on white ---------- */
+    @media print {
+      :root { --bg: #fff; --surface: #fff; --fg: #000; --muted: #333; --border: #999; --accent: #000; --accent-soft: #fff; }
+      body { background: #fff; color: #000; }
+      .toc, .hl { display: none; }
+      /* TOC is hidden, so collapse the two-column grid — otherwise wide page
+         boxes (landscape/PDF >960px) squeeze content into the 15rem TOC column */
+      .layout { display: block; }
+      .meta-bar { background: #fff; }
+      details.supporting { background: #fff; }
+      /* JS opens all <details> on beforeprint; this forces visibility even without JS in supporting browsers */
+      details.supporting > * { display: block; }
+      a { color: #000; text-decoration: none; }
+    }
+  </style>
+</head>
+<body data-spec-key="{{STORY_ID}}-{{REPO_NAME}}">
+
+  <!-- ============ Header meta bar ============ -->
+  <header class="meta-bar">
+    <div class="meta-bar-inner">
+      <h1>Claude Instructions: {{STORY_TITLE}}</h1>
+      <ul class="pills">
+        <li class="pill">{{STORY_ID}}</li>
+        <li class="pill pill-status">{{STATUS}}</li>
+        <li class="pill">{{REPO_NAME}}</li>
+        <li class="pill">{{STORY_TYPE}}</li>
+        <li class="pill">{{DATE}}</li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ============ Sticky table of contents (scroll-tracking) ============ -->
+    <nav class="toc" aria-label="Table of contents">
+      <details open id="toc-details">
+        <summary>Contents</summary>
+        <ol id="toc-list">
+          <li><a href="#story-summary">Story Summary</a></li>
+          <li><a href="#technical-context">Technical Context</a></li>
+          <li><a href="#implementation-steps">Implementation Steps</a></li>
+          <li><a href="#test-requirements">Test Requirements</a></li>
+          <li><a href="#manual-testing">Manual Testing</a></li>
+          <li><a href="#validation-checklist">Validation Checklist</a></li>
+          <!-- SLOT: add one entry per additional h2 section, in document order -->
+        </ol>
+      </details>
+    </nav>
+
+    <main>
+
+      <!-- ============ TL;DR card — always first, never collapsed ============ -->
+      <section class="tldr" aria-label="Summary">
+        <span class="label">TL;DR</span>
+        <p><!-- SLOT: 2–3 sentences — WHAT is being built, WHY, and the impact. No detail. --></p>
+      </section>
+
+      <!-- ============ Key facts strip ============ -->
+      <dl class="key-facts">
+        <div><dt>Repo</dt><dd>{{REPO_NAME}}</dd></div>
+        <div><dt>Type</dt><dd>{{STORY_TYPE}}</dd></div>
+        <div><dt>Story</dt><dd>{{STORY_ID}}</dd></div>
+        <!-- SLOT: 1–3 more high-signal facts (e.g. files touched count, risk level) -->
+      </dl>
+
+      <!-- ============ Story Summary — never collapsed ============ -->
+      <h2 id="story-summary">Story Summary <a class="hl" href="#story-summary" aria-label="Link to Story Summary">#</a></h2>
+      <p><!-- SLOT: brief description of what needs to be built. One idea per paragraph; bold keywords. --></p>
+
+      <!-- Example callout — copy the pattern for constraints/risks, delete if unused.
+           Variants: callout-note, callout-tip, callout-warning, callout-danger -->
+      <div class="callout callout-warning">
+        <span class="callout-label">Warning</span>
+        <p><!-- SLOT: a constraint or risk the developer must not miss --></p>
+      </div>
+
+      <!-- ============ Technical Context — never collapsed ============ -->
+      <h2 id="technical-context">Technical Context <a class="hl" href="#technical-context" aria-label="Link to Technical Context">#</a></h2>
+      <p><!-- SLOT: key files, patterns, and architectural context. Prefer the table below over prose. --></p>
+      <table>
+        <tr><th>File</th><th>Role in this change</th></tr>
+        <tr><td><code><!-- SLOT: path/to/file --></code></td><td><!-- SLOT: why it matters --></td></tr>
+      </table>
+
+      <!-- Supporting detail pattern: background, alternatives considered, edge-case notes.
+           Collapsed by default. NEVER put requirements, risks, steps, or criteria in here. -->
+      <details class="supporting">
+        <summary>Alternatives considered</summary>
+        <p><!-- SLOT: decision records, options with trade-offs --></p>
+      </details>
+
+      <!-- ============ Implementation Steps — never collapsed ============ -->
+      <h2 id="implementation-steps">Implementation Steps <a class="hl" href="#implementation-steps" aria-label="Link to Implementation Steps">#</a></h2>
+      <ol>
+        <li><span class="badge badge-required">Required</span> <!-- SLOT: step with <code>file</code> references; WHAT, not HOW --></li>
+        <!-- SLOT: one li per step; use badge-required / badge-optional / badge-p0 / badge-p1 instead of adjectives -->
+      </ol>
+
+      <!-- ============ Test Requirements — never collapsed ============ -->
+      <h2 id="test-requirements">Test Requirements <a class="hl" href="#test-requirements" aria-label="Link to Test Requirements">#</a></h2>
+      <p><!-- SLOT: what tests need to be written, what patterns to follow --></p>
+
+      <!-- ============ Manual Testing — never collapsed ============ -->
+      <h2 id="manual-testing">Manual Testing <a class="hl" href="#manual-testing" aria-label="Link to Manual Testing">#</a></h2>
+      <h3 id="happy-path">Happy Path <a class="hl" href="#happy-path" aria-label="Link to Happy Path">#</a></h3>
+      <ul class="check"><li><!-- SLOT: step to verify normal usage --></li></ul>
+      <h3 id="error-scenarios">Error Scenarios <a class="hl" href="#error-scenarios" aria-label="Link to Error Scenarios">#</a></h3>
+      <ul class="check"><li><!-- SLOT: step to verify error handling --></li></ul>
+      <h3 id="ux-verification">UX Verification <a class="hl" href="#ux-verification" aria-label="Link to UX Verification">#</a></h3>
+      <ul class="check"><li><!-- SLOT: step to verify user experience --></li></ul>
+
+      <!-- ============ Validation Checklist — interactive, persisted, never collapsed ============ -->
+      <h2 id="validation-checklist">Validation Checklist <a class="hl" href="#validation-checklist" aria-label="Link to Validation Checklist">#</a></h2>
+      <ul class="checklist">
+        <li><label><input type="checkbox" data-check="ac-1"> <span><!-- SLOT: acceptance criterion 1 --></span></label></li>
+        <li><label><input type="checkbox" data-check="ac-2"> <span><!-- SLOT: acceptance criterion 2 --></span></label></li>
+        <!-- SLOT: one li per criterion; data-check values must be unique within this file -->
+      </ul>
+      <p class="progress" id="checklist-progress" aria-live="polite"></p>
+
+    </main>
+  </div>
+
+  <script>
+  /* All behavior is progressive enhancement: with JS disabled, every section is
+     readable, <details> still toggles natively, and the checklist still checks
+     (without persistence). No network requests, no external code. */
+  (function () {
+    "use strict";
+
+    /* ---- TOC scroll tracking (scroll spy) ---- */
+    var tocLinks = Array.prototype.slice.call(document.querySelectorAll("#toc-list a"));
+    var sections = tocLinks
+      .map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); })
+      .filter(Boolean);
+    function setActive(id) {
+      tocLinks.forEach(function (a) {
+        a.classList.toggle("active", a.getAttribute("href") === "#" + id);
+      });
+    }
+    if ("IntersectionObserver" in window && sections.length) {
+      var visible = {};
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { visible[e.target.id] = e.isIntersecting; });
+        var current = sections.filter(function (s) { return visible[s.id]; })[0];
+        if (!current) {
+          for (var i = sections.length - 1; i >= 0; i--) {
+            if (sections[i].getBoundingClientRect().top < 0) { current = sections[i]; break; }
+          }
+        }
+        if (current) setActive(current.id);
+      }, { rootMargin: "0px 0px -70% 0px" });
+      sections.forEach(function (s) { observer.observe(s); });
+    }
+
+    /* ---- Collapse the TOC by default on narrow windows ---- */
+    var tocDetails = document.getElementById("toc-details");
+    if (tocDetails && window.matchMedia && window.matchMedia("(max-width: 60rem)").matches) {
+      tocDetails.removeAttribute("open");
+    }
+
+    /* ---- Validation checklist: live progress + localStorage persistence ---- */
+    var boxes = Array.prototype.slice.call(document.querySelectorAll(".checklist input[type=checkbox]"));
+    var progress = document.getElementById("checklist-progress");
+    var storeKey = "spec-checklist:" + (document.body.getAttribute("data-spec-key") || document.title);
+    function renderProgress() {
+      if (!progress) return;
+      var done = boxes.filter(function (b) { return b.checked; }).length;
+      progress.textContent = done + " of " + boxes.length + " verified";
+    }
+    function save() {
+      try {
+        var checked = boxes.filter(function (b) { return b.checked; })
+          .map(function (b) { return b.getAttribute("data-check"); });
+        localStorage.setItem(storeKey, JSON.stringify(checked));
+      } catch (e) { /* private mode / storage unavailable — degrade silently */ }
+    }
+    try {
+      var saved = JSON.parse(localStorage.getItem(storeKey) || "[]");
+      boxes.forEach(function (b) {
+        if (saved.indexOf(b.getAttribute("data-check")) !== -1) b.checked = true;
+      });
+    } catch (e) { /* corrupt or unavailable storage — start unchecked */ }
+    boxes.forEach(function (b) {
+      b.addEventListener("change", function () { save(); renderProgress(); });
+    });
+    renderProgress();
+
+    /* ---- Print: open all collapsed sections, restore afterwards ---- */
+    var toggled = [];
+    window.addEventListener("beforeprint", function () {
+      toggled = Array.prototype.slice.call(document.querySelectorAll("details:not([open])"));
+      toggled.forEach(function (d) { d.setAttribute("open", ""); });
+    });
+    window.addEventListener("afterprint", function () {
+      toggled.forEach(function (d) { d.removeAttribute("open"); });
+      toggled = [];
+    });
+  })();
+  </script>
+</body>
+</html>

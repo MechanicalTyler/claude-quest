@@ -1,0 +1,9 @@
+{
+  "name": "guardrails-bash",
+  "version": "1.2.0",
+  "description": "Bash and shell safety guards for Claude: blocks rm -rf, /tmp usage, and unsafe gradle commands",
+  "license": "MIT",
+  "hooks": {
+    "PreToolUse": "hooks/guardrails_bash_pre_tool_use.py"
+  }
+}

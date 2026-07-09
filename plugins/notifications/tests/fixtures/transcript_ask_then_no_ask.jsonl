@@ -1,0 +1,4 @@
+{"message": {"role": "user", "content": "initial question"}}
+{"message": {"role": "assistant", "content": [{"type": "tool_use", "name": "AskUserQuestion", "id": "toolu_01", "input": {"questions": []}}]}}
+{"message": {"role": "user", "content": "user answered"}}
+{"message": {"role": "assistant", "content": [{"type": "text", "text": "Thanks, I will proceed."}]}}

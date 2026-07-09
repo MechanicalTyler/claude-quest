@@ -1,0 +1,10 @@
+{
+  "name": "audit-trail",
+  "version": "1.0.1",
+  "description": "Logs every Claude tool call (input and output) to JSON files in ~/.claude/logs/ for auditability and debugging",
+  "license": "MIT",
+  "hooks": {
+    "PreToolUse": "hooks/audit_trail_pre_tool_use.py",
+    "PostToolUse": "hooks/audit_trail_post_tool_use.py"
+  }
+}

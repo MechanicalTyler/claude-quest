@@ -1,0 +1,10 @@
+{
+  "name": "dev-workflow",
+  "version": "2.24.1",
+  "description": "Action-based development workflow skills with pluggable PM and notes adapters",
+  "author": {
+    "name": "MechanicalTyler"
+  },
+  "license": "MIT",
+  "keywords": ["workflow", "development", "start-development", "review-pr", "test-pr", "start-debugging", "create-story", "write-spec", "full-cycle", "epic"]
+}
