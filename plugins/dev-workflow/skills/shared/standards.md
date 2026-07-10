@@ -258,6 +258,21 @@ Questions are a last resort — only ask when **all** of these are true:
 
 ---
 
+## Process Fidelity (no undocumented deviation)
+
+**Skipping, reordering, weakening, or ignoring any documented step, gate, or standard requires the user's explicit permission FIRST.**
+
+- **What this covers** — Skipping any documented step, reordering the documented stage sequence, weakening or bypassing any documented gate (User Approval Gate, CI gate, deploy gate, Loop Safety Guard, Story Creation Gate), and ignoring any standard in this file or in a skill's own SKILL.md
+- **Ask first, every time** — Before any such deviation, STOP and ask the user for explicit permission, stating exactly what would be skipped, reordered, or ignored and why. Proceed only on an explicit yes. This holds even when the deviation looks obviously safe, faster, or redundant in the moment — "this step seems unnecessary here" is precisely the judgment this rule removes
+- **Autonomous contexts never deviate** — An agent with no ability to ask (autonomous mode, dispatched subagent) must NEVER deviate. Stop and report what would need to be skipped and why — mirroring how the Story Creation Gate handles story creation in autonomous contexts
+- **Hard-fail rules have no override path** — Some documented rules are deterministic and non-negotiable; asking the user is not a way around them:
+  - The **CI gate** default and the **deploy gate** default each have exactly one documented exception: their own config-driven exemption list (`ci_gate_exempt_repos` for CI, `deploy_gate_exempt_repos` for deploy — two separate lists, neither a judgment call). For these gates, "ask first" means stopping to flag that the agent was about to treat a non-exempt repo as exempt, override a failing/missing gate result, or otherwise deviate from the documented hard-fail logic. A user's "yes" there authorizes reporting the situation or updating the exemption config — never recording a passing verdict the gate did not actually produce
+  - The **Loop Safety Guard**'s stop-after-3 cycle cap has NO exemption list and NO override path of any kind, documented or otherwise — it is unconditional. "Ask first" for it means stopping to report that the cycle cap was reached, exactly as already documented
+
+The Story Creation Gate below is a specific instance of this rule; where the two overlap, the more specific gate's wording governs.
+
+---
+
 ## Story Creation Gate
 
 **A PM story, ticket, issue, or subtask may ONLY be created when the user explicitly invoked `create-story` or `full-cycle`.**
