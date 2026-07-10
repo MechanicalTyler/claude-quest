@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 try:
-    from attention_hub_client import clear_active_subagent
+    from attention_hub_client import mark_subagent_active
 except ImportError:
     import importlib.util
     hub_spec = importlib.util.spec_from_file_location(
@@ -18,23 +18,22 @@ except ImportError:
     )
     attention_hub_client = importlib.util.module_from_spec(hub_spec)
     hub_spec.loader.exec_module(attention_hub_client)
-    clear_active_subagent = attention_hub_client.clear_active_subagent
+    mark_subagent_active = attention_hub_client.mark_subagent_active
 
 
 def main():
-    # SubagentStop: no notifications needed. When a subagent stops, the main
-    # agent is still running and user action is not required at this point.
-    # Only clears this subagent's active-tracking marker, so the Stop hook's
-    # active-subagent count stays accurate.
+    # PreToolUse: pure observer, not a gate. Must always exit 0 and never
+    # print a permission-decision payload -- if this hook ever blocked a Task
+    # dispatch, subagents would stop running entirely, which is strictly
+    # worse than the "shows waiting/done while working" bug it fixes.
     try:
         input_data = json.load(sys.stdin)
-        session_id = input_data.get("session_id", "")
-        if session_id:
-            clear_active_subagent(session_id)
+        if input_data.get("tool_name") == "Task":
+            mark_subagent_active(input_data.get("session_id", ""))
     except Exception:
         pass
     sys.exit(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

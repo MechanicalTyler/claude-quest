@@ -327,6 +327,75 @@ def test_session_end_removes_session(base_hook_input):
     assert deletes[0][0].endswith("/api/sessions/test-session-123")
 
 
+def set_active_subagent_marker(active_subagent_home, session_id="test-session-123", name="marker-1"):
+    """Drop an active-subagent marker for a session, as PreToolUse(Task) would."""
+    marker_dir = active_subagent_home / session_id
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    (marker_dir / name).touch()
+
+
+def test_stop_with_active_subagent_reports_working_not_done(base_hook_input, transcript_without_ask, active_subagent_home):
+    # Why: the core fix — a Stop while a subagent is still running must report
+    # "working", not "done", so the hub row doesn't falsely flag for attention.
+    set_active_subagent_marker(active_subagent_home)
+    events = hub_events(run_hook_capture_hub("notifications_stop.py", {
+        **base_hook_input,
+        "transcript_path": transcript_without_ask,
+    }))
+    assert len(events) == 1
+    assert events[0]["state"] == "working"
+
+
+def test_stop_with_active_subagent_and_genuine_ask_reports_needs_input(base_hook_input, transcript_with_ask, active_subagent_home):
+    # Why: needs_input always wins — a genuine AskUserQuestion must still report
+    # needs_input even while background subagents are active.
+    set_active_subagent_marker(active_subagent_home)
+    events = hub_events(run_hook_capture_hub("notifications_stop.py", {
+        **base_hook_input,
+        "transcript_path": transcript_with_ask,
+    }))
+    assert len(events) == 1
+    assert events[0]["state"] == "needs_input"
+
+
+def test_subagent_stop_clears_exactly_one_active_marker(base_hook_input, active_subagent_home):
+    # Why: SubagentStop must clear one marker per completed subagent so the count
+    # accurately reflects how many are still running.
+    set_active_subagent_marker(active_subagent_home, name="marker-1")
+    set_active_subagent_marker(active_subagent_home, name="marker-2")
+    run_hook_capture_hub("notifications_subagent_stop.py", {**base_hook_input})
+    remaining = list((active_subagent_home / "test-session-123").iterdir())
+    assert len(remaining) == 1
+
+
+def test_session_end_clears_all_active_subagent_markers(base_hook_input, active_subagent_home):
+    # Why: parallels the existing waiting-marker SessionEnd assertion — ending a
+    # session must clear every one of its active-subagent markers, not just one.
+    set_active_subagent_marker(active_subagent_home, name="marker-1")
+    set_active_subagent_marker(active_subagent_home, name="marker-2")
+    run_hook_capture_hub("notifications_session_end.py", {
+        **base_hook_input,
+        "reason": "exit",
+    })
+    assert not (active_subagent_home / "test-session-123").exists()
+
+
+def test_subagent_stop_then_stop_reports_done_not_working(base_hook_input, transcript_without_ask, active_subagent_home):
+    # Why: chained scenario matching story Testing Instruction #3 exactly — a
+    # session with one active-subagent marker that receives SubagentStop
+    # (clearing it) followed immediately by Stop must report done/needs_input as
+    # today, not working, confirming the marker's absence correctly drives the
+    # branch (not just its presence).
+    set_active_subagent_marker(active_subagent_home, name="marker-1")
+    run_hook_capture_hub("notifications_subagent_stop.py", {**base_hook_input})
+    events = hub_events(run_hook_capture_hub("notifications_stop.py", {
+        **base_hook_input,
+        "transcript_path": transcript_without_ask,
+    }))
+    assert len(events) == 1
+    assert events[0]["state"] == "done"
+
+
 def test_hooks_exit_zero_when_hub_down(base_hook_input, transcript_without_ask, monkeypatch):
     # Why: the graceful-degradation acceptance criterion — a dead hub must never
     # error any hook. Uses a real connection-refused, not a mock.
