@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Design: Process Fidelity Gate (sc-1201)</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1.5rem; }
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; border-bottom: 1px solid #8884; padding-bottom: .25rem; }
+  code { background: #8882; padding: .1em .35em; border-radius: 3px; font-size: .9em; }
+  table { border-collapse: collapse; width: 100%; margin: .75rem 0; }
+  th, td { border: 1px solid #8884; padding: .4rem .6rem; text-align: left; vertical-align: top; }
+  blockquote { border-left: 3px solid #8886; margin: .75rem 0; padding: .25rem .9rem; color: inherit; opacity: .85; }
+</style>
+</head>
+<body>
+
+<h1>Design: Process Fidelity Gate</h1>
+<p><strong>Story:</strong> sc-1201 &middot; <strong>Repo:</strong> claude-quest (plugins/dev-workflow) &middot; <strong>Date:</strong> 2026-07-10</p>
+
+<h2>Problem</h2>
+<p>full-cycle and its stage skills sometimes decide, on their own, to skip a documented step
+(write-spec, the User Approval Gate), reorder the pipeline, or weaken a gate (CI/deploy
+exemption, Loop Safety Guard) without asking. Prose rules that are only descriptive get
+skimmed past under time pressure or when a step looks "obviously" redundant. This design
+adds an explicit, salient permission-ask requirement that models the existing Story
+Creation Gate, which already proves this pattern works in this codebase.</p>
+
+<h2>Precedent</h2>
+<p>Commit <code>998f9db</code> ("add subagent wait discipline to stop orchestrator idling")
+solved a structurally identical problem &mdash; skills silently doing the wrong thing at a
+dispatch point &mdash; with exactly this shape: one mandatory section added to
+<code>shared/standards.md</code>, plus short pointers back to it from every real call site
+(<code>full-cycle</code>, <code>epic</code>, <code>review-pr</code>). This design reuses
+that shape rather than inventing a new one.</p>
+
+<h2>Chosen approach</h2>
+<p>Single canonical rule in <code>shared/standards.md</code> (one source of truth, read by
+every dev-workflow skill at session start) plus a one-line pointer at each concrete decision
+point where a skip/reorder/ignore could actually happen. Rejected alternative: restating the
+full rule text inside each of the five files &mdash; rejected because duplicated prose drifts
+out of sync over time (the same reason the Story Creation Gate isn't copy-pasted either).</p>
+
+<h2>New standards.md section</h2>
+<p>Add <strong>"Process Fidelity (no undocumented deviation)"</strong>, placed immediately
+before the existing <strong>Story Creation Gate</strong> section &mdash; Story Creation Gate
+is itself a specific, pre-existing instance of this same general principle, so the general
+rule reads naturally right above its first concrete example.</p>
+<p>Required content of the new section:</p>
+<ul>
+  <li><strong>Scope:</strong> covers skipping any documented step, reordering the documented
+  stage sequence, weakening or bypassing any documented gate (User Approval Gate, CI gate,
+  deploy gate, Loop Safety Guard, Story Creation Gate), and ignoring any standard in
+  <code>standards.md</code> or a skill's own <code>SKILL.md</code>.</li>
+  <li><strong>Ask first, always:</strong> before any such deviation, stop and ask the user
+  for explicit permission, stating exactly what would be skipped/reordered/ignored and why.
+  Proceed only on an explicit yes &mdash; including when the deviation looks obviously safe,
+  faster, or redundant in the moment. "This seems unnecessary here" is a reason to ask, not
+  a reason to skip.</li>
+  <li><strong>Autonomous / subagent contexts (no ability to ask):</strong> never deviate.
+  Stop and report what would need to be skipped and why, the same way the Story Creation
+  Gate already handles this case for autonomous story creation.</li>
+</ul>
+
+<h2>Reinforcement pointer sites</h2>
+<table>
+<tr><th>File</th><th>Anchor</th><th>Pointer content</th></tr>
+<tr><td><code>full-cycle/SKILL.md</code></td><td>Resume/Entry Detection &amp; stage
+sequencing (the table deciding which stage runs next)</td><td>A one-line reminder that
+entering at a different stage, or skipping write-spec's approval gate, requires the Process
+Fidelity ask &mdash; not a silent inference from PR/story state.</td></tr>
+<tr><td><code>write-spec/SKILL.md</code></td><td>User Approval Gate section</td><td>The gate
+itself already blocks progress; add a line that the gate may never be silently weakened
+(e.g. treating a non-response as approval) without asking per Process Fidelity.</td></tr>
+<tr><td><code>start-development/SKILL.md</code></td><td>Development Standards &sect;1 (TDD)</td>
+<td>Reminder that skipping RED-GREEN-REFACTOR for a given behavior, or deviating from the
+per-repo implementation plan, requires asking first.</td></tr>
+<tr><td><code>review-pr/SKILL.md</code></td><td>CI Gate / exemption logic (~line 136)</td>
+<td>Reminder that invoking the <code>ci_gate_exempt_repos</code> exemption (or any other
+gate-skip) outside the documented exemption conditions requires asking first.</td></tr>
+<tr><td><code>test-pr/SKILL.md</code></td><td>Deploy Gate / exemption logic (~line 139)</td>
+<td>Same reminder for <code>deploy_gate_exempt_repos</code>.</td></tr>
+</table>
+
+<h2>Explicitly out of scope</h2>
+<p><code>address-pr-comments</code> and <code>epic</code> are not touched &mdash; the
+approved story acceptance criteria name exactly the five files above plus
+<code>standards.md</code>. Any equivalent gap in those two skills is a follow-up, not part
+of this change.</p>
+
+<h2>Verification</h2>
+<p>No build/test step exists for this plugin (markdown + one HTML asset, no compiled code).
+Verification is: read the five files back and confirm the new rule text is present,
+consistently worded, cross-references <code>standards.md</code>, and doesn't duplicate or
+contradict the Story Creation Gate, User Approval Gate, Loop Safety Guard, or CI/deploy
+exemption logic it sits next to.</p>
+
+</body>
+</html>
