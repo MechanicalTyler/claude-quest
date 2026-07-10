@@ -191,7 +191,7 @@ under the depth-5 cap) — every stage gets a fresh context even under the epic.
 builds those stages run inline within the task's worker context (still isolated per task).
 Dispatch the concurrent tasks of a round in a **single message with multiple Agent calls**.
 
-This is the plugin's one genuinely concurrent, backgrounded dispatch point — apply
+This is epic's one genuinely concurrent, backgrounded dispatch point — apply
 `standards.md` → "Subagent Wait Discipline" here: immediately after dispatching the round,
 state every task dispatched (task ID, repo) and that you are waiting on their completion
 notifications, then arm a bounded, visible fallback re-check rather than trusting
