@@ -17,7 +17,13 @@
       "name": "notifications",
       "source": "./plugins/notifications",
       "description": "System notifications when Claude completes tasks or needs your attention (macOS + Slack)",
-      "version": "1.6.0"
+      "version": "1.6.1"
+    },
+    {
+      "name": "attention-hub",
+      "source": "./plugins/attention-hub",
+      "description": "Self-hosted, zero-dependency dashboard server that tracks which coding-agent sessions are waiting on you",
+      "version": "1.0.0"
     },
     {
       "name": "dev-workflow",

@@ -4,10 +4,10 @@
 # dependencies = []
 # ///
 """
-Claude attention hub — self-hosted session attention tracker.
+Attention hub — self-hosted session attention tracker.
 
 A zero-dependency (stdlib only) HTTP server that receives per-session state
-events from Claude Code hooks and serves a web dashboard showing one
+events from any reporting client and serves a web dashboard showing one
 color-coded row per session, sorted needs-attention first.
 
 Manual start (typically inside tmux/screen):
@@ -354,7 +354,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Claude Attention Hub</title>
+<title>Attention Hub</title>
 <style>
   :root { color-scheme: dark; }
   body { font-family: system-ui, sans-serif; background: #14171c; color: #e6e8eb;
@@ -406,7 +406,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>Claude Attention Hub <small id="meta"></small></h1>
+<h1>Attention Hub <small id="meta"></small></h1>
 <div id="sessions"></div>
 <p id="empty" hidden>No sessions reporting.</p>
 <script>
@@ -610,7 +610,7 @@ def create_server(bind, port, state_file, prune_hours):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Claude attention hub")
+    parser = argparse.ArgumentParser(description="Attention hub")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
                         help=f"port to listen on (default {DEFAULT_PORT})")
     parser.add_argument("--bind", default=DEFAULT_BIND,
