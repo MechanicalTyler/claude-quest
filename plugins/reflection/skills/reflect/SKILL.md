@@ -1,6 +1,6 @@
 ---
 name: reflection:reflect
-description: "Use when a user wants to review the accumulated reflection log and turn recurring corrective moments into actionable, root-cause-attributed suggestions, or says '/reflect', 'review how this session went,' or 'what problems came up.'"
+description: "Use when the user wants to review what went wrong in recent sessions, asks why the agent keeps getting corrected on the same thing, or says '/reflect', 'review how this session went,' or 'what problems came up.'"
 ---
 
 # Reflect
