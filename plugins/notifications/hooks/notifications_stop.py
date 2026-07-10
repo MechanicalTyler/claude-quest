@@ -27,6 +27,7 @@ except ImportError:
 try:
     from attention_hub_client import (
         report_state, macos_enabled, slack_enabled, get_session_name, clear_waiting_marker,
+        count_active_subagents,
     )
 except ImportError:
     import importlib.util
@@ -41,6 +42,7 @@ except ImportError:
     slack_enabled = attention_hub_client.slack_enabled
     get_session_name = attention_hub_client.get_session_name
     clear_waiting_marker = attention_hub_client.clear_waiting_marker
+    count_active_subagents = attention_hub_client.count_active_subagents
 
 
 def log_message(message):
@@ -91,6 +93,14 @@ def main():
             sound = "Glass"
             hook_type = "stop_needs_input"
             hub_state = "needs_input"
+        elif count_active_subagents(session_id) > 0:
+            # Background subagents are still running: this Stop is the main
+            # agent pausing to check in on them, not a real completion. Report
+            # working and skip the Slack/macOS notification entirely.
+            hub_success = report_state(session_id, input_data.get("cwd", ""), "working", message,
+                                       session_name=get_session_name(input_data))
+            log_message(f"{'✅' if hub_success else '❌'} Hub (working - active subagents)")
+            sys.exit(0)
         else:
             subtitle = "Task Complete"
             sound = "Hero"

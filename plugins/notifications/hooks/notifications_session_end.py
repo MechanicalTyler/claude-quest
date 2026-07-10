@@ -9,7 +9,9 @@ import sys
 from pathlib import Path
 
 try:
-    from attention_hub_client import remove_session, log_hub, clear_waiting_marker
+    from attention_hub_client import (
+        remove_session, log_hub, clear_waiting_marker, clear_all_active_subagents,
+    )
 except ImportError:
     import importlib.util
     hub_spec = importlib.util.spec_from_file_location(
@@ -21,6 +23,7 @@ except ImportError:
     remove_session = attention_hub_client.remove_session
     log_hub = attention_hub_client.log_hub
     clear_waiting_marker = attention_hub_client.clear_waiting_marker
+    clear_all_active_subagents = attention_hub_client.clear_all_active_subagents
 
 
 def main():
@@ -32,8 +35,10 @@ def main():
         if not session_id:
             sys.exit(0)
 
-        # Session teardown: drop any waiting marker so nothing leaks on disk.
+        # Session teardown: drop any waiting marker and active-subagent
+        # markers so nothing leaks on disk.
         clear_waiting_marker(session_id)
+        clear_all_active_subagents(session_id)
 
         success = remove_session(session_id)
         log_hub(f"SessionEnd -> remove {session_id}: {'ok' if success else 'hub unreachable'}")

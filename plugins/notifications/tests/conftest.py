@@ -60,6 +60,15 @@ def marker_home(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def active_subagent_home(tmp_path, monkeypatch):
+    """Redirect HOME to tmp_path so active-subagent marker files (and hook
+    logs) never touch the real ~/.claude. Returns the active-subagents
+    directory path (parent of each session's own marker subdirectory)."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    return tmp_path / ".claude" / "notifications" / "active-subagents"
+
+
+@pytest.fixture
 def base_hook_input():
     """Base stdin payload common to all hooks."""
     return {

@@ -98,3 +98,40 @@ def test_stop_still_notifies_when_agent_type_absent(base_hook_input, transcript_
     slack_payloads, macos_subtitles = load_and_run_stop_hook(hook_input)
     assert len(slack_payloads) == 1, "Stop hook must send Slack in main agent context"
     assert len(macos_subtitles) == 1, "Stop hook must send macOS notification in main agent context"
+
+
+# --- Active-subagent notification suppression ---
+
+
+def test_stop_sends_zero_notifications_with_active_subagent(base_hook_input, transcript_without_ask, active_subagent_home):
+    # Why: a Stop while a background subagent is still running is just the main
+    # agent checking in — it must not spam Slack/macOS as if the task were done.
+    marker_dir = active_subagent_home / "test-session-123"
+    marker_dir.mkdir(parents=True)
+    (marker_dir / "marker-1").touch()
+    hook_input = {**base_hook_input, "transcript_path": transcript_without_ask}
+    slack_payloads, macos_subtitles = load_and_run_stop_hook(hook_input)
+    assert len(slack_payloads) == 0, "Stop hook must not send Slack while a subagent is active"
+    assert len(macos_subtitles) == 0, "Stop hook must not send macOS notification while a subagent is active"
+
+
+def test_stop_still_notifies_with_active_subagent_and_genuine_needs_input(base_hook_input, transcript_with_ask, active_subagent_home):
+    # Why: regression guard for the needs_input-always-wins rule — a genuine
+    # AskUserQuestion must still notify even while background subagents run.
+    marker_dir = active_subagent_home / "test-session-123"
+    marker_dir.mkdir(parents=True)
+    (marker_dir / "marker-1").touch()
+    hook_input = {**base_hook_input, "transcript_path": transcript_with_ask}
+    slack_payloads, macos_subtitles = load_and_run_stop_hook(hook_input)
+    assert len(slack_payloads) == 1, "needs_input must still notify even with an active subagent"
+    assert len(macos_subtitles) == 1, "needs_input must still notify even with an active subagent"
+    assert macos_subtitles[0] == "Needs Input"
+
+
+def test_stop_with_zero_active_subagents_notifies_as_before(base_hook_input, transcript_without_ask, active_subagent_home):
+    # Why: regression guard — with no active-subagent markers at all, today's
+    # notification behavior must be completely unchanged.
+    hook_input = {**base_hook_input, "transcript_path": transcript_without_ask}
+    slack_payloads, macos_subtitles = load_and_run_stop_hook(hook_input)
+    assert len(slack_payloads) == 1
+    assert len(macos_subtitles) == 1

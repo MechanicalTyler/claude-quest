@@ -67,3 +67,134 @@ def test_helpers_tolerate_none_session_id(hub_client, marker_home):
     assert hub_client.set_waiting_marker(None) is False
     assert hub_client.has_waiting_marker(None) is False
     assert hub_client.clear_waiting_marker(None) is False
+
+
+# --- Active-subagent marker mechanics ---
+
+
+def test_mark_one_subagent_active_counts_one(hub_client, active_subagent_home):
+    # Why: a single Task dispatch must register exactly one active subagent so the
+    # Stop hook can tell "background work in flight" from "nothing running".
+    assert hub_client.mark_subagent_active("session-abc") is True
+    assert hub_client.count_active_subagents("session-abc") == 1
+    assert (active_subagent_home / "session-abc").is_dir()
+
+
+def test_mark_two_subagents_active_counts_two(hub_client, active_subagent_home):
+    # Why: multiple concurrent Task dispatches from the same session must each get
+    # their own marker file, not overwrite each other, so the count reflects reality.
+    hub_client.mark_subagent_active("session-abc")
+    hub_client.mark_subagent_active("session-abc")
+    assert hub_client.count_active_subagents("session-abc") == 2
+
+
+def test_mark_many_concurrent_subagents_all_count(hub_client, active_subagent_home):
+    # Why: the uuid4-token exclusive-create scheme must scale to many parallel
+    # dispatches without any filename collision silently dropping a marker.
+    for _ in range(25):
+        assert hub_client.mark_subagent_active("session-abc") is True
+    assert hub_client.count_active_subagents("session-abc") == 25
+    assert len(list((active_subagent_home / "session-abc").iterdir())) == 25
+
+
+def test_mark_creates_uniquely_named_marker_files(hub_client, active_subagent_home):
+    # Why: markers are named with a fresh uuid4 token specifically so concurrent
+    # dispatches can never collide on a filename — verify the names are distinct.
+    hub_client.mark_subagent_active("session-abc")
+    hub_client.mark_subagent_active("session-abc")
+    names = {p.name for p in (active_subagent_home / "session-abc").iterdir()}
+    assert len(names) == 2
+
+
+def test_clear_one_marker_decrements_count_by_one(hub_client, active_subagent_home):
+    # Why: markers are interchangeable — only the count matters — so clearing must
+    # remove exactly one, regardless of which, without needing a start/stop ID.
+    hub_client.mark_subagent_active("session-abc")
+    hub_client.mark_subagent_active("session-abc")
+    hub_client.mark_subagent_active("session-abc")
+    assert hub_client.clear_active_subagent("session-abc") is True
+    assert hub_client.count_active_subagents("session-abc") == 2
+
+
+def test_clear_active_subagent_with_no_markers_returns_false(hub_client, active_subagent_home):
+    # Why: SubagentStop firing with nothing to clear (e.g. a denied Task dispatch
+    # cleaned up elsewhere) must report "nothing existed", not silently succeed.
+    assert hub_client.clear_active_subagent("never-marked") is False
+
+
+def test_stale_marker_excluded_from_count_and_pruned(hub_client, active_subagent_home):
+    # Why: a crashed subagent that never fires SubagentStop must not wedge a
+    # session on "working" forever — TTL-expired markers are excluded and removed.
+    hub_client.mark_subagent_active("session-abc")
+    marker_dir = active_subagent_home / "session-abc"
+    stale_marker = next(marker_dir.iterdir())
+    old_time = __import__("time").time() - hub_client.ACTIVE_SUBAGENT_TTL_SECONDS - 60
+    os.utime(stale_marker, (old_time, old_time))
+    assert hub_client.count_active_subagents("session-abc") == 0
+    assert not stale_marker.exists()
+
+
+def test_fresh_and_stale_markers_mixed_counts_only_fresh(hub_client, active_subagent_home):
+    # Why: pruning must be selective — a mix of one stale and one fresh marker must
+    # prune only the stale one and still report the fresh one as active.
+    hub_client.mark_subagent_active("session-abc")
+    hub_client.mark_subagent_active("session-abc")
+    marker_dir = active_subagent_home / "session-abc"
+    markers = list(marker_dir.iterdir())
+    old_time = __import__("time").time() - hub_client.ACTIVE_SUBAGENT_TTL_SECONDS - 60
+    os.utime(markers[0], (old_time, old_time))
+    assert hub_client.count_active_subagents("session-abc") == 1
+    assert not markers[0].exists()
+    assert markers[1].exists()
+
+
+def test_clear_all_active_subagents_zeroes_count(hub_client, active_subagent_home):
+    # Why: session teardown must remove every marker at once, not one at a time,
+    # so SessionEnd cleanup stays a single cheap operation.
+    hub_client.mark_subagent_active("session-abc")
+    hub_client.mark_subagent_active("session-abc")
+    assert hub_client.clear_all_active_subagents("session-abc") is True
+    assert hub_client.count_active_subagents("session-abc") == 0
+    assert not (active_subagent_home / "session-abc").exists()
+
+
+def test_clear_all_active_subagents_does_not_affect_other_sessions(hub_client, active_subagent_home):
+    # Why: session teardown is per-session — clearing one session's markers must
+    # never touch another session's still-active subagents.
+    hub_client.mark_subagent_active("session-abc")
+    hub_client.mark_subagent_active("session-xyz")
+    hub_client.clear_all_active_subagents("session-abc")
+    assert hub_client.count_active_subagents("session-xyz") == 1
+
+
+def test_clear_all_active_subagents_with_none_returns_false(hub_client, active_subagent_home):
+    # Why: SessionEnd cleanup for a session that never dispatched a subagent must
+    # report "nothing existed" rather than raising or fabricating success.
+    assert hub_client.clear_all_active_subagents("never-marked") is False
+
+
+def test_active_subagent_helpers_reject_hostile_session_ids(hub_client, active_subagent_home):
+    # Why: the session ID becomes a directory name; path separators or traversal
+    # must not let a malicious hook input write or delete files outside the
+    # active-subagents dir — same contract as the waiting marker.
+    for hostile in ("../escape", "a/b", "a\\b", "/etc/passwd", "..", ".", ""):
+        assert hub_client.mark_subagent_active(hostile) is False
+        assert hub_client.count_active_subagents(hostile) == 0
+        assert hub_client.clear_active_subagent(hostile) is False
+        assert hub_client.clear_all_active_subagents(hostile) is False
+    assert not (active_subagent_home.parent.parent.parent / "escape").exists()
+
+
+def test_active_subagent_helpers_tolerate_none_session_id(hub_client, active_subagent_home):
+    # Why: hook inputs are untrusted JSON — a null session_id must behave as "no
+    # markers", never raise.
+    assert hub_client.mark_subagent_active(None) is False
+    assert hub_client.count_active_subagents(None) == 0
+    assert hub_client.clear_active_subagent(None) is False
+    assert hub_client.clear_all_active_subagents(None) is False
+
+
+def test_count_active_subagents_with_no_directory_returns_zero(hub_client, active_subagent_home):
+    # Why: a session that never dispatched a subagent has no directory at all —
+    # counting must treat "missing" the same as "empty", not error.
+    assert hub_client.count_active_subagents("untouched-session") == 0

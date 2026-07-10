@@ -17,7 +17,7 @@
       "name": "notifications",
       "source": "./plugins/notifications",
       "description": "System notifications when Claude completes tasks or needs your attention (macOS + Slack)",
-      "version": "1.5.0"
+      "version": "1.6.0"
     },
     {
       "name": "dev-workflow",

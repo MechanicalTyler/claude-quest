@@ -12,11 +12,14 @@ CLAUDE_NOTIFY_SLACK) shared by the hook scripts.
 
 import json
 import os
+import shutil
 import socket
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,6 +27,7 @@ DEFAULT_HUB_URL = "http://localhost:8765"
 HUB_TIMEOUT_SECONDS = 2
 MESSAGE_SNIPPET_MAX = 200
 SESSION_NAME_MAX = 256
+ACTIVE_SUBAGENT_TTL_SECONDS = 2 * 60 * 60
 _FALSY_VALUES = {"0", "false", "no", "off"}
 
 # Container-detection signals (module-level so tests can redirect them).
@@ -208,6 +212,108 @@ def clear_waiting_marker(session_id):
         if path is None or not path.is_file():
             return False
         path.unlink()
+        return True
+    except Exception:
+        return False
+
+
+def _active_subagent_dir_path(session_id):
+    """Per-session directory holding one marker file per active subagent.
+
+    Reuses the same sanitization as _waiting_marker_path: the session ID
+    becomes a directory name, so reject anything empty, containing path
+    separators, null bytes, or a traversal component.
+    """
+    session_id = str(session_id or "").strip()
+    if (not session_id or "/" in session_id or "\\" in session_id
+            or "\x00" in session_id or session_id in (".", "..")):
+        return None
+    return Path.home() / ".claude" / "notifications" / "active-subagents" / session_id
+
+
+def mark_subagent_active(session_id):
+    """Record one active subagent dispatch for this session.
+
+    Creates the per-session active-subagent directory if needed, then creates
+    a single marker file named with a fresh uuid4 token via exclusive create
+    (Path.touch(exist_ok=False)), so concurrent dispatches can never collide
+    on a filename. Returns True on success, False if the session_id is
+    invalid or the filesystem operation fails. Never raises.
+    """
+    try:
+        dir_path = _active_subagent_dir_path(session_id)
+        if dir_path is None:
+            return False
+        dir_path.mkdir(parents=True, exist_ok=True)
+        marker_path = dir_path / uuid.uuid4().hex
+        marker_path.touch(exist_ok=False)
+        return True
+    except Exception:
+        return False
+
+
+def count_active_subagents(session_id):
+    """Count active-subagent markers for this session, pruning stale ones.
+
+    Any marker older than ACTIVE_SUBAGENT_TTL_SECONDS is removed before
+    counting, so a crashed (or denied/errored) subagent dispatch that never
+    fires SubagentStop cannot wedge a session on "working" forever. Returns
+    0 if none exist or the directory doesn't exist. Never raises.
+    """
+    try:
+        dir_path = _active_subagent_dir_path(session_id)
+        if dir_path is None or not dir_path.is_dir():
+            return 0
+        now = time.time()
+        count = 0
+        for marker in dir_path.iterdir():
+            try:
+                if not marker.is_file():
+                    continue
+                age = now - marker.stat().st_mtime
+                if age > ACTIVE_SUBAGENT_TTL_SECONDS:
+                    marker.unlink()
+                    continue
+                count += 1
+            except Exception:
+                continue
+        return count
+    except Exception:
+        return 0
+
+
+def clear_active_subagent(session_id):
+    """Remove one active-subagent marker for this session.
+
+    Markers are interchangeable -- only the count matters -- so any single
+    marker in the directory may be removed. Returns True if a marker was
+    removed, False if none existed. Never raises.
+    """
+    try:
+        dir_path = _active_subagent_dir_path(session_id)
+        if dir_path is None or not dir_path.is_dir():
+            return False
+        for marker in dir_path.iterdir():
+            if marker.is_file():
+                marker.unlink()
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def clear_all_active_subagents(session_id):
+    """Remove the entire active-subagent directory for this session at once.
+
+    Used at session end so no marker files outlive their session. Returns
+    True if the directory existed and was removed, False otherwise. Never
+    raises.
+    """
+    try:
+        dir_path = _active_subagent_dir_path(session_id)
+        if dir_path is None or not dir_path.is_dir():
+            return False
+        shutil.rmtree(dir_path)
         return True
     except Exception:
         return False
