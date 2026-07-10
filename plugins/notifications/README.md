@@ -14,54 +14,9 @@ System notifications when Claude completes tasks or needs input, plus a self-hos
 
 ## Attention hub
 
-Many concurrent Claude sessions (local, docker, remote servers) make macOS/Slack notifications spammy and hard to track. The attention hub is a small self-hosted server every session reports to; its web dashboard shows one color-coded row per session:
+Many concurrent Claude sessions (local, docker, remote servers) make macOS/Slack notifications spammy and hard to track. This plugin's hooks report each session's state to an attention-hub dashboard — a small self-hosted server with a web UI showing one color-coded row per session, sorted needs-attention first.
 
-- **Red** — `waiting` (blocked on a permission/question prompt) or `needs_input` (finished its turn by asking you something)
-- **Yellow** — `done` (task complete, awaiting your review)
-- **Green** — `working` (you answered; Claude is busy)
-
-Each card's title is the session name (set via `/rename`), falling back to the session ID for unnamed sessions, with the project (repo folder) as the subtitle. Cards sort needs-attention first, show time in state, the latest message snippet, and last-update age, refresh every 3 seconds, and have a per-card dismiss control for crashed/abandoned sessions. Sessions silent for over 24 hours are pruned automatically.
-
-### Expanded card view
-
-Clicking a card expands it; any number of cards may be open at once, and open cards stay open across the 3-second refresh. The detail panel shows:
-
-- **Host** — with a `container` badge when the session runs inside a container
-- **Full session ID** and the **full last message**
-- **Last update** age
-- **Status history** — the last 20 state transitions (most recent first), each with the time it was entered, how long it lasted, and a `manual` badge when the change came from a manual override rather than a hook
-
-### Forcing a status
-
-If the hub falls out of sync with reality (Claude is working but the card still says waiting), the **force status** buttons in the expanded panel set the state by hand — the current state's button is disabled. The override applies immediately and shows up in the history as `manual`, but it is not pinned: the next genuine hook event for the session overwrites it, so the hub always self-heals toward reality.
-
-The buttons call a small API you can also script against:
-
-```bash
-curl -X POST http://localhost:8765/api/sessions/<session-id>/state \
-  -H 'Content-Type: application/json' -d '{"state": "working"}'
-```
-
-Responses: `200` with the updated record, `400` for a missing/invalid state or malformed body, `404` for an unknown session — forcing never creates a session.
-
-### Starting the hub
-
-The hub is a manual-start, zero-dependency Python script (run it in tmux/screen; it does not survive reboot):
-
-```bash
-uv run hub/attention_hub.py
-```
-
-Options:
-
-| Flag | Default | Meaning |
-|------|---------|---------|
-| `--port` | `8765` | Port to listen on |
-| `--bind` | `0.0.0.0` | Bind address (`127.0.0.1` for localhost only) |
-| `--state-file` | `~/.claude/attention_hub_state.json` | JSON persistence file (sessions survive hub restarts) |
-| `--prune-hours` | `24` | Drop sessions silent for this many hours |
-
-Open `http://localhost:8765/` for the dashboard.
+The hub itself is a separate, standalone plugin so it can be installed and run independently of `notifications`. See the [`attention-hub`](../attention-hub) plugin for installation, running the dashboard, and its HTTP API.
 
 ### Docker containers and remote servers
 
@@ -80,10 +35,6 @@ export CLAUDE_HOST_LABEL=staging-server
 Sessions running inside a container are detected automatically — via `/.dockerenv` (Docker), `/run/.containerenv` (Podman), the `container` env var (Podman/systemd-nspawn), `KUBERNETES_SERVICE_HOST` (Kubernetes), or an overlayfs root filesystem as a fallback — and badged `container` in the expanded card. The hostname inside Docker defaults to the bare container ID, so give containers a readable host name with `CLAUDE_HOST_LABEL` (as above) or `docker run --hostname my-name`.
 
 If the hub is down or unreachable, hooks degrade gracefully: they never block or error a Claude session, and macOS/Slack notifications still work.
-
-### Security
-
-The hub has **no authentication or TLS** and is intended for a trusted private network only (localhost, LAN, VPN/tailnet). Dashboard rows expose project names and assistant message snippets. If remote machines do not need direct access, bind to localhost (`--bind 127.0.0.1`) or a VPN interface.
 
 ## Environment variables
 
