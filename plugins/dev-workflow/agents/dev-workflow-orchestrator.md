@@ -38,6 +38,11 @@ test-pr, plus the fix loops) as its own subagent, so each stage runs in fresh co
 those stages run inline within this context — still isolated per task, just not per
 stage.
 
+Each of those nested stage dispatches is sequential from your point of view — you cannot
+report a result back to the epic until the stage returns. Dispatch every one of them to
+block for its result per `skills/shared/standards.md` → "Subagent Wait Discipline"; never
+background a stage dispatch and end your turn waiting on a notification.
+
 **Bug reporting:** If full-cycle surfaces a defect attributable to a previously-completed
 task, include a `bug-report` (defect, affected repo, suspected source task ID) in your
 result. **Do not create a task** — only report it; the epic creates the bug task.

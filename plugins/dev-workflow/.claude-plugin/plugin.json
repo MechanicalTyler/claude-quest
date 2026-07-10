@@ -1,6 +1,6 @@
 {
   "name": "dev-workflow",
-  "version": "2.24.1",
+  "version": "2.25.0",
   "description": "Action-based development workflow skills with pluggable PM and notes adapters",
   "author": {
     "name": "MechanicalTyler"

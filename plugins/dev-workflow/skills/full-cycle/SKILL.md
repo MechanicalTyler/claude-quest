@@ -77,6 +77,12 @@ into *your* context (no subagent), which is exactly the "everything runs in one 
 failure this design prevents. Each worker's body invokes the matching
 `dev-workflow:{stage}` skill autonomously, so stage behavior is unchanged.
 
+**Every stage dispatch below is sequential — you cannot proceed until it returns.**
+Dispatch it to block for its result per `standards.md` → "Subagent Wait Discipline"; do
+not background it and end your turn to wait on a notification. This applies to every
+"Dispatch the Agent tool" instruction in this skill, including inside the Review Loop and
+Test Loop.
+
 **Subagent type + model per dispatch.** Resolve the model with the resolution order
 `models.stages.<stage-key>` → `models.<task-type>` → built-in default, then pass it as the
 `model` parameter on the Agent call (it overrides the worker's frontmatter default):

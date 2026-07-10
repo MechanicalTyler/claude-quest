@@ -96,6 +96,57 @@ behavior are unchanged; only the dispatch boundary is made explicit.
 Interactive stages (create-story, write-spec in the standalone full-cycle path) still run
 in the **main agent** so their user-facing gates work — do not dispatch a worker for those.
 
+---
+
+## Subagent Wait Discipline (never go idle)
+
+**Dispatching a subagent is not the end of your turn's work — resolving it is.** An
+orchestrator that fires an `Agent` call and then stops, with nothing else queued and no
+explicit statement of what happens next, produces a session that looks and behaves as
+fully idle. It may eventually be woken by a completion notification, or it may not — a
+subagent can die without ever emitting one, and a silent orchestrator has no way to tell
+the difference between "still working" and "stuck forever." This section is mandatory for
+every dispatch made by `full-cycle`, `epic`, `review-pr`'s perspective fan-out, and any
+other skill in this plugin that dispatches subagents.
+
+**Default: dispatch to block, not to background.** The overwhelming majority of dispatches
+in this plugin are strictly sequential — the orchestrator cannot take its next action until
+that one dispatch returns (read the PR number, read the review decision, decide the next
+loop iteration). For that shape, dispatch the subagent so its result comes back within the
+same continuous execution — do not fire it into the background and end your turn to wait
+for an out-of-band wake event. If your harness's `Agent` tool defaults to a background
+dispatch, explicitly request the blocking/synchronous variant (e.g. `run_in_background:
+false`, or the harness's equivalent), or immediately follow the dispatch with a blocking
+wait on that specific task before doing anything else. The test: if the very next thing you
+need to do is read this subagent's result, you must not end the turn before you have it.
+
+**Background dispatch is reserved for genuine concurrency.** Only use a backgrounded,
+fire-and-forget dispatch when multiple independent subagents are meant to run at the same
+time (`epic`'s per-repo scheduling round in Phase 7, `review-pr`'s six parallel perspective
+reviewers). Even then:
+
+- **State what's in flight before you stop.** The turn that dispatches the batch must
+  explicitly name every subagent launched (role, target — PR/task/repo) and how completion
+  will be detected. Never end a turn on unresolved dispatches with only an implicit
+  "waiting" — say so out loud.
+- **Never rely on notification delivery alone.** For any batch expected to take more than a
+  couple of minutes, arm a bounded, visible fallback re-check (e.g. a scheduled wake-up, or
+  polling task status through the harness's own status tool) so a subagent that dies without
+  notifying is caught within a bounded time instead of hanging the pipeline forever.
+- **The fallback must be visible, never a hidden loop.** "Wait for it to complete" and
+  "wait for all N agents to complete" — wherever this plugin's skills say that — means:
+  track completion through the harness's own task/agent status mechanism, or through an
+  explicitly named, visible watcher. It never means a backgrounded shell loop
+  (`while true; do sleep …; done` or equivalent) that produces no output the user can see.
+  A user watching the session must always be able to tell that work is actively in
+  progress, not silence they have to interrupt to interpret.
+
+**On resume from any wait**, whether from a blocking result or a wake event, immediately
+state what came back and what happens next — do not let the session's next visible action
+be unrelated to the thing it was just waiting on.
+
+---
+
 ## Subagent Nesting (version-dependent)
 
 As of **Claude Code v2.1.172**, a subagent may itself spawn subagents — up to a **fixed
