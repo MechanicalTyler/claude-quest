@@ -12,6 +12,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `hooks/reflection_session_start.py` runs on every session start and emits a fixed `additionalContext` payload (via `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "..."}}`) instructing the agent to watch for five trigger types throughout the session (correction of a claim, "no"/"don't"/"stop doing X", a repeated/rephrased request, pushback on an approach, visible frustration/escalation) and log each occurrence immediately and passively — no task interruption, no permission-asking. Like the notifications plugin's hooks, it degrades silently (exit 0, no output) on any error.
 
+### Stop hook (session-end `/reflect` nudge)
+
+`hooks/reflection_stop.py` fires at the end of every turn. It only acts when ALL of these hold: `stop_hook_active` is not set (avoids looping on its own block), the current session hasn't already been nudged (per-session marker at `~/.claude/reflection/state/{session_id}.nudged`), the last user message matches a sign-off heuristic (e.g. "bye", "that's all", "done for now"), and `~/.claude/reflection/log.md` actually has unreviewed content. When all four hold, it returns `{"decision": "block", "reason": "..."}` to stop the session from ending and tell the agent to run `/reflect` first — the same "block Stop, inject a reason" mechanism `dev-workflow`'s `compact-injector.sh` uses for `/compact`, but via the hook's own JSON decision output rather than tmux injection. The sign-off heuristic is inherently imprecise (regex over closing phrases) and will occasionally miss a real sign-off or fire on an unrelated message that happens to contain one of the phrases — the per-session marker caps the cost of a false positive to one nudge.
+
 ### Log file
 
 `~/.claude/reflection/log.md` — append-only Markdown, one entry per trigger, each with an ISO-8601 timestamp, a one-line context note (skill/project/cwd), the trigger type, and a one-line quote/paraphrase. This is uncommitted runtime state, created on first write — the same convention `dev-workflow` uses for `~/.claude/dev-workflow/state/`.
@@ -33,8 +37,9 @@ The skill never edits any file other than appending catch-up entries to the log 
 
 ```
 hooks/
-  hooks.json                        # SessionStart hook registration
+  hooks.json                        # SessionStart + Stop hook registration
   reflection_session_start.py       # Emits watch-and-log instructions on every session start
+  reflection_stop.py                # Nudges /reflect at a detected end-of-session sign-off, if unreviewed log entries exist
 skills/
   reflect/
     SKILL.md                        # /reflect: read -> catch-up scan -> synthesize -> report

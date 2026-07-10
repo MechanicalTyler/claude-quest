@@ -5,6 +5,7 @@ Passively watches every Claude Code session for moments the agent didn't meet ex
 ## What it does
 
 - **SessionStart hook**: injects standing watch-and-log instructions into every session (with or without any other plugin installed). The agent watches for five trigger types and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission.
+- **Stop hook**: at what looks like a natural end of session (a sign-off like "bye" / "that's all" / "done for now") with unreviewed log entries still sitting in `~/.claude/reflection/log.md`, blocks the session from ending and asks the agent to run `/reflect` first — once per session, so a false-positive sign-off match only costs one nudge.
 - **`/reflect` skill**: reads the log, catches up on anything from the live conversation or the most recent prior session in the current project that wasn't already captured, groups recurring problems, attributes each to a specific root cause, and writes a self-contained HTML report.
 
 ## Trigger types
@@ -36,6 +37,10 @@ Each report groups findings by root cause, and every finding is attributed to ei
 - a specific `CLAUDE.md` (user-global or repo-level) and the rule that's missing or being ignored.
 
 `/reflect` never edits another skill's or plugin's files — it only appends catch-up entries to the log and writes its own report.
+
+## Session-end nudge
+
+The sign-off heuristic (regex over phrases like "bye", "that's all", "done for now") is imprecise by nature — it can miss a real sign-off, or match a message that isn't actually one. Each session gets at most one nudge (tracked at `~/.claude/reflection/state/{session_id}.nudged`), so a false match costs one extra "run /reflect?" prompt, not a repeating nag.
 
 ## Installation
 
