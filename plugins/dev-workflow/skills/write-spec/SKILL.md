@@ -304,6 +304,8 @@ Record the spec path for use in the approval gate and Phase 11. When in the per-
 
 > **This gate runs after all per-repo specs are written (after the Phase 5–10 loop completes) and BEFORE Phase 11.** Do not proceed to Phase 11 without passing this gate.
 
+**Process Fidelity applies here (see `skills/shared/standards.md` → "Process Fidelity").** This gate must never be silently treated as satisfied — silence or a non-answer is not approval, and weakening, reinterpreting, or bypassing the gate requires asking the user for explicit permission first.
+
 **Interactive mode:**
 
 Present all generated specs to the user in a summary table:

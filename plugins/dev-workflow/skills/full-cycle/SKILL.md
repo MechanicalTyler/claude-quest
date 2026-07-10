@@ -105,6 +105,8 @@ Test Loop.
 
 The skill is resumable: re-invoking it at any time must enter the pipeline at the correct stage. Determine the entry stage from PM story state, whether a linked PR exists, the PR's review decision, and test-pr's tracking labels. Evaluate top to bottom and enter at the **first** matching stage.
 
+**Process Fidelity applies here (see `standards.md` → "Process Fidelity").** Entry detection selects where the pipeline resumes — it never skips or reorders work: entering at a non-default stage, skipping a stage (including write-spec or its User Approval Gate), or running stages out of the documented order beyond what the table below dictates requires asking the user for explicit permission first, never a silent inference from PR/story state.
+
 **Why the row order matters:** when test-pr fails it submits a `REQUEST_CHANGES` review, which drives the PR's aggregate `reviewDecision` to `CHANGES_REQUESTED` — the *same* value review-pr produces when review fails. The PR review decision alone therefore cannot tell a failed review from a failed test. The `tests-failing` / `tested-in-dev` labels (set by test-pr — see the test-pr label requirement) are the disambiguator, so the label rows are evaluated **before** the generic `reviewDecision == CHANGES_REQUESTED` row.
 
 | # | Observed state | Entry stage |

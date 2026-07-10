@@ -163,6 +163,8 @@ After each PR is created, attach it to the story as an external link via the PM 
    Apply the full RED-GREEN-REFACTOR cycle:
    > Invoke Skill: `superpowers:test-driven-development`
    > Use this for each distinct behavior being implemented.
+
+   **Process Fidelity applies here (see `skills/shared/standards.md` → "Process Fidelity").** Skipping RED-GREEN-REFACTOR for a given behavior, or deviating from the per-repo implementation plan, requires asking the user for explicit permission first — it is never a silent judgment call.
 2. **Respect existing architecture patterns** — Study the codebase structure before making changes
 3. **No placeholder code** — Always implement full functionality. If unable, stop and ask for help
 4. **For database changes** — Update appropriate DAO, Entity classes, and Migrations

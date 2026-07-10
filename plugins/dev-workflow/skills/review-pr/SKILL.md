@@ -139,6 +139,7 @@ Some repos legitimately have no dev build CI (e.g. documentation-only or plugin 
 - **Default is gated.** A repo that is absent from `ci_gate_exempt_repos` is gated. The `review_ci_command` `fallback` entry is NOT an exemption — falling back to the fallback CI instruction still requires the gate to run and pass.
 - **Absence of a CI workflow is not an exemption.** If a non-exempt repo has no dev build CI workflow at all, that is a **REQUEST_CHANGES**, not a skip. Never treat "no CI found" as auto-exempt.
 - **Announce every skip.** When the gate is skipped by exemption, the review body MUST state it explicitly, e.g. "Dev build CI gate skipped: repo `<name>` is explicitly exempt in `ci_gate_exempt_repos`." Silent skipping is forbidden.
+- **Process Fidelity applies here (see `skills/shared/standards.md` → "Process Fidelity", hard-fail carve-out) — and it does not soften this gate.** Silently treating a non-exempt repo as if it were listed in `ci_gate_exempt_repos`, silently overriding a failing, missing, or cancelled CI result, or silently expanding who counts as exempt must STOP and be flagged to the user. No user answer converts any of those into a passing verdict the CI did not produce — the gate's pass/fail logic and its config-driven exemption list stay exactly as strict as documented above.
 
 The dev build CI is the build workflow described under "Load CI Configuration" and "Required Workflows" below; this gate makes triggering and waiting on it non-negotiable. Run it as the first action of Phase 3.
 

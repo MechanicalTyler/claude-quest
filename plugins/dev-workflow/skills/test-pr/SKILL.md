@@ -142,6 +142,7 @@ Some repos legitimately have no dev deploy CI (e.g. documentation-only or plugin
 - **Default is gated.** A repo absent from `deploy_gate_exempt_repos` is gated. The `deploy_command` `fallback` entry is NOT an exemption — falling back to the fallback deploy instruction still requires a successful dev deploy CI run.
 - **Absence of a deploy CI is not an exemption.** For a non-exempt repo with no runnable dev deploy CI, the verdict is **REQUEST_CHANGES + `tests-failing`**, never a skip.
 - **Announce every skip.** When the gate is skipped by exemption, the test report MUST state that functional dev testing was skipped by explicit exemption (naming the repo and `deploy_gate_exempt_repos`) and describe how the change was otherwise validated. Silent skipping is forbidden.
+- **Process Fidelity applies here (see `skills/shared/standards.md` → "Process Fidelity", hard-fail carve-out) — and it does not soften this gate.** Silently treating a non-exempt repo as if it were listed in `deploy_gate_exempt_repos`, or silently overriding a failing or missing dev deploy CI result, must STOP and be flagged to the user. This creates no user-grantable bypass of the deploy gate itself — its hard-fail default and config-driven exemption list stay exactly as strict as documented above.
 
 Read `~/.claude/dev-workflow/config.json` for `deploy_command`.
 
