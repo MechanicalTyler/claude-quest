@@ -332,6 +332,9 @@ Launch the following 6 agents in parallel:
    - Instructions: content of `skills/subagents/budget-manager.md` + shared context
    - Focus: external API costs, infrastructure, storage, scaling cost profile
 
+This round is a genuinely concurrent, backgrounded dispatch — apply `skills/shared/standards.md`
+→ "Subagent Wait Discipline": state that all 6 are in flight before yielding the turn, and
+arm a bounded, visible fallback re-check rather than trusting notification delivery alone.
 Wait for all 6 agents to complete, then collect all findings before proceeding to Phase 5.5.
 
 ---

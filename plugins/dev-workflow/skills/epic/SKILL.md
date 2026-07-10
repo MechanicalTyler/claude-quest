@@ -165,7 +165,9 @@ The scheduler decides what runs next. It reads `tasklist.md` as the source of tr
    single batch.
 5. When the ready set is empty:
    - If any task is still **actively** in flight (`in-progress`, `in-review`, `in-test`), wait for it
-     to complete (Phase 8), then recompute from step 1.
+     to complete (Phase 8) per `standards.md` → "Subagent Wait Discipline" — state which task(s) are
+     in flight and how completion will be detected before yielding the turn; do not go silent — then
+     recompute from step 1.
    - An `awaiting-merge` task is **never waited on** — only a human can advance it, which cannot
      happen inside this run. Do not block on it.
    - If nothing is actively in flight and nothing is ready — i.e. every remaining task is
@@ -188,6 +190,13 @@ v2.1.172+ it dispatches each of full-cycle's stages as its own nested subagent (
 under the depth-5 cap) — every stage gets a fresh context even under the epic. On older
 builds those stages run inline within the task's worker context (still isolated per task).
 Dispatch the concurrent tasks of a round in a **single message with multiple Agent calls**.
+
+This is epic's one genuinely concurrent, backgrounded dispatch point — apply
+`standards.md` → "Subagent Wait Discipline" here: immediately after dispatching the round,
+state every task dispatched (task ID, repo) and that you are waiting on their completion
+notifications, then arm a bounded, visible fallback re-check rather than trusting
+notification delivery alone for a run that may take a long time. Never let the turn end
+with an in-flight round and no statement of what's running.
 
 The dispatch prompt must contain, explicitly:
 
