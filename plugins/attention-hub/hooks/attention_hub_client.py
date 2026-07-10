@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """
-Shared attention-hub client for Claude hooks.
+Attention-hub reporting client.
 
 Builds per-session state events and delivers them to the attention hub over
 HTTP. Every network operation uses a short timeout and swallows all failures:
-an unreachable hub must never block or error a Claude session.
-
-Also hosts the per-channel notification flags (CLAUDE_NOTIFY_MACOS /
-CLAUDE_NOTIFY_SLACK) shared by the hook scripts.
+an unreachable hub must never block or error an agent session.
 """
 
 import json
@@ -28,7 +25,6 @@ HUB_TIMEOUT_SECONDS = 2
 MESSAGE_SNIPPET_MAX = 200
 SESSION_NAME_MAX = 256
 ACTIVE_SUBAGENT_TTL_SECONDS = 2 * 60 * 60
-_FALSY_VALUES = {"0", "false", "no", "off"}
 
 # Container-detection signals (module-level so tests can redirect them).
 CONTAINER_MARKER_FILES = ("/.dockerenv", "/run/.containerenv")
@@ -112,23 +108,6 @@ def detect_container():
         return False
 
 
-def _channel_enabled(env_var):
-    value = os.environ.get(env_var, "").strip().lower()
-    if not value:
-        return True
-    return value not in _FALSY_VALUES
-
-
-def macos_enabled():
-    """macOS channel flag (CLAUDE_NOTIFY_MACOS). Defaults to enabled."""
-    return _channel_enabled("CLAUDE_NOTIFY_MACOS")
-
-
-def slack_enabled():
-    """Slack channel flag (CLAUDE_NOTIFY_SLACK). Defaults to enabled."""
-    return _channel_enabled("CLAUDE_NOTIFY_SLACK")
-
-
 def get_session_name(input_data):
     """Best-effort session name for the hook's session.
 
@@ -166,14 +145,14 @@ def _waiting_marker_path(session_id):
 
     The session ID becomes a filename, so reject anything empty, containing
     path separators, or that is a traversal component. Markers live in a
-    dedicated subdirectory of ~/.claude/notifications/ so all of the plugin's
+    dedicated subdirectory of ~/.claude/attention-hub/ so all of the plugin's
     transient state sits under one gitignorable path.
     """
     session_id = str(session_id or "").strip()
     if (not session_id or "/" in session_id or "\\" in session_id
             or "\x00" in session_id or session_id in (".", "..")):
         return None
-    return Path.home() / ".claude" / "notifications" / "waiting-markers" / session_id
+    return Path.home() / ".claude" / "attention-hub" / "waiting-markers" / session_id
 
 
 def set_waiting_marker(session_id):
@@ -228,7 +207,7 @@ def _active_subagent_dir_path(session_id):
     if (not session_id or "/" in session_id or "\\" in session_id
             or "\x00" in session_id or session_id in (".", "..")):
         return None
-    return Path.home() / ".claude" / "notifications" / "active-subagents" / session_id
+    return Path.home() / ".claude" / "attention-hub" / "active-subagents" / session_id
 
 
 def mark_subagent_active(session_id):

@@ -1,0 +1,2 @@
+{"message": {"role": "user", "content": "Write a function"}}
+{"message": {"role": "assistant", "content": [{"type": "text", "text": "Here is the function you requested."}]}}

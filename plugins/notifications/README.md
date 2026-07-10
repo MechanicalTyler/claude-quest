@@ -1,22 +1,19 @@
 # notifications
 
-System notifications when Claude completes tasks or needs input, plus a self-hosted attention hub that tracks which of your Claude sessions is waiting on you.
+System notifications when Claude completes tasks or needs input (macOS + Slack). Optionally also reports session state to the [`attention-hub`](../attention-hub) dashboard, if that plugin is installed alongside this one.
 
 ## What it does
 
-- **Notification hook**: Sends message to Slack app + macOS notification when Claude needs user input (actionable types only); reports `waiting` to the attention hub
-- **PreToolUse hook**: Pure observer — marks the session as having an active subagent when a `Task` dispatch is seen (every other tool is a no-op). Always exits `0` and never emits a permission-decision payload, so it can never block a tool call
-- **Stop hook**: Sends message to Slack app + macOS "Task Complete" notification when Claude finishes; reports `needs_input` or `done` to the attention hub (subagent sessions are skipped entirely). If any subagent dispatched by this session is still active, reports `working` instead of `done` and sends no notification — a genuine `needs_input` (the main agent asked a question) always overrides this
-- **UserPromptSubmit hook**: Reports `working` to the attention hub — answering a session automatically clears its needs-attention state
-- **PostToolUse hook**: Reports `working` to the attention hub when a tool completes after the session was flagged `waiting` (a tool can only complete once a pending permission/question was answered) — so answering a permission dialog flips the row back to green without a new prompt. Gated by a per-session marker file under `~/.claude/notifications/waiting-markers/`, so on normal tool calls (no marker) it exits instantly with zero network activity. Note: the flip happens when the approved tool *finishes* — a long-running approved command keeps showing `waiting` until it completes
-- **SessionEnd hook**: Removes the session from the attention hub (and cleans up its waiting marker and any active-subagent markers)
-- **SubagentStop hook**: No notifications. Clears one active-subagent marker for the session so the Stop hook's active-subagent count stays accurate
+- **Notification hook**: Sends message to Slack app + macOS notification when Claude needs user input (actionable types only); if attention-hub is installed, also reports `waiting` to its dashboard
+- **Stop hook**: Sends message to Slack app + macOS "Task Complete" notification when Claude finishes; if attention-hub is installed, also reports `needs_input` or `done` (subagent sessions are skipped entirely). If any subagent dispatched by this session is still active, reports `working` instead of `done` and sends no notification — a genuine `needs_input` (the main agent asked a question) always overrides this
 
-## Attention hub
+That's the entire hook set this plugin ships. All attention-tracking hooks (PreToolUse, PostToolUse, UserPromptSubmit, SessionEnd, SubagentStop) and the dashboard server now live in the separate [`attention-hub`](../attention-hub) plugin — install it to get the full dashboard experience for any agent, Claude Code or otherwise.
 
-Many concurrent Claude sessions (local, docker, remote servers) make macOS/Slack notifications spammy and hard to track. This plugin's hooks report each session's state to an attention-hub dashboard — a small self-hosted server with a web UI showing one color-coded row per session, sorted needs-attention first.
+## Optional attention-hub integration
 
-The hub itself is a separate, standalone plugin so it can be installed and run independently of `notifications`. See the [`attention-hub`](../attention-hub) plugin for installation, running the dashboard, and its HTTP API.
+Many concurrent Claude sessions (local, docker, remote servers) make macOS/Slack notifications spammy and hard to track. If the [`attention-hub`](../attention-hub) plugin is also installed, this plugin's Notification and Stop hooks additionally report each session's state to its dashboard — a small self-hosted server with a web UI showing one color-coded row per session, sorted needs-attention first.
+
+This is a soft dependency, auto-discovered at hook run time (a sibling-plugin lookup, with an optional `CLAUDE_ATTENTION_HUB_CLIENT_PATH` override) — nothing to configure. **If attention-hub is not installed, notifications still works exactly as before this integration: macOS/Slack notifications fire normally, hub reporting is simply skipped.** One behavior does depend on attention-hub actually being installed: the Stop hook's "don't notify while a background subagent is still running" suppression relies on active-subagent markers written by attention-hub's own PreToolUse/SubagentStop hooks. Running notifications standalone means every Stop is treated as a real completion — install both plugins together to restore that refinement.
 
 ### Docker containers and remote servers
 
@@ -51,7 +48,7 @@ Both notification channels behave exactly as before when the flags are unset.
 
 - macOS notifications: `brew install terminal-notifier`
 - Slack app: must be running at `http://localhost:8080` (optional, gracefully degrades)
-- Attention hub: Python 3.8+ (stdlib only), started manually (optional, gracefully degrades)
+- Attention hub integration: install the [`attention-hub`](../attention-hub) plugin alongside this one (optional, gracefully degrades if absent)
 
 ## Installation
 

@@ -9,9 +9,9 @@ HOOKS_DIR = Path(__file__).parent.parent / "hooks"
 
 
 def run_pre_tool_use(hook_input, capsys):
-    """Run notifications_pre_tool_use, return (exit_code, stdout)."""
+    """Run attention_hub_pre_tool_use, return (exit_code, stdout)."""
     spec = importlib.util.spec_from_file_location(
-        "notifications_pre_tool_use", HOOKS_DIR / "notifications_pre_tool_use.py"
+        "attention_hub_pre_tool_use", HOOKS_DIR / "attention_hub_pre_tool_use.py"
     )
     with patch("sys.stdin", StringIO(json.dumps(hook_input))):
         mod = importlib.util.module_from_spec(spec)
@@ -80,7 +80,7 @@ def test_malformed_stdin_exits_zero(active_subagent_home, capsys):
     # Why: a hook that raises on bad input would break the tool call it is
     # supposed to be silently observing.
     spec = importlib.util.spec_from_file_location(
-        "notifications_pre_tool_use", HOOKS_DIR / "notifications_pre_tool_use.py"
+        "attention_hub_pre_tool_use", HOOKS_DIR / "attention_hub_pre_tool_use.py"
     )
     with patch("sys.stdin", StringIO("not json")):
         mod = importlib.util.module_from_spec(spec)

@@ -6,12 +6,13 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 HOOKS_DIR = Path(__file__).parent.parent / "hooks"
+ATTENTION_HUB_HOOKS_DIR = Path(__file__).parent.parent.parent / "attention-hub" / "hooks"
 
 
-def run_hook_capture_hub(script_name, hook_input):
+def run_hook_capture_hub(script_name, hook_input, hooks_dir=HOOKS_DIR):
     """Run a hook script, return list of (url, method, body) hub requests."""
     spec = importlib.util.spec_from_file_location(
-        script_name.replace(".py", ""), HOOKS_DIR / script_name
+        script_name.replace(".py", ""), hooks_dir / script_name
     )
     hub_requests = []
 
@@ -91,7 +92,7 @@ def test_stop_without_ask_reports_done(base_hook_input, transcript_without_ask):
     assert events[0]["state"] == "done"
 
 
-def test_subagent_stop_reports_nothing(base_hook_input, transcript_without_ask):
+def test_subagent_session_stop_reports_nothing(base_hook_input, transcript_without_ask):
     # Why: subagent sessions are internal; showing them as dashboard rows would
     # recreate the notification spam this feature exists to remove.
     events = hub_events(run_hook_capture_hub("notifications_stop.py", {
@@ -110,29 +111,6 @@ def test_stop_reports_message_snippet(base_hook_input, transcript_without_ask):
         "transcript_path": transcript_without_ask,
     }))
     assert events[0]["message"], "Stop event must carry the latest message snippet"
-
-
-# --- UserPromptSubmit hook -> working ---
-
-def test_user_prompt_submit_reports_working(base_hook_input):
-    # Why: the user answering a session is the "addressed" signal — it must flip
-    # the row green automatically with no manual bookkeeping.
-    events = hub_events(run_hook_capture_hub("notifications_user_prompt_submit.py", {
-        **base_hook_input,
-        "prompt": "please continue",
-    }))
-    assert len(events) == 1
-    assert events[0]["state"] == "working"
-    assert events[0]["session_id"] == "test-session-123"
-
-
-def test_user_prompt_submit_without_session_id_reports_nothing(base_hook_input):
-    # Why: without a session ID the hub cannot key the row; sending would create
-    # a garbage entry. The hook must stay silent and exit 0.
-    hook_input = {**base_hook_input, "prompt": "hi"}
-    hook_input["session_id"] = ""
-    events = hub_events(run_hook_capture_hub("notifications_user_prompt_submit.py", hook_input))
-    assert events == []
 
 
 # --- Session name propagation ---
@@ -154,18 +132,6 @@ def test_stop_reports_session_name_from_transcript(base_hook_input, transcript_w
     # the moment the row turns yellow/red is when the label matters most.
     events = hub_events(run_hook_capture_hub("notifications_stop.py", {
         **base_hook_input,
-        "transcript_path": named_transcript(tmp_path, transcript_without_ask),
-    }))
-    assert len(events) == 1
-    assert events[0]["session_name"] == "tester"
-
-
-def test_user_prompt_submit_reports_session_name(base_hook_input, transcript_without_ask, tmp_path):
-    # Why: UserPromptSubmit fires on every prompt, so it is the event that picks up
-    # a fresh /rename fastest; it must carry the name, not just flip state to green.
-    events = hub_events(run_hook_capture_hub("notifications_user_prompt_submit.py", {
-        **base_hook_input,
-        "prompt": "please continue",
         "transcript_path": named_transcript(tmp_path, transcript_without_ask),
     }))
     assert len(events) == 1
@@ -194,7 +160,7 @@ def test_unnamed_session_reports_empty_name(base_hook_input, transcript_without_
     assert events[0]["session_name"] == ""
 
 
-# --- Waiting marker lifecycle across hooks ---
+# --- Waiting marker lifecycle (Notification sets, Stop clears) ---
 
 def set_marker(marker_home, session_id="test-session-123"):
     """Drop a waiting marker for a session, as the Notification hook would."""
@@ -204,7 +170,8 @@ def set_marker(marker_home, session_id="test-session-123"):
 
 def test_actionable_notification_sets_waiting_marker(base_hook_input, transcript_without_ask, marker_home):
     # Why: the marker is the local record that the hub was told "waiting" — without
-    # it, PostToolUse can never know the session resumed after a permission prompt.
+    # it, attention-hub's PostToolUse can never know the session resumed after a
+    # permission prompt.
     run_hook_capture_hub("notifications_notification.py", {
         **base_hook_input,
         "notification_type": "permission_prompt",
@@ -224,52 +191,6 @@ def test_non_actionable_notification_sets_no_marker(base_hook_input, transcript_
     assert not (marker_home / "test-session-123").exists()
 
 
-def test_post_tool_use_with_marker_reports_working_and_clears(base_hook_input, marker_home):
-    # Why: a tool can only complete after a pending permission was granted, so the
-    # hub must flip to "working" exactly once and the marker must be consumed.
-    set_marker(marker_home)
-    events = hub_events(run_hook_capture_hub("notifications_post_tool_use.py", {
-        **base_hook_input,
-        "tool_name": "Bash",
-    }))
-    assert len(events) == 1
-    assert events[0]["state"] == "working"
-    assert events[0]["session_id"] == "test-session-123"
-    assert not (marker_home / "test-session-123").exists()
-
-
-def test_post_tool_use_without_marker_reports_nothing(base_hook_input, marker_home):
-    # Why: PostToolUse fires after every tool call forever; without a marker it must
-    # make zero network calls or an unreachable hub adds 2s latency to every tool.
-    events = hub_events(run_hook_capture_hub("notifications_post_tool_use.py", {
-        **base_hook_input,
-        "tool_name": "Bash",
-    }))
-    assert events == []
-
-
-def test_post_tool_use_without_session_id_reports_nothing(base_hook_input, marker_home):
-    # Why: without a session ID there is no marker to key and no hub row to update;
-    # the hook must stay silent and exit 0 rather than send a garbage event.
-    set_marker(marker_home)
-    hook_input = {**base_hook_input, "tool_name": "Bash"}
-    hook_input["session_id"] = ""
-    events = hub_events(run_hook_capture_hub("notifications_post_tool_use.py", hook_input))
-    assert events == []
-    assert (marker_home / "test-session-123").is_file()
-
-
-def test_user_prompt_submit_clears_marker(base_hook_input, marker_home):
-    # Why: a new prompt is an authoritative "user is engaged" signal — a leftover
-    # marker would make the next tool call send a redundant "working" report.
-    set_marker(marker_home)
-    run_hook_capture_hub("notifications_user_prompt_submit.py", {
-        **base_hook_input,
-        "prompt": "please continue",
-    })
-    assert not (marker_home / "test-session-123").exists()
-
-
 def test_stop_clears_marker(base_hook_input, transcript_without_ask, marker_home):
     # Why: a denied permission runs no tool, so Stop is the hook that must consume
     # the marker — otherwise the first tool of the NEXT turn reports stale "working".
@@ -281,54 +202,11 @@ def test_stop_clears_marker(base_hook_input, transcript_without_ask, marker_home
     assert not (marker_home / "test-session-123").exists()
 
 
-def test_session_end_clears_marker(base_hook_input, marker_home):
-    # Why: ended sessions must not leak marker files into ~/.claude — and a recycled
-    # session ID must never inherit a stale waiting state.
-    set_marker(marker_home)
-    run_hook_capture_hub("notifications_session_end.py", {
-        **base_hook_input,
-        "reason": "exit",
-    })
-    assert not (marker_home / "test-session-123").exists()
-
-
-def test_post_tool_use_exits_zero_when_hub_down(base_hook_input, marker_home, monkeypatch):
-    # Why: graceful degradation — a dead hub must never error the new hook, and the
-    # marker must be cleared FIRST so the 2s timeout is paid once, not per tool call.
-    monkeypatch.setenv("CLAUDE_ATTENTION_HUB_URL", "http://127.0.0.1:1")
-    set_marker(marker_home)
-    spec = importlib.util.spec_from_file_location(
-        "notifications_post_tool_use", HOOKS_DIR / "notifications_post_tool_use.py"
-    )
-    with patch("sys.stdin", StringIO(json.dumps({**base_hook_input, "tool_name": "Bash"}))):
-        mod = importlib.util.module_from_spec(spec)
-        exit_code = 0
-        try:
-            spec.loader.exec_module(mod)
-            mod.main()
-        except SystemExit as e:
-            exit_code = e.code or 0
-    assert exit_code == 0, "post_tool_use must exit 0 when hub is unreachable"
-    assert not (marker_home / "test-session-123").exists(), \
-        "marker must be cleared even when the hub is down (bounds retries to one)"
-
-
-# --- SessionEnd hook -> removal ---
-
-def test_session_end_removes_session(base_hook_input):
-    # Why: ended sessions must leave the dashboard, otherwise rows accumulate and
-    # the "which instance needs me" answer drowns in dead entries.
-    hub_requests = run_hook_capture_hub("notifications_session_end.py", {
-        **base_hook_input,
-        "reason": "exit",
-    })
-    deletes = [(url, method) for url, method, body in hub_requests if method == "DELETE"]
-    assert len(deletes) == 1
-    assert deletes[0][0].endswith("/api/sessions/test-session-123")
-
+# --- Active-subagent suppression (read via attention_hub_bridge) ---
 
 def set_active_subagent_marker(active_subagent_home, session_id="test-session-123", name="marker-1"):
-    """Drop an active-subagent marker for a session, as PreToolUse(Task) would."""
+    """Drop an active-subagent marker for a session, as attention-hub's
+    PreToolUse(Task) hook would."""
     marker_dir = active_subagent_home / session_id
     marker_dir.mkdir(parents=True, exist_ok=True)
     (marker_dir / name).touch()
@@ -358,36 +236,17 @@ def test_stop_with_active_subagent_and_genuine_ask_reports_needs_input(base_hook
     assert events[0]["state"] == "needs_input"
 
 
-def test_subagent_stop_clears_exactly_one_active_marker(base_hook_input, active_subagent_home):
-    # Why: SubagentStop must clear one marker per completed subagent so the count
-    # accurately reflects how many are still running.
-    set_active_subagent_marker(active_subagent_home, name="marker-1")
-    set_active_subagent_marker(active_subagent_home, name="marker-2")
-    run_hook_capture_hub("notifications_subagent_stop.py", {**base_hook_input})
-    remaining = list((active_subagent_home / "test-session-123").iterdir())
-    assert len(remaining) == 1
-
-
-def test_session_end_clears_all_active_subagent_markers(base_hook_input, active_subagent_home):
-    # Why: parallels the existing waiting-marker SessionEnd assertion — ending a
-    # session must clear every one of its active-subagent markers, not just one.
-    set_active_subagent_marker(active_subagent_home, name="marker-1")
-    set_active_subagent_marker(active_subagent_home, name="marker-2")
-    run_hook_capture_hub("notifications_session_end.py", {
-        **base_hook_input,
-        "reason": "exit",
-    })
-    assert not (active_subagent_home / "test-session-123").exists()
-
-
 def test_subagent_stop_then_stop_reports_done_not_working(base_hook_input, transcript_without_ask, active_subagent_home):
-    # Why: chained scenario matching story Testing Instruction #3 exactly — a
-    # session with one active-subagent marker that receives SubagentStop
-    # (clearing it) followed immediately by Stop must report done/needs_input as
-    # today, not working, confirming the marker's absence correctly drives the
-    # branch (not just its presence).
+    # Why: chained scenario spanning both plugins — a session with one
+    # active-subagent marker that receives attention-hub's SubagentStop hook
+    # (clearing it) followed immediately by notifications' Stop hook must
+    # report done/needs_input as today, not working, confirming the marker's
+    # absence correctly drives the branch (not just its presence). Exercises
+    # attention-hub's real hook (not a stub) to prove the two plugins interact
+    # correctly through the shared marker files on disk.
     set_active_subagent_marker(active_subagent_home, name="marker-1")
-    run_hook_capture_hub("notifications_subagent_stop.py", {**base_hook_input})
+    run_hook_capture_hub("attention_hub_subagent_stop.py", {**base_hook_input},
+                         hooks_dir=ATTENTION_HUB_HOOKS_DIR)
     events = hub_events(run_hook_capture_hub("notifications_stop.py", {
         **base_hook_input,
         "transcript_path": transcript_without_ask,
@@ -396,13 +255,13 @@ def test_subagent_stop_then_stop_reports_done_not_working(base_hook_input, trans
     assert events[0]["state"] == "done"
 
 
+# --- Graceful degradation ---
+
 def test_hooks_exit_zero_when_hub_down(base_hook_input, transcript_without_ask, monkeypatch):
     # Why: the graceful-degradation acceptance criterion — a dead hub must never
-    # error any hook. Uses a real connection-refused, not a mock.
+    # error either hook. Uses a real connection-refused, not a mock.
     monkeypatch.setenv("CLAUDE_ATTENTION_HUB_URL", "http://127.0.0.1:1")
     for script, extra in [
-        ("notifications_user_prompt_submit.py", {"prompt": "hi"}),
-        ("notifications_session_end.py", {"reason": "exit"}),
         ("notifications_notification.py",
          {"notification_type": "permission_prompt", "transcript_path": transcript_without_ask}),
         ("notifications_stop.py", {"transcript_path": transcript_without_ask}),
@@ -423,3 +282,35 @@ def test_hooks_exit_zero_when_hub_down(base_hook_input, transcript_without_ask, 
             except SystemExit as e:
                 exit_code = e.code or 0
             assert exit_code == 0, f"{script} must exit 0 when hub is unreachable"
+
+
+def test_hooks_exit_zero_when_attention_hub_not_installed(base_hook_input, transcript_without_ask, monkeypatch):
+    # Why: notifications must keep working standalone — if attention-hub isn't
+    # installed (bridge discovery finds nothing), the Notification/Stop hooks
+    # must still exit 0 and still send macOS/Slack, exactly like an unreachable
+    # hub. Points the bridge's override env var at a path that doesn't exist to
+    # simulate "attention-hub not installed" without touching real discovery.
+    monkeypatch.setenv("CLAUDE_ATTENTION_HUB_CLIENT_PATH", "/nonexistent/attention_hub_client.py")
+    for script, extra in [
+        ("notifications_notification.py",
+         {"notification_type": "permission_prompt", "transcript_path": transcript_without_ask}),
+        ("notifications_stop.py", {"transcript_path": transcript_without_ask}),
+    ]:
+        spec = importlib.util.spec_from_file_location(
+            script.replace(".py", ""), HOOKS_DIR / script
+        )
+        with patch("sys.stdin", StringIO(json.dumps({**base_hook_input, **extra}))), \
+             patch("requests.post") as mock_post, \
+             patch("subprocess.run") as mock_subprocess:
+            mock_post.return_value = MagicMock(status_code=200, text="ok")
+            mock_subprocess.return_value = MagicMock(returncode=0, stderr="")
+            mod = importlib.util.module_from_spec(spec)
+            exit_code = 0
+            try:
+                spec.loader.exec_module(mod)
+                mod.main()
+            except SystemExit as e:
+                exit_code = e.code or 0
+            assert exit_code == 0, f"{script} must exit 0 when attention-hub isn't installed"
+            assert mock_post.called, f"{script} must still send Slack when attention-hub isn't installed"
+            assert mock_subprocess.called, f"{script} must still send macOS when attention-hub isn't installed"

@@ -25,7 +25,7 @@ def run_hook(hook_input: dict):
          patch("subprocess.run") as mock_subprocess:
         mock_post.return_value = MagicMock(status_code=200, text="ok")
         try:
-            mod = load_hook("notifications_subagent_stop")
+            mod = load_hook("attention_hub_subagent_stop")
             mod.main()
         except SystemExit:
             pass

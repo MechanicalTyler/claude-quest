@@ -8,8 +8,8 @@ from unittest.mock import patch, MagicMock
 
 def load_client():
     spec = importlib.util.spec_from_file_location(
-        "attention_hub_client",
-        Path(__file__).parent.parent / "hooks" / "attention_hub_client.py"
+        "channel_flags",
+        Path(__file__).parent.parent / "hooks" / "channel_flags.py"
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

@@ -24,22 +24,31 @@ except ImportError:
     extract_latest_message = macos_notification.extract_latest_message
 
 try:
-    from attention_hub_client import (
-        report_state, macos_enabled, slack_enabled, get_session_name, set_waiting_marker,
-    )
+    from channel_flags import macos_enabled, slack_enabled
 except ImportError:
     import importlib.util
-    hub_spec = importlib.util.spec_from_file_location(
-        "attention_hub_client",
-        Path(__file__).parent / "attention_hub_client.py"
+    flags_spec = importlib.util.spec_from_file_location(
+        "channel_flags",
+        Path(__file__).parent / "channel_flags.py"
     )
-    attention_hub_client = importlib.util.module_from_spec(hub_spec)
-    hub_spec.loader.exec_module(attention_hub_client)
-    report_state = attention_hub_client.report_state
-    macos_enabled = attention_hub_client.macos_enabled
-    slack_enabled = attention_hub_client.slack_enabled
-    get_session_name = attention_hub_client.get_session_name
-    set_waiting_marker = attention_hub_client.set_waiting_marker
+    channel_flags = importlib.util.module_from_spec(flags_spec)
+    flags_spec.loader.exec_module(channel_flags)
+    macos_enabled = channel_flags.macos_enabled
+    slack_enabled = channel_flags.slack_enabled
+
+try:
+    from attention_hub_bridge import report_state, get_session_name, set_waiting_marker
+except ImportError:
+    import importlib.util
+    bridge_spec = importlib.util.spec_from_file_location(
+        "attention_hub_bridge",
+        Path(__file__).parent / "attention_hub_bridge.py"
+    )
+    attention_hub_bridge = importlib.util.module_from_spec(bridge_spec)
+    bridge_spec.loader.exec_module(attention_hub_bridge)
+    report_state = attention_hub_bridge.report_state
+    get_session_name = attention_hub_bridge.get_session_name
+    set_waiting_marker = attention_hub_bridge.set_waiting_marker
 
 # Notification types that mean the agent is blocked and needs user action.
 ACTIONABLE_NOTIFICATION_TYPES = {"permission_prompt", "idle_prompt", "elicitation_dialog"}
@@ -90,7 +99,8 @@ def main():
         message = extract_latest_message(transcript_path) or input_data.get("message", "")
 
         # Set the waiting marker even if the hub POST fails: intent matters,
-        # and a later redundant "working" report is harmless.
+        # and a later redundant "working" report is harmless. No-ops silently
+        # when attention-hub isn't installed.
         set_waiting_marker(session_id)
 
         hub_success = report_state(session_id, input_data.get("cwd", ""), "waiting", message,

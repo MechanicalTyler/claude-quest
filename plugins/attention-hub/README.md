@@ -1,6 +1,6 @@
 # attention-hub
 
-A self-hosted, zero-dependency dashboard server that tracks which of your coding-agent sessions is waiting on you. Any agent or hook system can report to it over plain HTTP — it has no dependency on any particular agent.
+A self-hosted, zero-dependency dashboard server *and* a full set of Claude Code hooks that track which of your coding-agent sessions is waiting on you. Installing this plugin alone gives a Claude Code session everything it needs to report to the dashboard — no other plugin required. Any other agent or hook system can also report to the hub over plain HTTP, since the wire protocol is fully documented below.
 
 ## What it is
 
@@ -33,6 +33,20 @@ curl -X POST http://localhost:8765/api/sessions/<session-id>/state \
 ```
 
 Responses: `200` with the updated record, `400` for a missing/invalid state or malformed body, `404` for an unknown session — forcing never creates a session.
+
+## Reporting hooks
+
+This plugin ships five Claude Code hooks that report session state to the dashboard automatically once installed — no configuration needed:
+
+- **PreToolUse hook**: Pure observer — marks the session as having an active subagent when a `Task` dispatch is seen (every other tool is a no-op). Always exits `0` and never emits a permission-decision payload, so it can never block a tool call
+- **PostToolUse hook**: Reports `working` to the hub when a tool completes after the session was flagged `waiting` (a tool can only complete once a pending permission/question was answered). Gated by a per-session marker file, so on normal tool calls (no marker) it exits instantly with zero network activity
+- **UserPromptSubmit hook**: Reports `working` to the hub — answering a session automatically clears its needs-attention state
+- **SessionEnd hook**: Removes the session from the hub (and cleans up its waiting marker and any active-subagent markers)
+- **SubagentStop hook**: Clears one active-subagent marker for the session so the active-subagent count stays accurate
+
+Transient hook state (waiting markers, active-subagent markers) lives under `~/.claude/attention-hub/`.
+
+These five hooks report `working`/removal events only — they never send a `waiting`/`needs_input`/`done` event on their own, since deciding *when* a session needs attention is specific to the Notification and Stop lifecycle events. If you also install the [`notifications`](../notifications) plugin, its Notification and Stop hooks optionally report those states to this same dashboard (auto-discovered, no configuration). Installed alone, attention-hub still gives you the PreToolUse/PostToolUse/UserPromptSubmit/SessionEnd/SubagentStop tracking above; any other agent that wants `waiting`/`needs_input`/`done` reporting can POST directly to the [HTTP API](#http-api) documented below.
 
 ## Starting the hub
 

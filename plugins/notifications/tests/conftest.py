@@ -54,18 +54,22 @@ def _neutral_notification_channel_env(monkeypatch):
 @pytest.fixture
 def marker_home(tmp_path, monkeypatch):
     """Redirect HOME to tmp_path so waiting-marker files (and hook logs) never
-    touch the real ~/.claude. Returns the marker directory path."""
+    touch the real ~/.claude. Markers live under the attention-hub plugin's
+    namespace now (notification.py/stop.py reach them via attention_hub_bridge,
+    which loads attention-hub's relocated client). Returns the marker directory."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    return tmp_path / ".claude" / "notifications" / "waiting-markers"
+    return tmp_path / ".claude" / "attention-hub" / "waiting-markers"
 
 
 @pytest.fixture
 def active_subagent_home(tmp_path, monkeypatch):
     """Redirect HOME to tmp_path so active-subagent marker files (and hook
-    logs) never touch the real ~/.claude. Returns the active-subagents
-    directory path (parent of each session's own marker subdirectory)."""
+    logs) never touch the real ~/.claude. Markers live under the attention-hub
+    plugin's namespace now (read via attention_hub_bridge). Returns the
+    active-subagents directory path (parent of each session's own marker
+    subdirectory)."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    return tmp_path / ".claude" / "notifications" / "active-subagents"
+    return tmp_path / ".claude" / "attention-hub" / "active-subagents"
 
 
 @pytest.fixture

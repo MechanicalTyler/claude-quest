@@ -25,24 +25,32 @@ except ImportError:
     has_ask_user_question = macos_notification.has_ask_user_question
 
 try:
-    from attention_hub_client import (
-        report_state, macos_enabled, slack_enabled, get_session_name, clear_waiting_marker,
-        count_active_subagents,
-    )
+    from channel_flags import macos_enabled, slack_enabled
 except ImportError:
     import importlib.util
-    hub_spec = importlib.util.spec_from_file_location(
-        "attention_hub_client",
-        Path(__file__).parent / "attention_hub_client.py"
+    flags_spec = importlib.util.spec_from_file_location(
+        "channel_flags",
+        Path(__file__).parent / "channel_flags.py"
     )
-    attention_hub_client = importlib.util.module_from_spec(hub_spec)
-    hub_spec.loader.exec_module(attention_hub_client)
-    report_state = attention_hub_client.report_state
-    macos_enabled = attention_hub_client.macos_enabled
-    slack_enabled = attention_hub_client.slack_enabled
-    get_session_name = attention_hub_client.get_session_name
-    clear_waiting_marker = attention_hub_client.clear_waiting_marker
-    count_active_subagents = attention_hub_client.count_active_subagents
+    channel_flags = importlib.util.module_from_spec(flags_spec)
+    flags_spec.loader.exec_module(channel_flags)
+    macos_enabled = channel_flags.macos_enabled
+    slack_enabled = channel_flags.slack_enabled
+
+try:
+    from attention_hub_bridge import report_state, get_session_name, clear_waiting_marker, count_active_subagents
+except ImportError:
+    import importlib.util
+    bridge_spec = importlib.util.spec_from_file_location(
+        "attention_hub_bridge",
+        Path(__file__).parent / "attention_hub_bridge.py"
+    )
+    attention_hub_bridge = importlib.util.module_from_spec(bridge_spec)
+    bridge_spec.loader.exec_module(attention_hub_bridge)
+    report_state = attention_hub_bridge.report_state
+    get_session_name = attention_hub_bridge.get_session_name
+    clear_waiting_marker = attention_hub_bridge.clear_waiting_marker
+    count_active_subagents = attention_hub_bridge.count_active_subagents
 
 
 def log_message(message):
@@ -83,6 +91,7 @@ def main():
 
         # End of turn: consume any waiting marker. Covers the denied-permission
         # path (no tool ran) so the next turn cannot report stale "working".
+        # No-ops silently when attention-hub isn't installed.
         clear_waiting_marker(session_id)
 
         message = extract_latest_message(transcript_path)
@@ -96,7 +105,11 @@ def main():
         elif count_active_subagents(session_id) > 0:
             # Background subagents are still running: this Stop is the main
             # agent pausing to check in on them, not a real completion. Report
-            # working and skip the Slack/macOS notification entirely.
+            # working and skip the Slack/macOS notification entirely. When
+            # attention-hub isn't installed, count_active_subagents is always
+            # 0, so this branch never triggers and every Stop is treated as a
+            # real completion -- a disclosed trade-off of running notifications
+            # standalone (see README).
             hub_success = report_state(session_id, input_data.get("cwd", ""), "working", message,
                                        session_name=get_session_name(input_data))
             log_message(f"{'✅' if hub_success else '❌'} Hub (working - active subagents)")
