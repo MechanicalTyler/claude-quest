@@ -1,0 +1,10 @@
+{
+  "name": "reflection",
+  "description": "Passively watches every session for moments the agent didn't meet expectations, logs them, and synthesizes root-cause-attributed improvement reports via /reflect",
+  "version": "0.1.0",
+  "author": {
+    "name": "MechanicalTyler"
+  },
+  "license": "MIT",
+  "keywords": ["reflection", "logging", "hooks", "self-improvement", "root-cause-analysis"]
+}
