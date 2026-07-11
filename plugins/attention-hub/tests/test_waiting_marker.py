@@ -214,8 +214,10 @@ def test_mark_subagent_active_writes_labeled_json_record(hub_client, active_suba
 
 
 def test_mark_background_active_writes_kinded_json_record(hub_client, active_subagent_home):
-    # Why: this is the mechanism that closes AC-4 for Bash/Workflow/Monitor --
-    # each background dispatch must get its own kinded, labeled marker.
+    # Why: this is the mechanism that closes AC-4 for Bash-background
+    # dispatches (Workflow/Monitor were confirmed unreachable via
+    # PreToolUse and are not tracked) -- each background dispatch must get
+    # its own kinded, labeled marker.
     hub_client.mark_background_active("session-abc", "bash", label="run tests")
     marker = next((active_subagent_home / "session-abc").iterdir())
     record = hub_client._read_marker(marker)

@@ -359,8 +359,10 @@ def count_active_subagents(session_id):
     """Count active-status markers for this session, across every kind,
     pruning stale ones via list_active_work. Returns 0 if none exist. Never
     raises. This is the mechanism that closes the false-done bug for
-    Bash-background/Workflow/Monitor: it counts every marked kind, not just
-    task, so notifications_stop.py's existing, unmodified
+    Bash-background dispatches (the only background kind actually marked --
+    Workflow/Monitor detection was confirmed unreachable via PreToolUse and
+    removed, see attention_hub_pre_tool_use.py): it counts every marked
+    kind, not just task, so notifications_stop.py's existing, unmodified
     `count_active_subagents(session_id) > 0` check naturally trips for them.
     """
     try:
