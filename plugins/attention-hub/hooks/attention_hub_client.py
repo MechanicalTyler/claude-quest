@@ -251,22 +251,62 @@ def _write_marker(path, record):
         return False
 
 
-def mark_subagent_active(session_id):
+def mark_subagent_active(session_id, label=None):
     """Record one active subagent dispatch for this session.
 
     Creates the per-session active-subagent directory if needed, then creates
     a single marker file named with a fresh uuid4 token via exclusive create
     (Path.touch(exist_ok=False)), so concurrent dispatches can never collide
-    on a filename. Returns True on success, False if the session_id is
-    invalid or the filesystem operation fails. Never raises.
+    on a filename, and writes a JSON record (id, kind="task", label,
+    status="active", started_at) into it. Returns True on success, False if
+    the session_id is invalid or the filesystem operation fails. Never raises.
     """
     try:
         dir_path = _active_subagent_dir_path(session_id)
         if dir_path is None:
             return False
         dir_path.mkdir(parents=True, exist_ok=True)
-        marker_path = dir_path / uuid.uuid4().hex
+        marker_id = uuid.uuid4().hex
+        marker_path = dir_path / marker_id
         marker_path.touch(exist_ok=False)
+        _write_marker(marker_path, {
+            "id": marker_id,
+            "kind": "task",
+            "label": str(label or "")[:LABEL_MAX_CHARS],
+            "status": "active",
+            "started_at": time.time(),
+        })
+        return True
+    except Exception:
+        return False
+
+
+def mark_background_active(session_id, kind, label=None):
+    """Record one active background-tool dispatch for this session.
+
+    Same directory/marker mechanism as mark_subagent_active, but for
+    non-Task tools that run in the background (Bash, Workflow, Monitor).
+    These kinds have no completion hook (see spec's Warning callout), so
+    they are pruned only by BACKGROUND_SUBAGENT_TTL_SECONDS in
+    list_active_work and never flip to status="completed". Returns True on
+    success, False if session_id is invalid or the filesystem operation
+    fails. Never raises.
+    """
+    try:
+        dir_path = _active_subagent_dir_path(session_id)
+        if dir_path is None:
+            return False
+        dir_path.mkdir(parents=True, exist_ok=True)
+        marker_id = uuid.uuid4().hex
+        marker_path = dir_path / marker_id
+        marker_path.touch(exist_ok=False)
+        _write_marker(marker_path, {
+            "id": marker_id,
+            "kind": kind,
+            "label": str(label or "")[:LABEL_MAX_CHARS],
+            "status": "active",
+            "started_at": time.time(),
+        })
         return True
     except Exception:
         return False

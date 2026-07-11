@@ -198,3 +198,27 @@ def test_count_active_subagents_with_no_directory_returns_zero(hub_client, activ
     # Why: a session that never dispatched a subagent has no directory at all —
     # counting must treat "missing" the same as "empty", not error.
     assert hub_client.count_active_subagents("untouched-session") == 0
+
+
+def test_mark_subagent_active_writes_labeled_json_record(hub_client, active_subagent_home):
+    # Why: AC-1 requires a per-subagent id/label/status/started_at record,
+    # not an anonymous touch file -- this is the write path for it.
+    hub_client.mark_subagent_active("session-abc", label="fix the thing")
+    marker = next((active_subagent_home / "session-abc").iterdir())
+    record = hub_client._read_marker(marker)
+    assert record["id"] == marker.name
+    assert record["kind"] == "task"
+    assert record["label"] == "fix the thing"
+    assert record["status"] == "active"
+    assert isinstance(record["started_at"], float)
+
+
+def test_mark_background_active_writes_kinded_json_record(hub_client, active_subagent_home):
+    # Why: this is the mechanism that closes AC-4 for Bash/Workflow/Monitor --
+    # each background dispatch must get its own kinded, labeled marker.
+    hub_client.mark_background_active("session-abc", "bash", label="run tests")
+    marker = next((active_subagent_home / "session-abc").iterdir())
+    record = hub_client._read_marker(marker)
+    assert record["kind"] == "bash"
+    assert record["label"] == "run tests"
+    assert record["status"] == "active"
