@@ -25,6 +25,9 @@ HUB_TIMEOUT_SECONDS = 2
 MESSAGE_SNIPPET_MAX = 200
 SESSION_NAME_MAX = 256
 ACTIVE_SUBAGENT_TTL_SECONDS = 2 * 60 * 60
+BACKGROUND_SUBAGENT_TTL_SECONDS = 15 * 60
+COMPLETED_RETENTION_SECONDS = 5 * 60
+LABEL_MAX_CHARS = 256
 
 # Container-detection signals (module-level so tests can redirect them).
 CONTAINER_MARKER_FILES = ("/.dockerenv", "/run/.containerenv")
@@ -208,6 +211,44 @@ def _active_subagent_dir_path(session_id):
             or "\x00" in session_id or session_id in (".", "..")):
         return None
     return Path.home() / ".claude" / "attention-hub" / "active-subagents" / session_id
+
+
+def _read_marker(path):
+    """Parse a marker file's JSON body, with legacy-empty-file fallback.
+
+    Returns a dict with id/kind/label/status/started_at (and completed_at
+    when present). Any unparsable or empty file is treated as a valid
+    legacy record: kind="task", empty label, status="active", and the
+    file's own mtime as started_at. Never raises.
+    """
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+        if text:
+            record = json.loads(text)
+            if isinstance(record, dict) and record.get("kind") and record.get("status"):
+                return record
+    except Exception:
+        pass
+    try:
+        mtime = path.stat().st_mtime
+    except Exception:
+        mtime = time.time()
+    return {
+        "id": path.name,
+        "kind": "task",
+        "label": "",
+        "status": "active",
+        "started_at": mtime,
+    }
+
+
+def _write_marker(path, record):
+    """Write a marker record as JSON. Never raises."""
+    try:
+        path.write_text(json.dumps(record), encoding="utf-8")
+        return True
+    except Exception:
+        return False
 
 
 def mark_subagent_active(session_id):

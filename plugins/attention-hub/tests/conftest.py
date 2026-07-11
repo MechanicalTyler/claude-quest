@@ -1,8 +1,21 @@
 # tests/conftest.py
+import importlib.util
 import pytest
 from pathlib import Path
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture
+def hub_client():
+    """Load the attention_hub_client module for testing."""
+    spec = importlib.util.spec_from_file_location(
+        "attention_hub_client",
+        Path(__file__).parent.parent / "hooks" / "attention_hub_client.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 @pytest.fixture
