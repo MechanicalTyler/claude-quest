@@ -192,13 +192,30 @@ def set_active_subagent_marker(active_subagent_home, session_id="test-session-12
 
 
 def test_subagent_stop_clears_exactly_one_active_marker(base_hook_input, active_subagent_home):
-    # Why: SubagentStop must clear one marker per completed subagent so the count
-    # accurately reflects how many are still running.
+    # Why: SubagentStop must flip exactly one marker to completed per
+    # completed subagent. Deliberately updated for this story: the old
+    # assertion (file count drops to 1) tested "the file gets deleted",
+    # which this story intentionally changes for task-kind markers --
+    # both files remain, one flipped to completed, one still active.
     set_active_subagent_marker(active_subagent_home, name="marker-1")
     set_active_subagent_marker(active_subagent_home, name="marker-2")
     run_hook_capture_hub("attention_hub_subagent_stop.py", {**base_hook_input})
-    remaining = list((active_subagent_home / "test-session-123").iterdir())
-    assert len(remaining) == 1
+
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "attention_hub_client", HOOKS_DIR / "attention_hub_client.py"
+    )
+    hub_client = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hub_client)
+
+    marker_dir = active_subagent_home / "test-session-123"
+    remaining = list(marker_dir.iterdir())
+    assert len(remaining) == 2
+    records = [hub_client._read_marker(m) for m in remaining]
+    completed = [r for r in records if r["status"] == "completed"]
+    active = [r for r in records if r["status"] == "active"]
+    assert len(completed) == 1
+    assert len(active) == 1
 
 
 def test_session_end_clears_all_active_subagent_markers(base_hook_input, active_subagent_home):

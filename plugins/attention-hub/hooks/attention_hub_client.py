@@ -336,21 +336,41 @@ def count_active_subagents(session_id):
 
 
 def clear_active_subagent(session_id):
-    """Remove one active-subagent marker for this session.
+    """Flip the oldest still-active task-kind marker to status="completed".
 
-    Markers are interchangeable -- only the count matters -- so any single
-    marker in the directory may be removed. Returns True if a marker was
-    removed, False if none existed. Never raises.
+    Selects by file mtime ascending (FIFO) among markers whose kind is
+    "task" and whose status is "active" -- today's harness gives
+    SubagentStop no identifier for which subagent finished, so FIFO is the
+    best available approximation (see spec's marker-attribution decision:
+    correct whenever subagents complete in dispatch order, the common
+    case). Sets completed_at to now instead of deleting the file, so a
+    just-finished subagent still shows briefly as "completed" on the
+    dashboard. Returns True if a marker was flipped, False if none existed.
+    Never raises.
     """
     try:
         dir_path = _active_subagent_dir_path(session_id)
         if dir_path is None or not dir_path.is_dir():
             return False
+        candidates = []
         for marker in dir_path.iterdir():
-            if marker.is_file():
-                marker.unlink()
-                return True
-        return False
+            if not marker.is_file():
+                continue
+            record = _read_marker(marker)
+            if record.get("kind") == "task" and record.get("status") == "active":
+                try:
+                    mtime = marker.stat().st_mtime
+                except Exception:
+                    continue
+                candidates.append((mtime, marker, record))
+        if not candidates:
+            return False
+        candidates.sort(key=lambda c: c[0])
+        _, marker, record = candidates[0]
+        record["status"] = "completed"
+        record["completed_at"] = time.time()
+        _write_marker(marker, record)
+        return True
     except Exception:
         return False
 

@@ -230,3 +230,33 @@ def test_mark_subagent_active_returns_false_when_write_marker_fails(hub_client, 
     # false "success" while the marker file has no/partial JSON body.
     monkeypatch.setattr(hub_client, "_write_marker", lambda path, record: False)
     assert hub_client.mark_subagent_active("session-abc") is False
+
+
+def test_clear_active_subagent_flips_oldest_to_completed(hub_client, active_subagent_home):
+    # Why: SubagentStop's payload carries no correlating ID for which
+    # subagent finished (see spec's marker-attribution decision) -- FIFO
+    # (oldest active task marker) is the chosen, deterministic best-effort.
+    hub_client.mark_subagent_active("session-abc", label="first")
+    dir_path = active_subagent_home / "session-abc"
+    older = next(dir_path.iterdir())
+    old_time = __import__("time").time() - 5
+    os.utime(older, (old_time, old_time))
+    hub_client.mark_subagent_active("session-abc", label="second")
+
+    assert hub_client.clear_active_subagent("session-abc") is True
+
+    records = {m.name: hub_client._read_marker(m) for m in dir_path.iterdir()}
+    completed = [r for r in records.values() if r["status"] == "completed"]
+    active = [r for r in records.values() if r["status"] == "active"]
+    assert len(completed) == 1
+    assert len(active) == 1
+    assert completed[0]["label"] == "first"
+    assert active[0]["label"] == "second"
+    assert isinstance(completed[0]["completed_at"], float)
+
+
+def test_clear_active_subagent_with_no_active_task_markers_returns_false(hub_client, active_subagent_home):
+    # Why: clearing must not pick a background-kind marker to complete --
+    # background kinds never observe completion (no equivalent hook exists).
+    hub_client.mark_background_active("session-abc", "bash", label="x")
+    assert hub_client.clear_active_subagent("session-abc") is False
