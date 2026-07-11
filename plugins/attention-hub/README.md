@@ -19,6 +19,7 @@ Clicking a card expands it; any number of cards may be open at once, and open ca
 - **Host** — with a `container` badge when the session runs inside a container
 - **Full session ID** and the **full last message**
 - **Last update** age
+- **Active work** — each tracked subagent entry with its kind, label, status, and time in state
 - **Status history** — the last 20 state transitions (most recent first), each with the time it was entered, how long it lasted, and a `manual` badge when the change came from a manual override rather than a reported event
 
 ### Forcing a status
@@ -47,6 +48,23 @@ This plugin ships five Claude Code hooks that report session state to the dashbo
 Transient hook state (waiting markers, active-subagent markers) lives under `~/.claude/attention-hub/`.
 
 These five hooks report `working`/removal events only — they never send a `waiting`/`needs_input`/`done` event on their own, since deciding *when* a session needs attention is specific to the Notification and Stop lifecycle events. If you also install the [`notifications`](../notifications) plugin, its Notification and Stop hooks optionally report those states to this same dashboard (auto-discovered, no configuration). Installed alone, attention-hub still gives you the PreToolUse/PostToolUse/UserPromptSubmit/SessionEnd/SubagentStop tracking above; any other agent that wants `waiting`/`needs_input`/`done` reporting can POST directly to the [HTTP API](#http-api) documented below.
+
+## Subagent Tracking and Retention
+
+When a session reports an active subagent (via the PreToolUse hook), the hub tracks markers for each dispatched task, backgrounded command, workflow execution, or persistent monitor watch. Each marker carries:
+
+- **Kind**: one of `task` (Task/Agent dispatch), `bash` (backgrounded Bash), `workflow` (Workflow dispatch), or `monitor` (persistent Monitor watch)
+- **Label**: friendly identifier for the work (e.g., agent name, script name)
+- **Status**: `active` or `completed`
+- **Duration**: ISO timestamp when the subagent started, and (if completed) when it finished
+
+The hub prunes markers based on two retention policies:
+
+- **Active task-kind markers** (ACTIVE_SUBAGENT_TTL_SECONDS): pruned after 2 hours of inactivity, so long-running task dispatches are tracked across your session
+- **Active background-kind markers** (bash, workflow, monitor; BACKGROUND_SUBAGENT_TTL_SECONDS): pruned after 15 minutes, since these tend to finish faster
+- **Completed task-kind markers** (COMPLETED_RETENTION_SECONDS): stay visible in the expanded card view for 5 minutes before being pruned, so you can see recent work that finished
+
+This tracking appears in the expanded card view's **Active work** section, showing each entry's kind, label, status, and elapsed time.
 
 ## Starting the hub
 
