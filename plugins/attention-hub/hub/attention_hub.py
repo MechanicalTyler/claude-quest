@@ -46,6 +46,7 @@ FIELD_MAX_CHARS = 256
 # Bounded per-session status-transition history (oldest entries drop first).
 HISTORY_MAX = 20
 HISTORY_SOURCES = {"hook", "manual"}
+ACTIVE_WORK_MAX = 10
 
 
 def _clamp(value, limit):
@@ -86,6 +87,9 @@ class AttentionStore:
                 is_container = bool(event.get("is_container"))
             else:
                 is_container = bool((existing or {}).get("is_container", False))
+            active_work = (self._sanitize_active_work(event.get("active_work"))
+                           if "active_work" in event
+                           else list((existing or {}).get("active_work") or []))
             record = {
                 "session_id": session_id,
                 "session_name": _clamp(event.get("session_name")
@@ -102,6 +106,7 @@ class AttentionStore:
                 "last_update": now,
                 "history": history[-HISTORY_MAX:],
                 "is_container": is_container,
+                "active_work": active_work,
             }
             self._sessions[session_id] = record
             self._save()
@@ -200,6 +205,7 @@ class AttentionStore:
                     record["message"] = _clamp(record.get("message") or "",
                                                MESSAGE_MAX_CHARS)
                     record["history"] = self._sanitize_history(record)
+                    record["active_work"] = self._sanitize_active_work(record.get("active_work"))
                     record["is_container"] = bool(record.get("is_container", False))
                     self._sessions[sid] = record
         except FileNotFoundError:
@@ -230,6 +236,32 @@ class AttentionStore:
                       "entered_at": float(record["state_since"]),
                       "source": "hook"}]
         return clean[-HISTORY_MAX:]
+
+    @staticmethod
+    def _sanitize_active_work(raw):
+        """Well-formed active_work entries, capped at ACTIVE_WORK_MAX. Each
+        entry's id/kind/label is clamped and status/started_at validated the
+        same defensive way other record fields are; malformed entries drop."""
+        clean = []
+        if isinstance(raw, list):
+            for entry in raw:
+                if not isinstance(entry, dict):
+                    continue
+                status = entry.get("status")
+                started_at = entry.get("started_at")
+                if status not in ("active", "completed") or not isinstance(started_at, (int, float)):
+                    continue
+                item = {
+                    "id": _clamp(entry.get("id") or "", FIELD_MAX_CHARS),
+                    "kind": _clamp(entry.get("kind") or "", FIELD_MAX_CHARS),
+                    "label": _clamp(entry.get("label") or "", FIELD_MAX_CHARS),
+                    "status": status,
+                    "started_at": float(started_at),
+                }
+                if status == "completed" and isinstance(entry.get("completed_at"), (int, float)):
+                    item["completed_at"] = float(entry["completed_at"])
+                clean.append(item)
+        return clean[:ACTIVE_WORK_MAX]
 
 
 class AttentionHubHandler(BaseHTTPRequestHandler):
