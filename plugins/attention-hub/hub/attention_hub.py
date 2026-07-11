@@ -157,9 +157,22 @@ class AttentionStore:
                 row = dict(record)
                 row["state_seconds"] = max(0.0, now - record["state_since"])
                 row["age_seconds"] = max(0.0, now - record["last_update"])
+                row["active_work"] = [self._with_duration(entry, now)
+                                       for entry in record.get("active_work", [])]
                 rows.append(row)
         rows.sort(key=lambda r: (STATE_PRIORITY.get(r["state"], 3), r["state_since"]))
         return rows
+
+    @staticmethod
+    def _with_duration(entry, now):
+        """entry plus a computed duration_seconds: frozen (completed_at -
+        started_at) once completed, live (now - started_at) while active."""
+        item = dict(entry)
+        if entry.get("status") == "completed" and "completed_at" in entry:
+            item["duration_seconds"] = max(0.0, entry["completed_at"] - entry["started_at"])
+        else:
+            item["duration_seconds"] = max(0.0, now - entry["started_at"])
+        return item
 
     def _prune_locked(self, now):
         stale = [sid for sid, record in self._sessions.items()
@@ -519,6 +532,18 @@ function buildHistoryList(s) {
   return list;
 }
 
+function buildActiveWorkList(entries) {
+  const list = document.createElement("ul");
+  list.className = "history";
+  for (const entry of entries) {
+    const li = document.createElement("li");
+    li.textContent = entry.kind + ": " + (entry.label || "(no label)")
+      + " — " + entry.status + " " + fmtDuration(entry.duration_seconds);
+    list.append(li);
+  }
+  return list;
+}
+
 function buildDetail(s) {
   const detail = document.createElement("div");
   detail.className = "detail";
@@ -530,6 +555,9 @@ function buildDetail(s) {
   detailField(dl, "message", s.message || "—");
   detailField(dl, "last update", fmtDuration(s.age_seconds) + " ago");
   detailField(dl, "history", buildHistoryList(s));
+  if (s.active_work && s.active_work.length) {
+    detailField(dl, "active work", buildActiveWorkList(s.active_work));
+  }
   detail.append(dl);
 
   const force = document.createElement("div");

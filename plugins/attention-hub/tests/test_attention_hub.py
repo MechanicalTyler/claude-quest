@@ -984,3 +984,35 @@ def test_active_work_survives_restart(tmp_path):
     reloaded = hub.AttentionStore(state_file)
     rows = reloaded.list_sessions()
     assert rows[0]["active_work"][0]["label"] == "x"
+
+
+def test_list_sessions_computes_live_duration_for_active_entry(tmp_path):
+    hub = load_hub()
+    clock = {"now": 1000.0}
+    store = hub.AttentionStore(str(tmp_path / "state.json"), now=lambda: clock["now"])
+    store.upsert({"session_id": "s1", "state": "working",
+                  "active_work": [{"id": "a", "kind": "task", "label": "",
+                                    "status": "active", "started_at": 940.0}]})
+    clock["now"] = 1010.0
+    rows = store.list_sessions()
+    assert rows[0]["active_work"][0]["duration_seconds"] == pytest.approx(70.0)
+
+
+def test_list_sessions_computes_frozen_duration_for_completed_entry(tmp_path):
+    hub = load_hub()
+    clock = {"now": 1000.0}
+    store = hub.AttentionStore(str(tmp_path / "state.json"), now=lambda: clock["now"])
+    store.upsert({"session_id": "s1", "state": "working",
+                  "active_work": [{"id": "a", "kind": "task", "label": "",
+                                    "status": "completed", "started_at": 900.0,
+                                    "completed_at": 950.0}]})
+    clock["now"] = 1010.0
+    rows = store.list_sessions()
+    assert rows[0]["active_work"][0]["duration_seconds"] == pytest.approx(50.0)
+
+
+def test_dashboard_renders_active_work_entry():
+    # Why: AC-2 -- the expanded card view must list individual active/recent
+    # subagents with label and status, not just the existing history list.
+    hub = load_hub()
+    assert "buildActiveWorkList" in hub.DASHBOARD_HTML
