@@ -51,18 +51,20 @@ These five hooks report `working`/removal events only — they never send a `wai
 
 ## Subagent Tracking and Retention
 
-When a session reports an active subagent (via the PreToolUse hook), the hub tracks markers for each dispatched task, backgrounded command, workflow execution, or persistent monitor watch. Each marker carries:
+When a session reports an active subagent (via the PreToolUse hook), the hub tracks markers for each dispatched Agent (subagent) call and each backgrounded Bash command. Each marker carries:
 
-- **Kind**: one of `task` (Task/Agent dispatch), `bash` (backgrounded Bash), `workflow` (Workflow dispatch), or `monitor` (persistent Monitor watch)
+- **Kind**: one of `task` (Agent/subagent dispatch — the marker kind is named `task` for historical reasons, but detection keys on the real `tool_name` value `Agent`) or `bash` (backgrounded Bash)
 - **Label**: friendly identifier for the work (e.g., agent name, script name)
 - **Status**: `active` or `completed`
 - **Duration**: elapsed time since the subagent started, computed from its start time (and, if completed, its finish time) — live while active, frozen once completed
 
 The hub prunes markers based on three retention policies:
 
-- **Active task-kind markers** (ACTIVE_SUBAGENT_TTL_SECONDS): pruned after 2 hours of inactivity, so long-running task dispatches are tracked across your session
-- **Active background-kind markers** (bash, workflow, monitor; BACKGROUND_SUBAGENT_TTL_SECONDS): pruned after 15 minutes, since these tend to finish faster
+- **Active task-kind markers** (ACTIVE_SUBAGENT_TTL_SECONDS): pruned after 2 hours of inactivity, so long-running dispatches are tracked across your session
+- **Active background-kind markers** (bash; BACKGROUND_SUBAGENT_TTL_SECONDS): pruned after 15 minutes, since these tend to finish faster
 - **Completed task-kind markers** (COMPLETED_RETENTION_SECONDS): stay visible in the expanded card view for 5 minutes before being pruned, so you can see recent work that finished
+
+Tracking Workflow or Monitor dispatches was investigated and found not achievable via this hook — Claude Code's PreToolUse event only fires for a fixed set of tools (`Bash`, `Edit`, `Write`, `Read`, `Glob`, `Grep`, `Agent`, `WebFetch`, `WebSearch`, `AskUserQuestion`, `ExitPlanMode`, and MCP tools), which does not include Workflow or Monitor. This is tracked as a follow-up (a different mechanism would be needed), not shipped as non-functional code.
 
 This tracking appears in the expanded card view's **Active work** section, showing each entry's kind, label, status, and elapsed time.
 
