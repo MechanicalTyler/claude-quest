@@ -250,3 +250,32 @@ def test_hooks_exit_zero_when_hub_down(base_hook_input, monkeypatch):
             except SystemExit as e:
                 exit_code = e.code or 0
             assert exit_code == 0, f"{script} must exit 0 when hub is unreachable"
+
+
+def test_subagent_stop_completes_oldest_marker_under_concurrency(base_hook_input, active_subagent_home):
+    # Why: SubagentStop's payload has no correlating ID (see spec's
+    # marker-attribution decision) -- verify the deterministic FIFO
+    # selection, not an arbitrary/undefined pick, when 2 task markers are
+    # concurrently active.
+    import time as _time
+    marker_dir = active_subagent_home / "test-session-123"
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    older = marker_dir / "marker-older"
+    older.write_text('{"id": "marker-older", "kind": "task", "label": "first", '
+                      '"status": "active", "started_at": %r}' % (_time.time() - 10))
+    import os as _os
+    _os.utime(older, (_time.time() - 10, _time.time() - 10))
+    newer = marker_dir / "marker-newer"
+    newer.write_text('{"id": "marker-newer", "kind": "task", "label": "second", '
+                      '"status": "active", "started_at": %r}' % _time.time())
+
+    run_hook_capture_hub("attention_hub_subagent_stop.py", {**base_hook_input})
+
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "attention_hub_client", HOOKS_DIR / "attention_hub_client.py"
+    )
+    hub_client = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hub_client)
+    assert hub_client._read_marker(older)["status"] == "completed"
+    assert hub_client._read_marker(newer)["status"] == "active"
