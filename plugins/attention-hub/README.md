@@ -105,6 +105,7 @@ Reports (creates or updates) a session's state. Body is a JSON object:
 | `timestamp` | no | ISO-8601 timestamp of the event |
 | `session_name` | no | Friendly display name; falls back to `session_id` when omitted |
 | `is_container` | no | Boolean; badges the card when the session runs inside a container |
+| `active_work` | no | Array of per-subagent records — `{id, kind, label, status, started_at, completed_at?}` (see Subagent Tracking and Retention above); sanitized, capped, and persisted server-side; sticky across events that omit the field |
 
 Responses: `200` with the stored record, `400` for a missing `session_id` or invalid `state`, `413` for an oversized body, `415` for a non-`application/json` `Content-Type`.
 
@@ -118,7 +119,7 @@ Removes a session from the dashboard. `200` on success, `404` if unknown.
 
 ### `GET /api/sessions`
 
-Returns `{"sessions": [...]}` — every tracked session with computed `state_seconds` and `age_seconds`.
+Returns `{"sessions": [...]}` — every tracked session with computed `state_seconds` and `age_seconds`, plus each `active_work` entry annotated with a computed `duration_seconds` (live while `active`, frozen once `completed`).
 
 ## Security
 
