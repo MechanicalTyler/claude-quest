@@ -39,7 +39,9 @@ the PR open for a human; it never runs a merge command (`gh … pr merge` or any
 It **never** writes feature code, specs, reviews, or tests itself, and **never** creates a task
 on its own initiative outside the consensus gate or a subagent's bug report. If you find yourself
 authoring a spec, editing source, reviewing a diff, or merging a PR in the main agent — stop; that
-work belongs in a dispatched subagent or, for the merge, to a human.
+work belongs in a dispatched subagent or, for the merge, to a human. This includes reading source
+files or running `repo-discovery.md` directly because a lookup "looks small" — dispatch it, every
+time; "small enough to just do myself" is how research work leaks into the orchestrator's context.
 
 ## Arguments: $ARGUMENTS
 
@@ -98,9 +100,11 @@ Goal: understand the initiative well enough to propose a complete, correctly-ord
    mode, run brainstorming in the main agent so it can ask the user — brainstorming is a discovery
    activity, not implementation work, so this does not violate the orchestration mandate.)
 2. **Investigate the target repos.** Per `skills/shared/repo-discovery.md`, discover the repos in the
-   workspace and their purposes. Dispatch repo-investigation via the Agent tool
-   (`subagent_type: general-purpose`, task type `reasoning`) when the codebase reading is
-   substantial, so raw file output stays out of the orchestrator context.
+   workspace and their purposes. **Always** dispatch repo-investigation via the Agent tool
+   (`subagent_type: general-purpose`, task type `reasoning`) — the orchestrator never runs
+   `repo-discovery.md`'s procedure, reads source files, or greps the codebase directly, regardless of
+   how small the read looks. The subagent returns a summary of repo purposes/structure; only that
+   summary enters the orchestrator's context.
 3. **Propose a decomposition** into small tasks. For each proposed task, mirror `create-story`'s
    field structure: `title`, `description`, `acceptanceCriteria`, `testingInstructions`, `repo`
    (exactly one per task), `story_type`, and `depends_on` (task IDs). A dependency exists when one

@@ -84,7 +84,7 @@ a worker, not a prose instruction the model can skim past). Map each stage to it
 | review-pr | `dev-workflow-reviewer` | `opus` |
 | test-pr | `dev-workflow-tester` | `opus` |
 | address-pr-comments (fix loops) | `dev-workflow-fixer` | `sonnet` |
-| entry/resume detection + decision read | `dev-workflow-pr-state-reader` | `sonnet` |
+| entry/resume detection + decision read + PR-number read | `dev-workflow-pr-state-reader` | `sonnet` |
 | full-cycle driven per-task by `epic` | `dev-workflow-orchestrator` | inherit |
 
 The `model` parameter on the Agent call **always wins** over the worker's frontmatter

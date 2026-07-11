@@ -92,6 +92,7 @@ Test Loop.
 | entry-detection | `dev-workflow-pr-state-reader` | `entry-detection` | `implementation` | `sonnet` |
 | write-spec (autonomous path only) | `dev-workflow-spec-writer` | `write-spec` | `implementation` | `sonnet` |
 | start-development | `dev-workflow-developer` | `start-development` | `implementation` | `sonnet` |
+| pr-number-read | `dev-workflow-pr-state-reader` | `pr-number-read` | `implementation` | `sonnet` |
 | review-pr | `dev-workflow-reviewer` | `review-pr` | `review` | `opus` |
 | address-pr-comments (fix loop) | `dev-workflow-fixer` | `address-pr-comments` | `implementation` | `sonnet` |
 | test-pr | `dev-workflow-tester` | `test-pr` | `review` | `opus` |
@@ -190,7 +191,15 @@ write-spec already writes one spec per repo named in the story (satisfying the "
 
 The subagent branches, implements with TDD, and opens the PR (one PR per repo for a multi-repo story). It returns its autonomous-mode key/value result.
 
-After it returns, determine the **PR number(s)** authoritatively: use the PM adapter's "Finding PRs linked to a story" instructions (the subagent attaches the PR to the story on creation), falling back to `gh pr list --state all --search "{story_id}"`. Do not rely solely on the subagent's self-reported PR number.
+After it returns, **dispatch the Agent tool** with `subagent_type: dev-workflow-pr-state-reader` (model: resolved from `models.stages.pr-number-read` → `models.implementation` → default `sonnet`) to resolve the **PR number(s)** authoritatively — do not resolve this inline. Dispatch prompt:
+
+> Find any linked PRs for story `{story_id}` via the PM adapter's "Finding PRs linked to a story"
+> instructions (the subagent attaches the PR to the story on creation), falling back to
+> `gh pr list --state all --search "{story_id}"`. Return **one line**:
+>
+> `pr_numbers=<csv or none>`
+
+Read that one line. Do not rely solely on the subagent's self-reported PR number, and never let raw PM/GitHub JSON enter the main orchestrator context.
 
 **State ownership:** start-development owns the "In Development" transition. The orchestrator does not duplicate it.
 
