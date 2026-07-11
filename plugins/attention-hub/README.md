@@ -37,8 +37,10 @@ Responses: `200` with the updated record, `400` for a missing/invalid state or m
 
 ## Reporting hooks
 
-This plugin ships five Claude Code hooks that report session state to the dashboard automatically once installed — no configuration needed:
+This plugin ships seven Claude Code hooks that report session state to the dashboard automatically once installed — no configuration needed, and no other plugin required:
 
+- **Notification hook**: Reports `waiting` to the hub for actionable notification types (permission prompts, idle prompts, elicitation dialogs) and sets the waiting marker
+- **Stop hook**: Computes and reports `needs_input` (AskUserQuestion was used), `working` (a background subagent is still active), or `done` — ported from the same decision logic the notifications plugin used before this split
 - **PreToolUse hook**: Pure observer — marks the session as having active work when an `Agent` dispatch (a subagent call — see Subagent Tracking below) or a backgrounded `Bash` call is seen; every other tool is a no-op. Always exits `0` and never emits a permission-decision payload, so it can never block a tool call
 - **PostToolUse hook**: Reports `working` to the hub when a tool completes after the session was flagged `waiting` (a tool can only complete once a pending permission/question was answered). Gated by a per-session marker file, so on normal tool calls (no marker) it exits instantly with zero network activity
 - **UserPromptSubmit hook**: Reports `working` to the hub — answering a session automatically clears its needs-attention state
@@ -47,7 +49,7 @@ This plugin ships five Claude Code hooks that report session state to the dashbo
 
 Transient hook state (waiting markers, active-subagent markers) lives under `~/.claude/attention-hub/`.
 
-These five hooks report `working`/removal events only — they never send a `waiting`/`needs_input`/`done` event on their own, since deciding *when* a session needs attention is specific to the Notification and Stop lifecycle events. If you also install the [`notifications`](../notifications) plugin, its Notification and Stop hooks optionally report those states to this same dashboard (auto-discovered, no configuration). Installed alone, attention-hub still gives you the PreToolUse/PostToolUse/UserPromptSubmit/SessionEnd/SubagentStop tracking above; any other agent that wants `waiting`/`needs_input`/`done` reporting can POST directly to the [HTTP API](#http-api) documented below.
+Installing this plugin alone gives a Claude Code session the complete waiting/needs_input/done/working lifecycle on the dashboard — no other plugin required. If the [`notifications`](../notifications) plugin is also installed, its own hooks handle macOS/Slack notifications independently, with zero shared code between the two plugins. Any other agent that wants to report state can also POST directly to the [HTTP API](#http-api) documented below.
 
 ## Subagent Tracking and Retention
 
