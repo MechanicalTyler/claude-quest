@@ -56,9 +56,9 @@ When a session reports an active subagent (via the PreToolUse hook), the hub tra
 - **Kind**: one of `task` (Task/Agent dispatch), `bash` (backgrounded Bash), `workflow` (Workflow dispatch), or `monitor` (persistent Monitor watch)
 - **Label**: friendly identifier for the work (e.g., agent name, script name)
 - **Status**: `active` or `completed`
-- **Duration**: ISO timestamp when the subagent started, and (if completed) when it finished
+- **Duration**: elapsed time since the subagent started, computed from its start time (and, if completed, its finish time) — live while active, frozen once completed
 
-The hub prunes markers based on two retention policies:
+The hub prunes markers based on three retention policies:
 
 - **Active task-kind markers** (ACTIVE_SUBAGENT_TTL_SECONDS): pruned after 2 hours of inactivity, so long-running task dispatches are tracked across your session
 - **Active background-kind markers** (bash, workflow, monitor; BACKGROUND_SUBAGENT_TTL_SECONDS): pruned after 15 minutes, since these tend to finish faster
