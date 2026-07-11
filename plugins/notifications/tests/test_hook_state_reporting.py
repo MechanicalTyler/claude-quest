@@ -284,6 +284,42 @@ def test_hooks_exit_zero_when_hub_down(base_hook_input, transcript_without_ask, 
             assert exit_code == 0, f"{script} must exit 0 when hub is unreachable"
 
 
+def test_stop_hook_forwards_active_work_on_working_branch(base_hook_input, transcript_without_ask, active_subagent_home):
+    # Why: this is what actually lets the dashboard show per-item detail
+    # (AC-1/AC-2) -- the payload must carry active_work when a subagent is
+    # running (the "working" branch).
+    set_active_subagent_marker(active_subagent_home)
+    events = hub_events(run_hook_capture_hub("notifications_stop.py", {
+        **base_hook_input, "transcript_path": transcript_without_ask,
+    }))
+    assert len(events) == 1
+    assert events[0]["state"] == "working"
+    assert len(events[0]["active_work"]) == 1
+    assert events[0]["active_work"][0]["kind"] == "task"
+    assert events[0]["active_work"][0]["status"] == "active"
+
+
+def test_stop_hook_forwards_active_work_on_done_branch(base_hook_input, transcript_without_ask, active_subagent_home):
+    # Why: a just-completed task marker sits in its retention window with
+    # status "completed" -- count_active_subagents excludes it (so Stop
+    # correctly reports "done"), but the done branch must still forward it
+    # so the dashboard can show recently-finished work, per AC-2.
+    marker_dir = active_subagent_home / "test-session-123"
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    import time as _time
+    (marker_dir / "marker-1").write_text(
+        '{"id": "marker-1", "kind": "task", "label": "y", "status": "completed", '
+        '"started_at": %r, "completed_at": %r}' % (_time.time() - 5, _time.time())
+    )
+    events = hub_events(run_hook_capture_hub("notifications_stop.py", {
+        **base_hook_input, "transcript_path": transcript_without_ask,
+    }))
+    assert len(events) == 1
+    assert events[0]["state"] == "done"
+    assert len(events[0]["active_work"]) == 1
+    assert events[0]["active_work"][0]["status"] == "completed"
+
+
 def test_hooks_exit_zero_when_attention_hub_not_installed(base_hook_input, transcript_without_ask, monkeypatch):
     # Why: notifications must keep working standalone — if attention-hub isn't
     # installed (bridge discovery finds nothing), the Notification/Stop hooks
