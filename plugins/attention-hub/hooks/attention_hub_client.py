@@ -251,15 +251,16 @@ def _write_marker(path, record):
         return False
 
 
-def mark_subagent_active(session_id, label=None):
-    """Record one active subagent dispatch for this session.
+def _create_marker(session_id, kind, label=None):
+    """Create one active-status marker of the given kind for this session.
 
-    Creates the per-session active-subagent directory if needed, then creates
-    a single marker file named with a fresh uuid4 token via exclusive create
-    (Path.touch(exist_ok=False)), so concurrent dispatches can never collide
-    on a filename, and writes a JSON record (id, kind="task", label,
-    status="active", started_at) into it. Returns True on success, False if
-    the session_id is invalid or the filesystem operation fails. Never raises.
+    Shared by mark_subagent_active (kind="task") and mark_background_active
+    (any other kind). Creates the per-session directory if needed, creates
+    a uuid4-named marker file via exclusive create so concurrent dispatches
+    can never collide on a filename, and writes the JSON record via
+    _write_marker -- propagating its actual success/failure rather than
+    assuming success. Returns True only if the marker was both created and
+    its JSON body written successfully. Never raises.
     """
     try:
         dir_path = _active_subagent_dir_path(session_id)
@@ -269,22 +270,31 @@ def mark_subagent_active(session_id, label=None):
         marker_id = uuid.uuid4().hex
         marker_path = dir_path / marker_id
         marker_path.touch(exist_ok=False)
-        _write_marker(marker_path, {
+        return _write_marker(marker_path, {
             "id": marker_id,
-            "kind": "task",
+            "kind": kind,
             "label": str(label or "")[:LABEL_MAX_CHARS],
             "status": "active",
             "started_at": time.time(),
         })
-        return True
     except Exception:
         return False
+
+
+def mark_subagent_active(session_id, label=None):
+    """Record one active subagent dispatch for this session.
+
+    Creates a "task"-kind marker via _create_marker -- see its docstring
+    for the full mechanism. Returns True on success, False if the
+    session_id is invalid or the filesystem operation fails. Never raises.
+    """
+    return _create_marker(session_id, "task", label)
 
 
 def mark_background_active(session_id, kind, label=None):
     """Record one active background-tool dispatch for this session.
 
-    Same directory/marker mechanism as mark_subagent_active, but for
+    Same mechanism as mark_subagent_active via _create_marker, but for
     non-Task tools that run in the background (Bash, Workflow, Monitor).
     These kinds have no completion hook (see spec's Warning callout), so
     they are pruned only by BACKGROUND_SUBAGENT_TTL_SECONDS in
@@ -292,24 +302,7 @@ def mark_background_active(session_id, kind, label=None):
     success, False if session_id is invalid or the filesystem operation
     fails. Never raises.
     """
-    try:
-        dir_path = _active_subagent_dir_path(session_id)
-        if dir_path is None:
-            return False
-        dir_path.mkdir(parents=True, exist_ok=True)
-        marker_id = uuid.uuid4().hex
-        marker_path = dir_path / marker_id
-        marker_path.touch(exist_ok=False)
-        _write_marker(marker_path, {
-            "id": marker_id,
-            "kind": kind,
-            "label": str(label or "")[:LABEL_MAX_CHARS],
-            "status": "active",
-            "started_at": time.time(),
-        })
-        return True
-    except Exception:
-        return False
+    return _create_marker(session_id, kind, label)
 
 
 def count_active_subagents(session_id):

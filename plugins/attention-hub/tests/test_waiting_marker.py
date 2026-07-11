@@ -222,3 +222,11 @@ def test_mark_background_active_writes_kinded_json_record(hub_client, active_sub
     assert record["kind"] == "bash"
     assert record["label"] == "run tests"
     assert record["status"] == "active"
+
+
+def test_mark_subagent_active_returns_false_when_write_marker_fails(hub_client, active_subagent_home, monkeypatch):
+    # Why: a mid-write failure (e.g. disk full after the exclusive touch
+    # succeeds) must be reported as failure, not silently swallowed into a
+    # false "success" while the marker file has no/partial JSON body.
+    monkeypatch.setattr(hub_client, "_write_marker", lambda path, record: False)
+    assert hub_client.mark_subagent_active("session-abc") is False
