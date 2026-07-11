@@ -38,20 +38,16 @@ except ImportError:
     slack_enabled = channel_flags.slack_enabled
 
 try:
-    from attention_hub_bridge import report_state, get_session_name, clear_waiting_marker, count_active_subagents, list_active_work
+    from subagent_tracker import count_active_subagents
 except ImportError:
     import importlib.util
-    bridge_spec = importlib.util.spec_from_file_location(
-        "attention_hub_bridge",
-        Path(__file__).parent / "attention_hub_bridge.py"
+    tracker_spec = importlib.util.spec_from_file_location(
+        "subagent_tracker",
+        Path(__file__).parent / "subagent_tracker.py"
     )
-    attention_hub_bridge = importlib.util.module_from_spec(bridge_spec)
-    bridge_spec.loader.exec_module(attention_hub_bridge)
-    report_state = attention_hub_bridge.report_state
-    get_session_name = attention_hub_bridge.get_session_name
-    clear_waiting_marker = attention_hub_bridge.clear_waiting_marker
-    count_active_subagents = attention_hub_bridge.count_active_subagents
-    list_active_work = attention_hub_bridge.list_active_work
+    subagent_tracker = importlib.util.module_from_spec(tracker_spec)
+    tracker_spec.loader.exec_module(subagent_tracker)
+    count_active_subagents = subagent_tracker.count_active_subagents
 
 
 def log_message(message):
@@ -90,12 +86,6 @@ def main():
             log_message("❌ No session ID, exiting")
             sys.exit(0)
 
-        # End of turn: consume any waiting marker. Covers the denied-permission
-        # path (no tool ran) so the next turn cannot report stale "working".
-        # No-ops silently when attention-hub isn't installed.
-        clear_waiting_marker(session_id)
-        active_work = list_active_work(session_id)
-
         message = extract_latest_message(transcript_path)
 
         needs_input = has_ask_user_question(transcript_path)
@@ -103,30 +93,18 @@ def main():
             subtitle = "Needs Input"
             sound = "Glass"
             hook_type = "stop_needs_input"
-            hub_state = "needs_input"
         elif count_active_subagents(session_id) > 0:
             # Background subagents are still running: this Stop is the main
-            # agent pausing to check in on them, not a real completion. Report
-            # working and skip the Slack/macOS notification entirely. When
-            # attention-hub isn't installed, count_active_subagents is always
-            # 0, so this branch never triggers and every Stop is treated as a
-            # real completion -- a disclosed trade-off of running notifications
-            # standalone (see README).
-            hub_success = report_state(session_id, input_data.get("cwd", ""), "working", message,
-                                       session_name=get_session_name(input_data),
-                                       active_work=active_work)
-            log_message(f"{'✅' if hub_success else '❌'} Hub (working - active subagents)")
+            # agent pausing to check in on them, not a real completion. Skip
+            # the Slack/macOS notification entirely -- notifications' own
+            # independent tracker (see subagent_tracker.py) is what drives
+            # this branch now, with no attention-hub dependency.
+            log_message("⏭️ Active subagent(s) running, skipping notification")
             sys.exit(0)
         else:
             subtitle = "Task Complete"
             sound = "Hero"
             hook_type = "stop_complete"
-            hub_state = "done"
-
-        hub_success = report_state(session_id, input_data.get("cwd", ""), hub_state, message,
-                                   session_name=get_session_name(input_data),
-                                   active_work=active_work)
-        log_message(f"{'✅' if hub_success else '❌'} Hub ({hub_state})")
 
         if not message:
             log_message("⚠️ No message to send")
