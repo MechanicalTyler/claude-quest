@@ -58,6 +58,7 @@ Create `~/.claude/dev-workflow/config.json`:
       "test-pr": "opus",
       "address-pr-comments": "sonnet",
       "entry-detection": "sonnet",
+      "pr-number-read": "sonnet",
       "decision-read": "sonnet"
     }
   }
@@ -80,6 +81,7 @@ The `models` section is optional. When absent, all dispatches use the built-in d
 | `models.stages.test-pr` | `opus` | full-cycle's test-pr stage subagent |
 | `models.stages.address-pr-comments` | `sonnet` | full-cycle's fix subagent in the review and test loops |
 | `models.stages.entry-detection` | `sonnet` | full-cycle's resume/entry-detection subagent |
+| `models.stages.pr-number-read` | `sonnet` | full-cycle's post-start-development PR-number resolution subagent |
 | `models.stages.decision-read` | `sonnet` | full-cycle's authoritative review/test decision-read subagent |
 
 **Resolution order** for any dispatch: `models.stages.<stage-key>` → `models.<task-type>` → built-in default. Stage-level keys take priority over task-type keys. Users who never add the `models` section see no change in behavior.
