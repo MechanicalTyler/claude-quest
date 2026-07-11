@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/attention_hub_notification.py"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "*",
