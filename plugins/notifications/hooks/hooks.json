@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/notifications_pre_tool_use.py"
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "hooks": [
