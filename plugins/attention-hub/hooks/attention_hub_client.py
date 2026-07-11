@@ -305,32 +305,60 @@ def mark_background_active(session_id, kind, label=None):
     return _create_marker(session_id, kind, label)
 
 
-def count_active_subagents(session_id):
-    """Count active-subagent markers for this session, pruning stale ones.
+def list_active_work(session_id):
+    """List surviving active-work records for this session, pruning stale ones.
 
-    Any marker older than ACTIVE_SUBAGENT_TTL_SECONDS is removed before
-    counting, so a crashed (or denied/errored) subagent dispatch that never
-    fires SubagentStop cannot wedge a session on "working" forever. Returns
-    0 if none exist or the directory doesn't exist. Never raises.
+    Active-status markers (any kind) prune by file mtime against the TTL for
+    their kind (ACTIVE_SUBAGENT_TTL_SECONDS for "task",
+    BACKGROUND_SUBAGENT_TTL_SECONDS for every other kind) -- unchanged from
+    today's mtime-based mechanism, never the JSON started_at field, so
+    existing mtime-manipulation tests keep passing. Completed-status markers
+    (task kind only) prune by COMPLETED_RETENTION_SECONDS against their own
+    completed_at field. Returns a list of surviving marker records. Never
+    raises.
     """
     try:
         dir_path = _active_subagent_dir_path(session_id)
         if dir_path is None or not dir_path.is_dir():
-            return 0
+            return []
         now = time.time()
-        count = 0
+        surviving = []
         for marker in dir_path.iterdir():
             try:
                 if not marker.is_file():
                     continue
-                age = now - marker.stat().st_mtime
-                if age > ACTIVE_SUBAGENT_TTL_SECONDS:
-                    marker.unlink()
-                    continue
-                count += 1
+                record = _read_marker(marker)
+                if record.get("status") == "completed":
+                    completed_at = record.get("completed_at", now)
+                    if now - completed_at > COMPLETED_RETENTION_SECONDS:
+                        marker.unlink()
+                        continue
+                else:
+                    ttl = (ACTIVE_SUBAGENT_TTL_SECONDS if record.get("kind") == "task"
+                           else BACKGROUND_SUBAGENT_TTL_SECONDS)
+                    age = now - marker.stat().st_mtime
+                    if age > ttl:
+                        marker.unlink()
+                        continue
+                surviving.append(record)
             except Exception:
                 continue
-        return count
+        return surviving
+    except Exception:
+        return []
+
+
+def count_active_subagents(session_id):
+    """Count active-status markers for this session, across every kind,
+    pruning stale ones via list_active_work. Returns 0 if none exist. Never
+    raises. This is the mechanism that closes the false-done bug for
+    Bash-background/Workflow/Monitor: it counts every marked kind, not just
+    task, so notifications_stop.py's existing, unmodified
+    `count_active_subagents(session_id) > 0` check naturally trips for them.
+    """
+    try:
+        return sum(1 for record in list_active_work(session_id)
+                    if record.get("status") == "active")
     except Exception:
         return 0
 

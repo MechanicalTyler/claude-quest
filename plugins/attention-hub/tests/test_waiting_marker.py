@@ -260,3 +260,83 @@ def test_clear_active_subagent_with_no_active_task_markers_returns_false(hub_cli
     # background kinds never observe completion (no equivalent hook exists).
     hub_client.mark_background_active("session-abc", "bash", label="x")
     assert hub_client.clear_active_subagent("session-abc") is False
+
+
+def test_list_active_work_returns_id_kind_label_status(hub_client, active_subagent_home):
+    # Why: AC-1/AC-2 require the full per-subagent identity surfaced, not
+    # just a count.
+    hub_client.mark_subagent_active("session-abc", label="do the thing")
+    work = hub_client.list_active_work("session-abc")
+    assert len(work) == 1
+    assert work[0]["kind"] == "task"
+    assert work[0]["label"] == "do the thing"
+    assert work[0]["status"] == "active"
+    assert "id" in work[0] and "started_at" in work[0]
+
+
+def test_list_active_work_prunes_background_kind_by_short_ttl_mtime(hub_client, active_subagent_home):
+    # Why: background kinds prune by file mtime against the 15-minute TTL --
+    # never against the JSON started_at field (see pruning-mechanism decision).
+    hub_client.mark_background_active("session-abc", "bash", label="x")
+    marker = next((active_subagent_home / "session-abc").iterdir())
+    old_time = __import__("time").time() - hub_client.BACKGROUND_SUBAGENT_TTL_SECONDS - 5
+    os.utime(marker, (old_time, old_time))
+    assert hub_client.list_active_work("session-abc") == []
+    assert not marker.exists()
+
+
+def test_list_active_work_task_kind_survives_past_short_ttl_boundary(hub_client, active_subagent_home):
+    # Why: the short (15-min) background TTL must not accidentally apply to
+    # task-kind markers -- a task marker older than the short TTL but
+    # younger than the long (2hr) TTL must NOT be pruned.
+    hub_client.mark_subagent_active("session-abc", label="x")
+    marker = next((active_subagent_home / "session-abc").iterdir())
+    mid_age_time = __import__("time").time() - hub_client.BACKGROUND_SUBAGENT_TTL_SECONDS - 60
+    os.utime(marker, (mid_age_time, mid_age_time))
+    work = hub_client.list_active_work("session-abc")
+    assert len(work) == 1
+    assert marker.exists()
+
+
+def test_list_active_work_prunes_completed_task_by_retention_window(hub_client, active_subagent_home):
+    # Why: completed task-kind markers must survive for AC-2's "recent"
+    # requirement, then vanish after COMPLETED_RETENTION_SECONDS -- measured
+    # from completed_at, independent of the long active-task TTL.
+    hub_client.mark_subagent_active("session-abc", label="x")
+    hub_client.clear_active_subagent("session-abc")
+    marker = next((active_subagent_home / "session-abc").iterdir())
+    record = hub_client._read_marker(marker)
+    record["completed_at"] = __import__("time").time() - hub_client.COMPLETED_RETENTION_SECONDS - 5
+    hub_client._write_marker(marker, record)
+    assert hub_client.list_active_work("session-abc") == []
+    assert not marker.exists()
+
+
+def test_list_active_work_keeps_recently_completed_task(hub_client, active_subagent_home):
+    # Why: a just-completed task must still appear (status "completed") until
+    # the retention window elapses -- this is the whole point of AC-2's
+    # "recent" requirement.
+    hub_client.mark_subagent_active("session-abc", label="x")
+    hub_client.clear_active_subagent("session-abc")
+    work = hub_client.list_active_work("session-abc")
+    assert len(work) == 1
+    assert work[0]["status"] == "completed"
+    assert isinstance(work[0]["completed_at"], float)
+
+
+def test_count_active_subagents_excludes_completed(hub_client, active_subagent_home):
+    # Why: AC-4's fix hinges on this wrapper counting only status=="active" --
+    # a retained completed marker must not inflate the count and wedge the
+    # Stop hook on "working" forever.
+    hub_client.mark_subagent_active("session-abc", label="x")
+    hub_client.mark_subagent_active("session-abc", label="y")
+    hub_client.clear_active_subagent("session-abc")
+    assert hub_client.count_active_subagents("session-abc") == 1
+
+
+def test_count_active_subagents_counts_background_kinds_too(hub_client, active_subagent_home):
+    # Why: this is the literal AC-4 fix -- once count_active_subagents counts
+    # every active-status kind, notifications_stop.py's existing, untouched
+    # check naturally trips for background dispatches, not just Task.
+    hub_client.mark_background_active("session-abc", "bash", label="x")
+    assert hub_client.count_active_subagents("session-abc") == 1
