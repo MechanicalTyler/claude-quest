@@ -39,11 +39,11 @@ Responses: `200` with the updated record, `400` for a missing/invalid state or m
 
 This plugin ships five Claude Code hooks that report session state to the dashboard automatically once installed — no configuration needed:
 
-- **PreToolUse hook**: Pure observer — marks the session as having an active subagent when a `Task` dispatch is seen (every other tool is a no-op). Always exits `0` and never emits a permission-decision payload, so it can never block a tool call
+- **PreToolUse hook**: Pure observer — marks the session as having active work when an `Agent` dispatch (a subagent call — see Subagent Tracking below) or a backgrounded `Bash` call is seen; every other tool is a no-op. Always exits `0` and never emits a permission-decision payload, so it can never block a tool call
 - **PostToolUse hook**: Reports `working` to the hub when a tool completes after the session was flagged `waiting` (a tool can only complete once a pending permission/question was answered). Gated by a per-session marker file, so on normal tool calls (no marker) it exits instantly with zero network activity
 - **UserPromptSubmit hook**: Reports `working` to the hub — answering a session automatically clears its needs-attention state
 - **SessionEnd hook**: Removes the session from the hub (and cleans up its waiting marker and any active-subagent markers)
-- **SubagentStop hook**: Clears one active-subagent marker for the session so the active-subagent count stays accurate
+- **SubagentStop hook**: Flips one active task-kind marker for the session to `completed` (see Subagent Tracking and Retention below) — it stays visible as recently-finished work for a short retention window rather than disappearing immediately
 
 Transient hook state (waiting markers, active-subagent markers) lives under `~/.claude/attention-hub/`.
 
