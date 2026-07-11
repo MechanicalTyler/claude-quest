@@ -31,8 +31,8 @@ def _bash_background_label(tool_input):
 
 def main():
     # PreToolUse: pure observer, not a gate. Must always exit 0 and never
-    # print a permission-decision payload -- if this hook ever blocked a Task
-    # dispatch, subagents would stop running entirely, which is strictly
+    # print a permission-decision payload -- if this hook ever blocked an
+    # Agent dispatch, subagents would stop running entirely, which is strictly
     # worse than the "shows waiting/done while working" bug it fixes.
     try:
         input_data = json.load(sys.stdin)
@@ -42,24 +42,22 @@ def main():
             tool_input = {}
         session_id = input_data.get("session_id", "")
 
-        if tool_name == "Task":
-            # [Inference] tool_input's description field is unconfirmed --
-            # see spec's verification decision. Falls back to empty label.
+        if tool_name == "Agent":
+            # Confirmed via Claude Code's official docs: "Agent" is the real
+            # tool_name for subagent dispatch in a PreToolUse hook payload.
+            # "Task" is a legacy/former name for the same tool and never
+            # matches a real payload -- this was a pre-existing bug.
             label = str(tool_input.get("description") or "").strip()
             mark_subagent_active(session_id, label=label)
         elif tool_name == "Bash" and tool_input.get("run_in_background"):
             mark_background_active(session_id, "bash", _bash_background_label(tool_input))
-        elif tool_name == "Workflow":
-            # [Unverified] "Workflow" tool_name string is an unconfirmed
-            # assumption -- see spec's verification decision.
-            label = (str(tool_input.get("description") or "").strip()
-                     or str(tool_input.get("name") or "").strip())
-            mark_background_active(session_id, "workflow", label)
-        elif tool_name == "Monitor" and tool_input.get("persistent"):
-            # [Unverified] "Monitor" tool_name string is an unconfirmed
-            # assumption -- see spec's verification decision.
-            label = str(tool_input.get("description") or "").strip()
-            mark_background_active(session_id, "monitor", label)
+        # Workflow/Monitor detection was removed here: confirmed those tools
+        # do not fire PreToolUse hooks at all in Claude Code's documented
+        # hook system (only Bash, Edit, Write, Read, Glob, Grep, Agent,
+        # WebFetch, WebSearch, AskUserQuestion, ExitPlanMode, and MCP tools
+        # do). Tracking background/persistent Workflow and Monitor dispatches
+        # is a follow-up gap that needs a different mechanism, not achievable
+        # via this hook.
     except Exception:
         pass
     sys.exit(0)
