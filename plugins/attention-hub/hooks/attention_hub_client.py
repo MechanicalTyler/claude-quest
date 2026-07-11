@@ -285,7 +285,10 @@ def mark_subagent_active(session_id, label=None):
     """Record one active subagent dispatch for this session.
 
     Creates a "task"-kind marker via _create_marker -- see its docstring
-    for the full mechanism. Returns True on success, False if the
+    for the full mechanism. "task" here is just this marker kind's internal
+    label; it is unrelated to the real PreToolUse tool_name, which is
+    "Agent" ("Task" is a legacy/former name for the same tool -- see
+    attention_hub_pre_tool_use.py). Returns True on success, False if the
     session_id is invalid or the filesystem operation fails. Never raises.
     """
     return _create_marker(session_id, "task", label)
@@ -295,12 +298,16 @@ def mark_background_active(session_id, kind, label=None):
     """Record one active background-tool dispatch for this session.
 
     Same mechanism as mark_subagent_active via _create_marker, but for
-    non-Task tools that run in the background (Bash, Workflow, Monitor).
-    These kinds have no completion hook (see spec's Warning callout), so
-    they are pruned only by BACKGROUND_SUBAGENT_TTL_SECONDS in
-    list_active_work and never flip to status="completed". Returns True on
-    success, False if session_id is invalid or the filesystem operation
-    fails. Never raises.
+    non-Agent tools that run in the background. Only "bash" (backgrounded
+    Bash) is currently detected by attention_hub_pre_tool_use.py -- Workflow
+    and Monitor detection was removed there since neither tool fires a
+    PreToolUse hook in Claude Code's documented hook system, so tracking
+    them via this function is not currently achievable (tracked as a
+    follow-up gap, not implemented here). These kinds have no completion
+    hook (see spec's Warning callout), so they are pruned only by
+    BACKGROUND_SUBAGENT_TTL_SECONDS in list_active_work and never flip to
+    status="completed". Returns True on success, False if session_id is
+    invalid or the filesystem operation fails. Never raises.
     """
     return _create_marker(session_id, kind, label)
 
