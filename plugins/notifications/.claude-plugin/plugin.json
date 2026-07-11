@@ -1,7 +1,7 @@
 {
   "name": "notifications",
-  "description": "System notifications when Claude completes tasks or needs input (macOS + Slack); reports session attention state to the attention-hub dashboard",
-  "version": "1.7.0",
+  "description": "System notifications when Claude completes tasks or needs input (macOS + Slack)",
+  "version": "1.8.0",
   "author": {
     "name": "MechanicalTyler"
   },
