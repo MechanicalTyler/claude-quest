@@ -80,7 +80,7 @@ agents/                # Dedicated subagent types dispatched by the orchestrator
   dev-workflow-reviewer.md         # review-pr
   dev-workflow-tester.md           # test-pr
   dev-workflow-fixer.md            # address-pr-comments (review/test fix loops; tool-restricted)
-  dev-workflow-pr-state-reader.md  # entry/resume detection + authoritative decision read (read-only)
+  dev-workflow-pr-state-reader.md  # entry/resume detection + PR-number resolution + authoritative decision read (read-only)
   dev-workflow-orchestrator.md     # full-cycle, dispatched per-task by epic (retains Agent tool to nest)
 hooks/
   context-meter.sh     # PostToolUse: token usage meter — emits at 60%/75% of 200k baseline
