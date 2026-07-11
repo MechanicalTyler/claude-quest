@@ -420,12 +420,12 @@ def clear_all_active_subagents(session_id):
         return False
 
 
-def build_event_payload(session_id, cwd, state, message=None, session_name=None):
+def build_event_payload(session_id, cwd, state, message=None, session_name=None, active_work=None):
     """Build the state-event payload identifying this session to the hub."""
     snippet = (message or "").strip()
     if len(snippet) > MESSAGE_SNIPPET_MAX:
         snippet = snippet[: MESSAGE_SNIPPET_MAX - 3] + "..."
-    return {
+    payload = {
         "session_id": session_id,
         "session_name": (session_name or "").strip()[:SESSION_NAME_MAX],
         "project": os.path.basename(os.path.normpath(cwd)) if cwd else "unknown",
@@ -435,6 +435,9 @@ def build_event_payload(session_id, cwd, state, message=None, session_name=None)
         "is_container": detect_container(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    if active_work:
+        payload["active_work"] = active_work
+    return payload
 
 
 def _issue_request(url, method, body, timeout, result):
@@ -487,11 +490,11 @@ def _request(url, method, body=None):
     return result["ok"]
 
 
-def report_state(session_id, cwd, state, message=None, session_name=None):
+def report_state(session_id, cwd, state, message=None, session_name=None, active_work=None):
     """POST a state event to the hub. Swallows every failure; returns success bool."""
     if not session_id:
         return False
-    payload = build_event_payload(session_id, cwd, state, message, session_name)
+    payload = build_event_payload(session_id, cwd, state, message, session_name, active_work)
     return _request(f"{get_hub_url()}/api/events", "POST", payload)
 
 

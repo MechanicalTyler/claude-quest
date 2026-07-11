@@ -420,3 +420,21 @@ def test_read_marker_legacy_empty_file_falls_back(hub_client, active_subagent_ho
     assert record["label"] == ""
     assert record["status"] == "active"
     assert isinstance(record["started_at"], float)
+
+
+# --- Active work tracking ---
+
+def test_build_event_payload_includes_active_work_when_present():
+    client = load_client()
+    payload = client.build_event_payload(
+        "s1", "/tmp/proj", "working", active_work=[{"kind": "task", "status": "active"}]
+    )
+    assert payload["active_work"] == [{"kind": "task", "status": "active"}]
+
+
+def test_build_event_payload_omits_active_work_when_empty():
+    # Why: keep normal-state payloads unchanged in shape when nothing is
+    # tracked, matching every other optional field's omit-when-empty style.
+    client = load_client()
+    payload = client.build_event_payload("s1", "/tmp/proj", "done")
+    assert "active_work" not in payload
