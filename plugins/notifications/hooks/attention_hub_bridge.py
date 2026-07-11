@@ -71,10 +71,11 @@ def available():
     return _client is not None
 
 
-def report_state(session_id, cwd, state, message=None, session_name=None):
+def report_state(session_id, cwd, state, message=None, session_name=None, active_work=None):
     if _client is None:
         return False
-    return _client.report_state(session_id, cwd, state, message=message, session_name=session_name)
+    return _client.report_state(session_id, cwd, state, message=message,
+                                session_name=session_name, active_work=active_work)
 
 
 def get_session_name(input_data):
@@ -99,6 +100,12 @@ def count_active_subagents(session_id):
     if _client is None:
         return 0
     return _client.count_active_subagents(session_id)
+
+
+def list_active_work(session_id):
+    if _client is None:
+        return []
+    return _client.list_active_work(session_id)
 
 
 def log_hub(message, log_file="attention_hub_client.log"):

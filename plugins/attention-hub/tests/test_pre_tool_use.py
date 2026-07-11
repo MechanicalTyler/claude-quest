@@ -27,7 +27,7 @@ def run_pre_tool_use(hook_input, capsys):
 def test_task_dispatch_marks_session_active(base_hook_input, active_subagent_home, capsys):
     # Why: this is the entire mechanism the story depends on — without a marker
     # created here, the Stop hook has no signal that a subagent is running.
-    run_pre_tool_use({**base_hook_input, "tool_name": "Task"}, capsys)
+    run_pre_tool_use({**base_hook_input, "tool_name": "Agent"}, capsys)
     marker_dir = active_subagent_home / "test-session-123"
     assert marker_dir.is_dir()
     assert len(list(marker_dir.iterdir())) == 1
@@ -51,7 +51,7 @@ def test_non_task_tool_makes_no_hub_or_network_calls(base_hook_input, active_sub
 def test_task_dispatch_exits_zero_and_emits_no_decision_payload(base_hook_input, active_subagent_home, capsys):
     # Why: highest-severity property in this change — a hook that ever blocks a
     # Task dispatch would stop subagents from running entirely.
-    exit_code, out = run_pre_tool_use({**base_hook_input, "tool_name": "Task"}, capsys)
+    exit_code, out = run_pre_tool_use({**base_hook_input, "tool_name": "Agent"}, capsys)
     assert exit_code == 0
     assert "decision" not in out
     assert out.strip() == ""
@@ -91,3 +91,55 @@ def test_malformed_stdin_exits_zero(active_subagent_home, capsys):
         except SystemExit as e:
             exit_code = e.code or 0
     assert exit_code == 0
+
+
+def test_task_dispatch_captures_description_as_label(base_hook_input, active_subagent_home, capsys):
+    # Why: AC-3 -- markers must carry a usable identifier, not stay anonymous.
+    # [Inference] the description field's presence on Task's tool_input is
+    # unconfirmed -- see spec's verification decision; this test locks in
+    # the assumed shape so a live-payload mismatch is a one-line fix here.
+    run_pre_tool_use({**base_hook_input, "tool_name": "Agent",
+                       "tool_input": {"description": "fix the bug"}}, capsys)
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "attention_hub_client", HOOKS_DIR / "attention_hub_client.py"
+    )
+    hub_client = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hub_client)
+    marker = next((active_subagent_home / "test-session-123").iterdir())
+    assert hub_client._read_marker(marker)["label"] == "fix the bug"
+
+
+def test_backgrounded_bash_creates_bash_kind_marker(base_hook_input, active_subagent_home, capsys):
+    run_pre_tool_use({**base_hook_input, "tool_name": "Bash",
+                       "tool_input": {"run_in_background": True, "description": "run suite"}}, capsys)
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "attention_hub_client", HOOKS_DIR / "attention_hub_client.py"
+    )
+    hub_client = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hub_client)
+    marker = next((active_subagent_home / "test-session-123").iterdir())
+    record = hub_client._read_marker(marker)
+    assert record["kind"] == "bash"
+    assert record["label"] == "run suite"
+
+
+def test_foreground_bash_creates_no_marker(base_hook_input, active_subagent_home, capsys):
+    # Why: only backgrounded Bash calls should be tracked -- a foreground
+    # command already blocks the turn and is not a false-done risk.
+    run_pre_tool_use({**base_hook_input, "tool_name": "Bash",
+                       "tool_input": {"command": "ls"}}, capsys)
+    assert not (active_subagent_home / "test-session-123").exists()
+
+
+def test_workflow_and_monitor_tool_names_create_no_marker(base_hook_input, active_subagent_home, capsys):
+    # Why: Workflow/Monitor detection was removed -- confirmed those tools
+    # don't fire PreToolUse hooks in Claude Code's documented hook system,
+    # so no code path should mark a session for them. Tracked as a follow-up
+    # gap (needs a different mechanism), not shipped as dead/broken code.
+    run_pre_tool_use({**base_hook_input, "tool_name": "Workflow",
+                       "tool_input": {"description": "run migration"}}, capsys)
+    run_pre_tool_use({**base_hook_input, "tool_name": "Monitor",
+                       "tool_input": {"persistent": True, "description": "watch logs"}}, capsys)
+    assert not (active_subagent_home / "test-session-123").exists()

@@ -391,3 +391,50 @@ def test_remove_session_sends_delete(monkeypatch):
     assert ok is True
     assert captured["url"] == "http://hub.example:8765/api/sessions/sess-9"
     assert captured["method"] == "DELETE"
+
+
+# --- Marker JSON record format + legacy fallback ---
+
+def test_read_marker_parses_json_record(hub_client, active_subagent_home):
+    # Why: _read_marker is the single source of truth every other marker
+    # function relies on -- it must round-trip a well-formed JSON record.
+    active_subagent_home.mkdir(parents=True, exist_ok=True)
+    marker = active_subagent_home / "m1"
+    marker.write_text('{"id": "m1", "kind": "bash", "label": "x", '
+                       '"status": "active", "started_at": 123.0}')
+    record = hub_client._read_marker(marker)
+    assert record == {"id": "m1", "kind": "bash", "label": "x",
+                       "status": "active", "started_at": 123.0}
+
+
+def test_read_marker_legacy_empty_file_falls_back(hub_client, active_subagent_home):
+    # Why: markers created before this story (empty touch files) must still
+    # be treated as valid task-kind, active-status records, not crash or
+    # silently vanish, so rollout never loses in-flight tracking.
+    active_subagent_home.mkdir(parents=True, exist_ok=True)
+    marker = active_subagent_home / "legacy-marker"
+    marker.touch()
+    record = hub_client._read_marker(marker)
+    assert record["id"] == "legacy-marker"
+    assert record["kind"] == "task"
+    assert record["label"] == ""
+    assert record["status"] == "active"
+    assert isinstance(record["started_at"], float)
+
+
+# --- Active work tracking ---
+
+def test_build_event_payload_includes_active_work_when_present():
+    client = load_client()
+    payload = client.build_event_payload(
+        "s1", "/tmp/proj", "working", active_work=[{"kind": "task", "status": "active"}]
+    )
+    assert payload["active_work"] == [{"kind": "task", "status": "active"}]
+
+
+def test_build_event_payload_omits_active_work_when_empty():
+    # Why: keep normal-state payloads unchanged in shape when nothing is
+    # tracked, matching every other optional field's omit-when-empty style.
+    client = load_client()
+    payload = client.build_event_payload("s1", "/tmp/proj", "done")
+    assert "active_work" not in payload

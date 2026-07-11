@@ -25,6 +25,9 @@ HUB_TIMEOUT_SECONDS = 2
 MESSAGE_SNIPPET_MAX = 200
 SESSION_NAME_MAX = 256
 ACTIVE_SUBAGENT_TTL_SECONDS = 2 * 60 * 60
+BACKGROUND_SUBAGENT_TTL_SECONDS = 15 * 60
+COMPLETED_RETENTION_SECONDS = 5 * 60
+LABEL_MAX_CHARS = 256
 
 # Container-detection signals (module-level so tests can redirect them).
 CONTAINER_MARKER_FILES = ("/.dockerenv", "/run/.containerenv")
@@ -210,73 +213,201 @@ def _active_subagent_dir_path(session_id):
     return Path.home() / ".claude" / "attention-hub" / "active-subagents" / session_id
 
 
-def mark_subagent_active(session_id):
-    """Record one active subagent dispatch for this session.
+def _read_marker(path):
+    """Parse a marker file's JSON body, with legacy-empty-file fallback.
 
-    Creates the per-session active-subagent directory if needed, then creates
-    a single marker file named with a fresh uuid4 token via exclusive create
-    (Path.touch(exist_ok=False)), so concurrent dispatches can never collide
-    on a filename. Returns True on success, False if the session_id is
-    invalid or the filesystem operation fails. Never raises.
+    Returns a dict with id/kind/label/status/started_at (and completed_at
+    when present). Any unparsable or empty file is treated as a valid
+    legacy record: kind="task", empty label, status="active", and the
+    file's own mtime as started_at. Never raises.
+    """
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+        if text:
+            record = json.loads(text)
+            if isinstance(record, dict) and record.get("kind") and record.get("status"):
+                return record
+    except Exception:
+        pass
+    try:
+        mtime = path.stat().st_mtime
+    except Exception:
+        mtime = time.time()
+    return {
+        "id": path.name,
+        "kind": "task",
+        "label": "",
+        "status": "active",
+        "started_at": mtime,
+    }
+
+
+def _write_marker(path, record):
+    """Write a marker record as JSON. Never raises."""
+    try:
+        path.write_text(json.dumps(record), encoding="utf-8")
+        return True
+    except Exception:
+        return False
+
+
+def _create_marker(session_id, kind, label=None):
+    """Create one active-status marker of the given kind for this session.
+
+    Shared by mark_subagent_active (kind="task") and mark_background_active
+    (any other kind). Creates the per-session directory if needed, creates
+    a uuid4-named marker file via exclusive create so concurrent dispatches
+    can never collide on a filename, and writes the JSON record via
+    _write_marker -- propagating its actual success/failure rather than
+    assuming success. Returns True only if the marker was both created and
+    its JSON body written successfully. Never raises.
     """
     try:
         dir_path = _active_subagent_dir_path(session_id)
         if dir_path is None:
             return False
         dir_path.mkdir(parents=True, exist_ok=True)
-        marker_path = dir_path / uuid.uuid4().hex
+        marker_id = uuid.uuid4().hex
+        marker_path = dir_path / marker_id
         marker_path.touch(exist_ok=False)
-        return True
+        return _write_marker(marker_path, {
+            "id": marker_id,
+            "kind": kind,
+            "label": str(label or "")[:LABEL_MAX_CHARS],
+            "status": "active",
+            "started_at": time.time(),
+        })
     except Exception:
         return False
 
 
-def count_active_subagents(session_id):
-    """Count active-subagent markers for this session, pruning stale ones.
+def mark_subagent_active(session_id, label=None):
+    """Record one active subagent dispatch for this session.
 
-    Any marker older than ACTIVE_SUBAGENT_TTL_SECONDS is removed before
-    counting, so a crashed (or denied/errored) subagent dispatch that never
-    fires SubagentStop cannot wedge a session on "working" forever. Returns
-    0 if none exist or the directory doesn't exist. Never raises.
+    Creates a "task"-kind marker via _create_marker -- see its docstring
+    for the full mechanism. "task" here is just this marker kind's internal
+    label; it is unrelated to the real PreToolUse tool_name, which is
+    "Agent" ("Task" is a legacy/former name for the same tool -- see
+    attention_hub_pre_tool_use.py). Returns True on success, False if the
+    session_id is invalid or the filesystem operation fails. Never raises.
+    """
+    return _create_marker(session_id, "task", label)
+
+
+def mark_background_active(session_id, kind, label=None):
+    """Record one active background-tool dispatch for this session.
+
+    Same mechanism as mark_subagent_active via _create_marker, but for
+    non-Agent tools that run in the background. Only "bash" (backgrounded
+    Bash) is currently detected by attention_hub_pre_tool_use.py -- Workflow
+    and Monitor detection was removed there since neither tool fires a
+    PreToolUse hook in Claude Code's documented hook system, so tracking
+    them via this function is not currently achievable (tracked as a
+    follow-up gap, not implemented here). These kinds have no completion
+    hook (see spec's Warning callout), so they are pruned only by
+    BACKGROUND_SUBAGENT_TTL_SECONDS in list_active_work and never flip to
+    status="completed". Returns True on success, False if session_id is
+    invalid or the filesystem operation fails. Never raises.
+    """
+    return _create_marker(session_id, kind, label)
+
+
+def list_active_work(session_id):
+    """List surviving active-work records for this session, pruning stale ones.
+
+    Active-status markers (any kind) prune by file mtime against the TTL for
+    their kind (ACTIVE_SUBAGENT_TTL_SECONDS for "task",
+    BACKGROUND_SUBAGENT_TTL_SECONDS for every other kind) -- unchanged from
+    today's mtime-based mechanism, never the JSON started_at field, so
+    existing mtime-manipulation tests keep passing. Completed-status markers
+    (task kind only) prune by COMPLETED_RETENTION_SECONDS against their own
+    completed_at field. Returns a list of surviving marker records. Never
+    raises.
     """
     try:
         dir_path = _active_subagent_dir_path(session_id)
         if dir_path is None or not dir_path.is_dir():
-            return 0
+            return []
         now = time.time()
-        count = 0
+        surviving = []
         for marker in dir_path.iterdir():
             try:
                 if not marker.is_file():
                     continue
-                age = now - marker.stat().st_mtime
-                if age > ACTIVE_SUBAGENT_TTL_SECONDS:
-                    marker.unlink()
-                    continue
-                count += 1
+                record = _read_marker(marker)
+                if record.get("status") == "completed":
+                    completed_at = record.get("completed_at", now)
+                    if now - completed_at > COMPLETED_RETENTION_SECONDS:
+                        marker.unlink()
+                        continue
+                else:
+                    ttl = (ACTIVE_SUBAGENT_TTL_SECONDS if record.get("kind") == "task"
+                           else BACKGROUND_SUBAGENT_TTL_SECONDS)
+                    age = now - marker.stat().st_mtime
+                    if age > ttl:
+                        marker.unlink()
+                        continue
+                surviving.append(record)
             except Exception:
                 continue
-        return count
+        return surviving
+    except Exception:
+        return []
+
+
+def count_active_subagents(session_id):
+    """Count active-status markers for this session, across every kind,
+    pruning stale ones via list_active_work. Returns 0 if none exist. Never
+    raises. This is the mechanism that closes the false-done bug for
+    Bash-background dispatches (the only background kind actually marked --
+    Workflow/Monitor detection was confirmed unreachable via PreToolUse and
+    removed, see attention_hub_pre_tool_use.py): it counts every marked
+    kind, not just task, so notifications_stop.py's existing, unmodified
+    `count_active_subagents(session_id) > 0` check naturally trips for them.
+    """
+    try:
+        return sum(1 for record in list_active_work(session_id)
+                    if record.get("status") == "active")
     except Exception:
         return 0
 
 
 def clear_active_subagent(session_id):
-    """Remove one active-subagent marker for this session.
+    """Flip the oldest still-active task-kind marker to status="completed".
 
-    Markers are interchangeable -- only the count matters -- so any single
-    marker in the directory may be removed. Returns True if a marker was
-    removed, False if none existed. Never raises.
+    Selects by file mtime ascending (FIFO) among markers whose kind is
+    "task" and whose status is "active" -- today's harness gives
+    SubagentStop no identifier for which subagent finished, so FIFO is the
+    best available approximation (see spec's marker-attribution decision:
+    correct whenever subagents complete in dispatch order, the common
+    case). Sets completed_at to now instead of deleting the file, so a
+    just-finished subagent still shows briefly as "completed" on the
+    dashboard. Returns True if a marker was flipped, False if none existed.
+    Never raises.
     """
     try:
         dir_path = _active_subagent_dir_path(session_id)
         if dir_path is None or not dir_path.is_dir():
             return False
+        candidates = []
         for marker in dir_path.iterdir():
-            if marker.is_file():
-                marker.unlink()
-                return True
-        return False
+            if not marker.is_file():
+                continue
+            record = _read_marker(marker)
+            if record.get("kind") == "task" and record.get("status") == "active":
+                try:
+                    mtime = marker.stat().st_mtime
+                except Exception:
+                    continue
+                candidates.append((mtime, marker, record))
+        if not candidates:
+            return False
+        candidates.sort(key=lambda c: c[0])
+        _, marker, record = candidates[0]
+        record["status"] = "completed"
+        record["completed_at"] = time.time()
+        _write_marker(marker, record)
+        return True
     except Exception:
         return False
 
@@ -298,12 +429,12 @@ def clear_all_active_subagents(session_id):
         return False
 
 
-def build_event_payload(session_id, cwd, state, message=None, session_name=None):
+def build_event_payload(session_id, cwd, state, message=None, session_name=None, active_work=None):
     """Build the state-event payload identifying this session to the hub."""
     snippet = (message or "").strip()
     if len(snippet) > MESSAGE_SNIPPET_MAX:
         snippet = snippet[: MESSAGE_SNIPPET_MAX - 3] + "..."
-    return {
+    payload = {
         "session_id": session_id,
         "session_name": (session_name or "").strip()[:SESSION_NAME_MAX],
         "project": os.path.basename(os.path.normpath(cwd)) if cwd else "unknown",
@@ -313,6 +444,9 @@ def build_event_payload(session_id, cwd, state, message=None, session_name=None)
         "is_container": detect_container(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    if active_work:
+        payload["active_work"] = active_work
+    return payload
 
 
 def _issue_request(url, method, body, timeout, result):
@@ -365,11 +499,11 @@ def _request(url, method, body=None):
     return result["ok"]
 
 
-def report_state(session_id, cwd, state, message=None, session_name=None):
+def report_state(session_id, cwd, state, message=None, session_name=None, active_work=None):
     """POST a state event to the hub. Swallows every failure; returns success bool."""
     if not session_id:
         return False
-    payload = build_event_payload(session_id, cwd, state, message, session_name)
+    payload = build_event_payload(session_id, cwd, state, message, session_name, active_work)
     return _request(f"{get_hub_url()}/api/events", "POST", payload)
 
 

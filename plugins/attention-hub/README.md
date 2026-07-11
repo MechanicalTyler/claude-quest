@@ -19,6 +19,7 @@ Clicking a card expands it; any number of cards may be open at once, and open ca
 - **Host** — with a `container` badge when the session runs inside a container
 - **Full session ID** and the **full last message**
 - **Last update** age
+- **Active work** — each tracked subagent entry with its kind, label, status, and time in state
 - **Status history** — the last 20 state transitions (most recent first), each with the time it was entered, how long it lasted, and a `manual` badge when the change came from a manual override rather than a reported event
 
 ### Forcing a status
@@ -38,15 +39,34 @@ Responses: `200` with the updated record, `400` for a missing/invalid state or m
 
 This plugin ships five Claude Code hooks that report session state to the dashboard automatically once installed — no configuration needed:
 
-- **PreToolUse hook**: Pure observer — marks the session as having an active subagent when a `Task` dispatch is seen (every other tool is a no-op). Always exits `0` and never emits a permission-decision payload, so it can never block a tool call
+- **PreToolUse hook**: Pure observer — marks the session as having active work when an `Agent` dispatch (a subagent call — see Subagent Tracking below) or a backgrounded `Bash` call is seen; every other tool is a no-op. Always exits `0` and never emits a permission-decision payload, so it can never block a tool call
 - **PostToolUse hook**: Reports `working` to the hub when a tool completes after the session was flagged `waiting` (a tool can only complete once a pending permission/question was answered). Gated by a per-session marker file, so on normal tool calls (no marker) it exits instantly with zero network activity
 - **UserPromptSubmit hook**: Reports `working` to the hub — answering a session automatically clears its needs-attention state
 - **SessionEnd hook**: Removes the session from the hub (and cleans up its waiting marker and any active-subagent markers)
-- **SubagentStop hook**: Clears one active-subagent marker for the session so the active-subagent count stays accurate
+- **SubagentStop hook**: Flips one active task-kind marker for the session to `completed` (see Subagent Tracking and Retention below) — it stays visible as recently-finished work for a short retention window rather than disappearing immediately
 
 Transient hook state (waiting markers, active-subagent markers) lives under `~/.claude/attention-hub/`.
 
 These five hooks report `working`/removal events only — they never send a `waiting`/`needs_input`/`done` event on their own, since deciding *when* a session needs attention is specific to the Notification and Stop lifecycle events. If you also install the [`notifications`](../notifications) plugin, its Notification and Stop hooks optionally report those states to this same dashboard (auto-discovered, no configuration). Installed alone, attention-hub still gives you the PreToolUse/PostToolUse/UserPromptSubmit/SessionEnd/SubagentStop tracking above; any other agent that wants `waiting`/`needs_input`/`done` reporting can POST directly to the [HTTP API](#http-api) documented below.
+
+## Subagent Tracking and Retention
+
+When a session reports an active subagent (via the PreToolUse hook), the hub tracks markers for each dispatched Agent (subagent) call and each backgrounded Bash command. Each marker carries:
+
+- **Kind**: one of `task` (Agent/subagent dispatch — the marker kind is named `task` for historical reasons, but detection keys on the real `tool_name` value `Agent`) or `bash` (backgrounded Bash)
+- **Label**: friendly identifier for the work (e.g., agent name, script name)
+- **Status**: `active` or `completed`
+- **Duration**: elapsed time since the subagent started, computed from its start time (and, if completed, its finish time) — live while active, frozen once completed
+
+The hub prunes markers based on three retention policies:
+
+- **Active task-kind markers** (ACTIVE_SUBAGENT_TTL_SECONDS): pruned after 2 hours of inactivity, so long-running dispatches are tracked across your session
+- **Active background-kind markers** (bash; BACKGROUND_SUBAGENT_TTL_SECONDS): pruned after 15 minutes, since these tend to finish faster
+- **Completed task-kind markers** (COMPLETED_RETENTION_SECONDS): stay visible in the expanded card view for 5 minutes before being pruned, so you can see recent work that finished
+
+Tracking Workflow or Monitor dispatches was investigated and found not achievable via this hook — Claude Code's PreToolUse event only fires for a fixed set of tools (`Bash`, `Edit`, `Write`, `Read`, `Glob`, `Grep`, `Agent`, `WebFetch`, `WebSearch`, `AskUserQuestion`, `ExitPlanMode`, and MCP tools), which does not include Workflow or Monitor. This is tracked as a follow-up (a different mechanism would be needed), not shipped as non-functional code.
+
+This tracking appears in the expanded card view's **Active work** section, showing each entry's kind, label, status, and elapsed time.
 
 ## Starting the hub
 
@@ -85,6 +105,7 @@ Reports (creates or updates) a session's state. Body is a JSON object:
 | `timestamp` | no | ISO-8601 timestamp of the event |
 | `session_name` | no | Friendly display name; falls back to `session_id` when omitted |
 | `is_container` | no | Boolean; badges the card when the session runs inside a container |
+| `active_work` | no | Array of per-subagent records — `{id, kind, label, status, started_at, completed_at?}` (see Subagent Tracking and Retention above); sanitized, capped, and persisted server-side; sticky across events that omit the field |
 
 Responses: `200` with the stored record, `400` for a missing `session_id` or invalid `state`, `413` for an oversized body, `415` for a non-`application/json` `Content-Type`.
 
@@ -98,7 +119,7 @@ Removes a session from the dashboard. `200` on success, `404` if unknown.
 
 ### `GET /api/sessions`
 
-Returns `{"sessions": [...]}` — every tracked session with computed `state_seconds` and `age_seconds`.
+Returns `{"sessions": [...]}` — every tracked session with computed `state_seconds` and `age_seconds`, plus each `active_work` entry annotated with a computed `duration_seconds` (live while `active`, frozen once `completed`).
 
 ## Security
 

@@ -924,3 +924,95 @@ def test_dashboard_data_one_row_per_session(hub_server):
     _, listing = http_json(f"{hub_server}/api/sessions")
     ids = sorted(s["session_id"] for s in listing["sessions"])
     assert ids == ["s0", "s1", "s2", "s3", "s4"]
+
+
+# --- Active work: storage, sanitizing, capping, persistence ---
+
+def test_upsert_stores_sanitized_active_work(tmp_path):
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    record = store.upsert({
+        "session_id": "s1", "state": "working",
+        "active_work": [
+            {"id": "a", "kind": "task", "label": "x", "status": "active", "started_at": 1.0},
+            {"id": "b", "kind": "bash", "status": "active", "started_at": 2.0},  # missing label, must survive
+            {"id": "c", "status": "bogus", "started_at": 3.0},  # invalid status, must be dropped
+            {"id": "d", "kind": "task", "status": "active"},  # missing started_at, must be dropped
+        ],
+    })
+    assert len(record["active_work"]) == 2
+    assert record["active_work"][0]["label"] == "x"
+    assert record["active_work"][1]["label"] == ""
+
+
+def test_upsert_active_work_defaults_empty(tmp_path):
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    record = store.upsert({"session_id": "s1", "state": "working"})
+    assert record["active_work"] == []
+
+
+def test_upsert_active_work_sticky_when_event_omits_it(tmp_path):
+    # Why: a plain state-change event (e.g. from notifications_stop.py's
+    # done/needs_input branch) must not silently wipe a session's currently
+    # tracked active_work list.
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    store.upsert({"session_id": "s1", "state": "working",
+                  "active_work": [{"id": "a", "kind": "task", "label": "",
+                                    "status": "active", "started_at": 1.0}]})
+    record = store.upsert({"session_id": "s1", "state": "done"})
+    assert len(record["active_work"]) == 1
+
+
+def test_upsert_active_work_capped_at_max(tmp_path):
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    entries = [{"id": str(i), "kind": "task", "status": "active", "started_at": 1.0}
+               for i in range(hub.ACTIVE_WORK_MAX + 5)]
+    record = store.upsert({"session_id": "s1", "state": "working", "active_work": entries})
+    assert len(record["active_work"]) == hub.ACTIVE_WORK_MAX
+
+
+def test_active_work_survives_restart(tmp_path):
+    hub = load_hub()
+    state_file = str(tmp_path / "state.json")
+    store = hub.AttentionStore(state_file)
+    store.upsert({"session_id": "s1", "state": "working",
+                  "active_work": [{"id": "a", "kind": "task", "label": "x",
+                                    "status": "active", "started_at": 1.0}]})
+    reloaded = hub.AttentionStore(state_file)
+    rows = reloaded.list_sessions()
+    assert rows[0]["active_work"][0]["label"] == "x"
+
+
+def test_list_sessions_computes_live_duration_for_active_entry(tmp_path):
+    hub = load_hub()
+    clock = {"now": 1000.0}
+    store = hub.AttentionStore(str(tmp_path / "state.json"), now=lambda: clock["now"])
+    store.upsert({"session_id": "s1", "state": "working",
+                  "active_work": [{"id": "a", "kind": "task", "label": "",
+                                    "status": "active", "started_at": 940.0}]})
+    clock["now"] = 1010.0
+    rows = store.list_sessions()
+    assert rows[0]["active_work"][0]["duration_seconds"] == pytest.approx(70.0)
+
+
+def test_list_sessions_computes_frozen_duration_for_completed_entry(tmp_path):
+    hub = load_hub()
+    clock = {"now": 1000.0}
+    store = hub.AttentionStore(str(tmp_path / "state.json"), now=lambda: clock["now"])
+    store.upsert({"session_id": "s1", "state": "working",
+                  "active_work": [{"id": "a", "kind": "task", "label": "",
+                                    "status": "completed", "started_at": 900.0,
+                                    "completed_at": 950.0}]})
+    clock["now"] = 1010.0
+    rows = store.list_sessions()
+    assert rows[0]["active_work"][0]["duration_seconds"] == pytest.approx(50.0)
+
+
+def test_dashboard_renders_active_work_entry():
+    # Why: AC-2 -- the expanded card view must list individual active/recent
+    # subagents with label and status, not just the existing history list.
+    hub = load_hub()
+    assert "buildActiveWorkList" in hub.DASHBOARD_HTML

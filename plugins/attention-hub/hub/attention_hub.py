@@ -46,6 +46,7 @@ FIELD_MAX_CHARS = 256
 # Bounded per-session status-transition history (oldest entries drop first).
 HISTORY_MAX = 20
 HISTORY_SOURCES = {"hook", "manual"}
+ACTIVE_WORK_MAX = 10
 
 
 def _clamp(value, limit):
@@ -86,6 +87,9 @@ class AttentionStore:
                 is_container = bool(event.get("is_container"))
             else:
                 is_container = bool((existing or {}).get("is_container", False))
+            active_work = (self._sanitize_active_work(event.get("active_work"))
+                           if "active_work" in event
+                           else list((existing or {}).get("active_work") or []))
             record = {
                 "session_id": session_id,
                 "session_name": _clamp(event.get("session_name")
@@ -102,6 +106,7 @@ class AttentionStore:
                 "last_update": now,
                 "history": history[-HISTORY_MAX:],
                 "is_container": is_container,
+                "active_work": active_work,
             }
             self._sessions[session_id] = record
             self._save()
@@ -152,9 +157,22 @@ class AttentionStore:
                 row = dict(record)
                 row["state_seconds"] = max(0.0, now - record["state_since"])
                 row["age_seconds"] = max(0.0, now - record["last_update"])
+                row["active_work"] = [self._with_duration(entry, now)
+                                       for entry in record.get("active_work", [])]
                 rows.append(row)
         rows.sort(key=lambda r: (STATE_PRIORITY.get(r["state"], 3), r["state_since"]))
         return rows
+
+    @staticmethod
+    def _with_duration(entry, now):
+        """entry plus a computed duration_seconds: frozen (completed_at -
+        started_at) once completed, live (now - started_at) while active."""
+        item = dict(entry)
+        if entry.get("status") == "completed" and "completed_at" in entry:
+            item["duration_seconds"] = max(0.0, entry["completed_at"] - entry["started_at"])
+        else:
+            item["duration_seconds"] = max(0.0, now - entry["started_at"])
+        return item
 
     def _prune_locked(self, now):
         stale = [sid for sid, record in self._sessions.items()
@@ -200,6 +218,7 @@ class AttentionStore:
                     record["message"] = _clamp(record.get("message") or "",
                                                MESSAGE_MAX_CHARS)
                     record["history"] = self._sanitize_history(record)
+                    record["active_work"] = self._sanitize_active_work(record.get("active_work"))
                     record["is_container"] = bool(record.get("is_container", False))
                     self._sessions[sid] = record
         except FileNotFoundError:
@@ -230,6 +249,32 @@ class AttentionStore:
                       "entered_at": float(record["state_since"]),
                       "source": "hook"}]
         return clean[-HISTORY_MAX:]
+
+    @staticmethod
+    def _sanitize_active_work(raw):
+        """Well-formed active_work entries, capped at ACTIVE_WORK_MAX. Each
+        entry's id/kind/label is clamped and status/started_at validated the
+        same defensive way other record fields are; malformed entries drop."""
+        clean = []
+        if isinstance(raw, list):
+            for entry in raw:
+                if not isinstance(entry, dict):
+                    continue
+                status = entry.get("status")
+                started_at = entry.get("started_at")
+                if status not in ("active", "completed") or not isinstance(started_at, (int, float)):
+                    continue
+                item = {
+                    "id": _clamp(entry.get("id") or "", FIELD_MAX_CHARS),
+                    "kind": _clamp(entry.get("kind") or "", FIELD_MAX_CHARS),
+                    "label": _clamp(entry.get("label") or "", FIELD_MAX_CHARS),
+                    "status": status,
+                    "started_at": float(started_at),
+                }
+                if status == "completed" and isinstance(entry.get("completed_at"), (int, float)):
+                    item["completed_at"] = float(entry["completed_at"])
+                clean.append(item)
+        return clean[:ACTIVE_WORK_MAX]
 
 
 class AttentionHubHandler(BaseHTTPRequestHandler):
@@ -487,6 +532,18 @@ function buildHistoryList(s) {
   return list;
 }
 
+function buildActiveWorkList(entries) {
+  const list = document.createElement("ul");
+  list.className = "history";
+  for (const entry of entries) {
+    const li = document.createElement("li");
+    li.textContent = entry.kind + ": " + (entry.label || "(no label)")
+      + " — " + entry.status + " " + fmtDuration(entry.duration_seconds);
+    list.append(li);
+  }
+  return list;
+}
+
 function buildDetail(s) {
   const detail = document.createElement("div");
   detail.className = "detail";
@@ -498,6 +555,9 @@ function buildDetail(s) {
   detailField(dl, "message", s.message || "—");
   detailField(dl, "last update", fmtDuration(s.age_seconds) + " ago");
   detailField(dl, "history", buildHistoryList(s));
+  if (s.active_work && s.active_work.length) {
+    detailField(dl, "active work", buildActiveWorkList(s.active_work));
+  }
   detail.append(dl);
 
   const force = document.createElement("div");

@@ -38,7 +38,7 @@ except ImportError:
     slack_enabled = channel_flags.slack_enabled
 
 try:
-    from attention_hub_bridge import report_state, get_session_name, clear_waiting_marker, count_active_subagents
+    from attention_hub_bridge import report_state, get_session_name, clear_waiting_marker, count_active_subagents, list_active_work
 except ImportError:
     import importlib.util
     bridge_spec = importlib.util.spec_from_file_location(
@@ -51,6 +51,7 @@ except ImportError:
     get_session_name = attention_hub_bridge.get_session_name
     clear_waiting_marker = attention_hub_bridge.clear_waiting_marker
     count_active_subagents = attention_hub_bridge.count_active_subagents
+    list_active_work = attention_hub_bridge.list_active_work
 
 
 def log_message(message):
@@ -93,6 +94,7 @@ def main():
         # path (no tool ran) so the next turn cannot report stale "working".
         # No-ops silently when attention-hub isn't installed.
         clear_waiting_marker(session_id)
+        active_work = list_active_work(session_id)
 
         message = extract_latest_message(transcript_path)
 
@@ -111,7 +113,8 @@ def main():
             # real completion -- a disclosed trade-off of running notifications
             # standalone (see README).
             hub_success = report_state(session_id, input_data.get("cwd", ""), "working", message,
-                                       session_name=get_session_name(input_data))
+                                       session_name=get_session_name(input_data),
+                                       active_work=active_work)
             log_message(f"{'✅' if hub_success else '❌'} Hub (working - active subagents)")
             sys.exit(0)
         else:
@@ -121,7 +124,8 @@ def main():
             hub_state = "done"
 
         hub_success = report_state(session_id, input_data.get("cwd", ""), hub_state, message,
-                                   session_name=get_session_name(input_data))
+                                   session_name=get_session_name(input_data),
+                                   active_work=active_work)
         log_message(f"{'✅' if hub_success else '❌'} Hub ({hub_state})")
 
         if not message:
