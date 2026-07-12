@@ -79,6 +79,14 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > Focus on: gaps or contradictions in the stated acceptance criteria,
 > and architectural questions within the stated scope.
 >
+> OVERRIDE: This invocation runs inside write-spec, whose SCOPE BOUNDARY forbids any
+> file write or commit besides the spec itself. Keep the entire design discussion
+> in-conversation only — SKIP brainstorming's checklist step 6 (writing a design doc
+> to `docs/superpowers/specs/` and committing it). Write NO files and make NO commits.
+>
+> OVERRIDE: Do NOT checkout, create, or switch a git branch for any reason during
+> this invocation — branching belongs to `start-development`, not write-spec.
+>
 > OVERRIDE: After brainstorming completes, do NOT invoke `superpowers:writing-plans`.
 > Return to Phase 5 (ULTRATHINK) — the brainstorming output informs that analysis.
 
