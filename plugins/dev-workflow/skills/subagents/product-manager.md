@@ -36,6 +36,13 @@ Go through **each acceptance criterion** from the story one by one. For each:
 - Are there conditions under which the feature simply doesn't work?
 - Is there a graceful degradation path if dependencies fail?
 
+### Release Hygiene
+Plugin version-bump verification, using the PR diff already in your context (it is base-branch-relative):
+- Collect every file path touched in the PR diff that matches `plugins/{name}/...`, grouping by plugin name.
+- For each touched plugin, check whether `plugins/{name}/.claude-plugin/plugin.json` exists in the repository. The check fires **only** when that manifest exists for the touched plugin directory — repos or PRs with no such plugin structure never match and produce zero findings from this check.
+- If the manifest exists but the diff does not show its `version` field as changed, that plugin's version bump was missed.
+- Record each miss under `### Critical Issues (must fix)` — not under `### Warnings (should fix)` — worded exactly as: `Warning (Required Change): plugin '{name}' touched without a plugin.json version bump`, naming the touched file(s) that triggered the finding. Critical Issues is what rolls into the review's blocking Required Changes.
+
 ## MCP Tools Available
 
 You have access to all configured MCP servers. Use them when helpful:
