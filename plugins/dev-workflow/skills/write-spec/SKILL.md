@@ -62,7 +62,7 @@ Use PM adapter to fetch story by ID. Capture:
 - Existing comments
 - **"Repos to modify"** field — a comma-joined list of repo/service names (e.g. `api, web, worker`)
 
-If the story contains screenshots, mockup images, or visual attachments you cannot access — STOP and ask the user to describe them before proceeding.
+If the story contains screenshots, mockup images, or visual attachments you cannot access directly, first check whether the loaded PM adapter documents a fetch method for that image URL's host (e.g. the Shortcut adapter's "Fetching Inline Image Attachments" section for `media.app.shortcut.com` URLs). If it does, attempt that method — download into this skill's own `./.scratch/tmp/` directory, verify the download succeeded, then Read the file — and use the retrieved image as spec context. STOP and ask the user to describe the image only when the adapter documents no fetch method for that host (e.g. Figma links, which do not accept the Shortcut token), or the documented method was attempted and failed.
 
 ### Repo Discovery
 
