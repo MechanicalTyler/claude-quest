@@ -57,6 +57,32 @@ curl -H "Shortcut-Token: $SHORTCUT_API_TOKEN" \
 gh pr list --state all --search "sc-{id}"
 ```
 
+## Fetching Inline Image Attachments
+
+Story descriptions and comments may embed image attachments hosted on Shortcut's media CDN
+(`media.app.shortcut.com`). These URLs return 401 to unauthenticated requests and to generic
+fetch tools (WebFetch, context-mode fetchers), but they accept the same `Shortcut-Token`
+header used for the REST API above.
+
+**Scope:** this method applies to `media.app.shortcut.com` URLs only — it is not a
+general-purpose image fetcher. For images on any other host (e.g. Figma), this adapter has
+no fetch method.
+
+Download into the calling skill's own scratch directory (`./.scratch/tmp/`, never raw
+`/tmp`), naming the local file from the URL's basename:
+
+```bash
+mkdir -p ./.scratch/tmp
+curl -f -sS -H "Shortcut-Token: $SHORTCUT_API_TOKEN" \
+  -o ./.scratch/tmp/{url-basename} "{media.app.shortcut.com URL}"
+```
+
+Verify the download actually succeeded before reading the file: a non-zero curl exit code
+or a non-200 HTTP response counts as failure (`-f` makes curl exit non-zero on HTTP errors).
+On success, use the Read tool on the downloaded file to view the image. On failure, treat
+the image as inaccessible and follow the calling skill's documented fallback (e.g. STOP and
+ask the user to describe it).
+
 ## Story reference in notes Adapter
 
 Format: `sc-XXXXX`
