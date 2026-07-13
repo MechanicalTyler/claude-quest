@@ -11,6 +11,8 @@ description: "Use when a developer needs a detailed technical spec before coding
 
 **AUDIENCE:** The spec must be digestible by a product manager. Write in plain language describing *what* to build and *why*, not *how* to code it. Implementation details like code examples, function signatures, and algorithmic pseudocode are the developer's responsibility — omit them from the spec.
 
+**SUB-SKILL DISPATCH DISCIPLINE:** Before invoking any sub-skill (`superpowers:brainstorming`, `superpowers:writing-plans`, or any sub-skill added to this skill later), read that sub-skill's own SKILL.md and check its complete set of default terminal and side-effect actions against the SCOPE BOUNDARY above (no code, no files besides the spec itself, no commits, no branch checkouts, no PM story/ticket/issue/subtask creation) — not only the one behavior a narrow inline OVERRIDE happens to name. Any default behavior that would violate the SCOPE BOUNDARY and is not already covered by an existing OVERRIDE line must get its own explicit OVERRIDE line before that dispatch runs.
+
 ## Arguments: $ARGUMENTS
 
 Story ID is passed as the first argument (e.g., `sc-12345` or `12345`).
@@ -230,6 +232,11 @@ Before writing the final spec, use the writing-plans methodology to structure th
 >
 > OVERRIDE: Do NOT offer execution options at the end of this invocation. Output feeds into
 > Phase 10 spec writing only.
+>
+> OVERRIDE: When the writing-plans invocation completes, proceed DIRECTLY into Phase 10
+> (Write Claude Instructions) in the same turn — do not stop, do not end the turn, and do
+> not wait for user input before continuing. Skip writing-plans' "Execution Handoff" step
+> entirely; Phase 10 is the only handoff.
 >
 > OVERRIDE: Implementation steps must describe WHAT to do, not HOW to code it.
 > Use plain language (e.g., "Add a validation endpoint that checks X against Y")
