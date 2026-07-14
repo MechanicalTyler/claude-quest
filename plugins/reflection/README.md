@@ -5,7 +5,7 @@ Passively watches every Claude Code session for moments the agent didn't meet ex
 ## What it does
 
 - **SessionStart hook**: injects standing watch-and-log instructions into every session (with or without any other plugin installed). The agent watches for five trigger types and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission.
-- **Stop hook**: at what looks like a natural end of session (a sign-off like "bye" / "that's all" / "done for now") with unreviewed log entries still sitting in `~/.claude/reflection/log.md`, blocks the session from ending and asks the agent to run `/reflect` first — once per session, so a false-positive sign-off match only costs one nudge.
+- **Stop hook**: at what looks like a natural end of session — either a sign-off phrase like "bye" / "that's all" / "done for now", or a project-management story observed moving to a done-type state in the session's own transcript — blocks the session from ending and asks the agent to run `/reflect` first, but only while at least one entry in `~/.claude/reflection/log.md` is still `open`. Fires once per session, so a false-positive match only costs one nudge.
 - **`/reflect` skill**: reads the log, catches up on anything from the live conversation or the most recent prior session in the current project that wasn't already captured, groups recurring problems, attributes each to a specific root cause, and writes a self-contained HTML report.
 
 ## Trigger types
@@ -26,6 +26,7 @@ The hook watches for five kinds of corrective moment:
 - One-line context note (skill / project / cwd, if identifiable)
 - Trigger type
 - One-line quote or close paraphrase of what the user said
+- Status: `open` when logged; `reported` (with the covering report's path and a timestamp) once a `/reflect` report covers it
 
 ## Reports
 
@@ -40,7 +41,7 @@ Each report groups findings by root cause, and every finding is attributed to ei
 
 ## Session-end nudge
 
-The sign-off heuristic (regex over phrases like "bye", "that's all", "done for now") is imprecise by nature — it can miss a real sign-off, or match a message that isn't actually one. Each session gets at most one nudge (tracked at `~/.claude/reflection/state/{session_id}.nudged`), so a false match costs one extra "run /reflect?" prompt, not a repeating nag.
+Completion is detected by either of two signals: a sign-off heuristic (regex over phrases like "bye", "that's all", "done for now") in the last user message, or a done-transition — the transcript shows a story/task update tool call plus a done-type state in a tool result, meaning the session ended by moving a story to Done rather than by saying goodbye. Both are imprecise by nature — they can miss a real completion, or match a session that isn't actually ending. Each session gets at most one nudge (tracked at `~/.claude/reflection/state/{session_id}.nudged`), so a false match costs one extra "run /reflect?" prompt, not a repeating nag. A log whose entries are all `reported` never nudges — there is nothing left to reflect on.
 
 ## Installation
 
