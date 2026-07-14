@@ -138,6 +138,23 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 - Minimum 3-5 relevant file references with explanations (all from the repo currently being specced)
 - Format: `` `path/to/file.rs:123-145` — [Feature name] — Uses pattern X for [purpose] ``
 
+**Change-Scope Classification (terraform/configmap detection):**
+
+After the repo's change-scope files are identified above, classify this repo's
+spec scope. Compute this once per repo (inside the per-repo loop); it is read
+later by Phase 8 (QA Perspective) and Phase 10 (Test Requirements / Validation
+Checklist):
+
+- **terraform/configmap-only** — EVERY file in the identified change scope is
+  either a `*.tf` file or a YAML manifest declaring `kind: ConfigMap`
+- **default (mixed/code)** — anything else; all downstream behavior is
+  unchanged from today
+
+Classification is all-or-nothing: a single application-code file in the scope
+means **default** — a partial match must never suppress a real test
+requirement. The signal is the actual investigated file scope, never the
+story's `story_type`, title, or other metadata.
+
 ---
 
 ## Phase 6: Research & Decision Making
