@@ -162,13 +162,18 @@ def main():
     if marker.exists():
         sys.exit(0)
 
-    # Only nudge on what looks like a natural sign-off, not every turn.
+    # Only nudge on a completion signal — two independent signals, OR'd:
+    # a sign-off phrase in the last user message, or a PM story moved to a
+    # done-type state (see has_done_transition; added after sc-1242's
+    # "Move the story to done" ended a session with no sign-off phrase).
     text = last_user_text(transcript_path)
-    if not text or not SIGNOFF_PATTERN.search(text):
+    signed_off = bool(text and SIGNOFF_PATTERN.search(text))
+    if not signed_off and not has_done_transition(transcript_path):
         sys.exit(0)
 
-    # Only nudge if there is actually something unreviewed to reflect on.
-    if not LOG_PATH.exists() or not LOG_PATH.read_text(encoding="utf-8").strip():
+    # Only nudge if at least one entry is still open (unstatused entries
+    # count as open) — a fully-reported log has nothing left to reflect on.
+    if not has_open_entries(LOG_PATH):
         sys.exit(0)
 
     marker.touch()

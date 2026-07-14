@@ -96,3 +96,65 @@ class TestOpenEntryGate:
         # Why: an empty file has no entries; the old any-content gate is gone.
         write_log(reflection_home, [""])
         assert stop_hook.has_open_entries(stop_hook.LOG_PATH) is False
+
+
+def run_main(stop_hook, hook_input, capsys):
+    with patch("sys.stdin", StringIO(json.dumps(hook_input))):
+        try:
+            stop_hook.main()
+        except SystemExit:
+            pass
+    out = capsys.readouterr().out.strip()
+    return json.loads(out) if out else None
+
+
+class TestMainEndToEnd:
+    def test_done_transition_blocks_with_reflect_reason(
+        self, stop_hook, reflection_home, transcript_done_transition, capsys
+    ):
+        # Why: the story's acceptance test — a done-transition with NO sign-off
+        # phrase in the last user message must still block with the reflect-now
+        # reason when open entries exist.
+        write_log(reflection_home, [OPEN_ENTRY])
+        decision = run_main(stop_hook, {
+            "session_id": "e2e-done",
+            "transcript_path": transcript_done_transition,
+        }, capsys)
+        assert decision is not None
+        assert decision["decision"] == "block"
+        assert "/reflect" in decision["reason"]
+
+    def test_signoff_still_blocks(
+        self, stop_hook, reflection_home, transcript_signoff, capsys
+    ):
+        # Why: regression check named in the story — the existing text-based
+        # sign-off detection must keep firing unchanged.
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        decision = run_main(stop_hook, {
+            "session_id": "e2e-signoff",
+            "transcript_path": transcript_signoff,
+        }, capsys)
+        assert decision is not None
+        assert decision["decision"] == "block"
+
+    def test_fully_reported_log_does_not_block(
+        self, stop_hook, reflection_home, transcript_signoff, capsys
+    ):
+        # Why: the redundant-nudge fix end to end — even on a clear sign-off,
+        # a log where every entry is reported must produce no block.
+        write_log(reflection_home, [REPORTED_ENTRY])
+        assert run_main(stop_hook, {
+            "session_id": "e2e-reported",
+            "transcript_path": transcript_signoff,
+        }, capsys) is None
+
+    def test_no_signals_does_not_block(
+        self, stop_hook, reflection_home, transcript_no_signals, capsys
+    ):
+        # Why: an ordinary mid-session turn (no sign-off, no done signal) must
+        # never nudge, even with open entries waiting.
+        write_log(reflection_home, [OPEN_ENTRY])
+        assert run_main(stop_hook, {
+            "session_id": "e2e-nosignal",
+            "transcript_path": transcript_no_signals,
+        }, capsys) is None
