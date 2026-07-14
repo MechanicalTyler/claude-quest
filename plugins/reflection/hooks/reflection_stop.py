@@ -162,6 +162,14 @@ def main():
     if marker.exists():
         sys.exit(0)
 
+    # Only nudge if at least one entry is still open (unstatused entries
+    # count as open) — a fully-reported log has nothing left to reflect on.
+    # Checked first because it only reads the (small) log file: on the common
+    # path — nothing logged, or everything already reported — it short-circuits
+    # the full-transcript scans below, whose cost grows with session length.
+    if not has_open_entries(LOG_PATH):
+        sys.exit(0)
+
     # Only nudge on a completion signal — two independent signals, OR'd:
     # a sign-off phrase in the last user message, or a PM story moved to a
     # done-type state (see has_done_transition; added after sc-1242's
@@ -169,11 +177,6 @@ def main():
     text = last_user_text(transcript_path)
     signed_off = bool(text and SIGNOFF_PATTERN.search(text))
     if not signed_off and not has_done_transition(transcript_path):
-        sys.exit(0)
-
-    # Only nudge if at least one entry is still open (unstatused entries
-    # count as open) — a fully-reported log has nothing left to reflect on.
-    if not has_open_entries(LOG_PATH):
         sys.exit(0)
 
     marker.touch()

@@ -158,3 +158,17 @@ class TestMainEndToEnd:
             "session_id": "e2e-nosignal",
             "transcript_path": transcript_no_signals,
         }, capsys) is None
+
+    def test_no_open_entries_skips_transcript_reads(
+        self, stop_hook, reflection_home, tmp_path, capsys
+    ):
+        # Why: performance gate ordering (PR #85 review) — when nothing is
+        # open to review, main() must short-circuit BEFORE the full-transcript
+        # scans (last_user_text / has_done_transition). A nonexistent
+        # transcript path proves it: any attempt to open the transcript would
+        # raise FileNotFoundError out of run_main.
+        write_log(reflection_home, [REPORTED_ENTRY])
+        assert run_main(stop_hook, {
+            "session_id": "e2e-cheap-gate-first",
+            "transcript_path": str(tmp_path / "missing-transcript.jsonl"),
+        }, capsys) is None
