@@ -323,11 +323,28 @@ Place the required content sections into the template's structure as follows:
 | Constraints, risks, gotchas | Callout boxes inside the relevant section | NEVER collapse |
 | Alternatives considered, background, edge-case detail | `<details class="supporting">` blocks | Collapsed by default |
 | Implementation Steps | `#implementation-steps` ordered list | NEVER collapse |
-| Test Requirements | `#test-requirements` section | NEVER collapse |
+| Test Requirements (content varies by Phase 5 classification — see below) | `#test-requirements` section | NEVER collapse |
 | Manual Testing (Happy Path / Error Scenarios / UX Verification) | `#manual-testing` section + h3 subsections | NEVER collapse |
-| Validation Checklist (acceptance criteria) | `#validation-checklist` interactive checklist | NEVER collapse |
+| Validation Checklist (acceptance criteria; content varies by Phase 5 classification — see below) | `#validation-checklist` interactive checklist | NEVER collapse |
 
 Critical content — requirements, risks, implementation steps, acceptance criteria, summaries — must never be hidden inside collapsed sections. Only supporting detail may be collapsed.
+
+**Terraform/configmap-only variant** (when Phase 5 classified this repo's change
+scope as terraform/configmap-only):
+
+- **Test Requirements** — `#test-requirements` states that no automated tests
+  are required, names `terraform plan` (and `terraform apply` in dev, where the
+  change is dev-deployed) as the verification mechanism, and cross-references
+  the Implementation Step that runs it. Never emit a generic regression-test ask.
+- **Validation Checklist** — never invent a "write automated tests" acceptance
+  criterion. Emit one concrete AC of the form "`terraform plan` confirms
+  <the intended diff> with no other unintended changes", plus a `badge-waived`
+  item documenting that no automated regression/config test was added because
+  `terraform plan` review is this repo's verification method (the template
+  defines `.badge-waived` alongside the other `.badge-*` classes).
+
+For the default (mixed/code) classification, both sections keep the existing
+generic guidance unchanged.
 
 ### Anti-patterns (explicitly forbidden)
 
