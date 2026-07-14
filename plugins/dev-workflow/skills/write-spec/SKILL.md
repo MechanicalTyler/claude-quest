@@ -225,6 +225,20 @@ Analyze from four perspectives sequentially:
 - What are potential pitfalls or gotchas?
 
 ### C. QA Perspective
+
+> **Terraform/configmap exception (do not remove):** when Phase 5 classified this
+> repo's change scope as **terraform/configmap-only**, the verification mechanism
+> is `terraform plan`/`apply` — not a written regression/unit test. Without this
+> branch, write-spec asked for regression tests on terraform-only stories and
+> produced an incorrect, hand-corrected acceptance criterion on sc-1234. This
+> note exists so the exception cannot silently regress.
+
+**When the Phase 5 classification is terraform/configmap-only**, replace the
+standard question set with:
+- Does `terraform plan` show exactly the intended diff, with no unintended changes?
+- Where the change is deployed to dev, does `terraform apply` succeed in dev?
+
+**When the classification is default (mixed/code)**, use the standard question set:
 - What are the happy path test scenarios?
 - What are the error/edge case scenarios?
 - What manual testing steps should be included in the PR?
