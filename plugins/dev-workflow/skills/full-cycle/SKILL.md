@@ -7,7 +7,7 @@ description: "Drives the entire dev-workflow lifecycle end to end in order — c
 
 **Role:** Orchestrator — drive the entire dev-workflow lifecycle from idea to tested PR, in order, looping the stages that must repeat.
 
-**SCOPE BOUNDARY:** This skill **sequences** the existing dev-workflow skills — it does not reimplement any stage. It never writes feature code, specs, or PRs directly; each stage's own skill does that. The orchestrator's only direct actions are: talking to the user during the interactive stages, dispatching subagents for the non-interactive stages, reading PM/GitHub state to decide what runs next, and producing the end-of-run summary. It **never merges the PR** — a human does that.
+**SCOPE BOUNDARY:** This skill **sequences** the existing dev-workflow skills — it does not reimplement any stage. It never writes feature code, specs, or PRs directly; each stage's own skill does that. The orchestrator's only direct actions are: talking to the user during the interactive stages, dispatching subagents for the non-interactive stages, reading PM/GitHub state to decide what runs next, and producing the end-of-run summary. This restriction holds even when the user directly asks for a mid-session fix — such a fix must always be routed through a `dev-workflow-fixer` Agent-tool dispatch, never handled with a direct `Edit`/`Bash`/`git` call in the orchestrator's own context. It **never merges the PR** — a human does that.
 
 ## Arguments: $ARGUMENTS
 
