@@ -102,6 +102,22 @@ def has_done_transition(transcript_path):
     return False
 
 
+def has_open_entries(log_path):
+    """At least one log entry still needs review: status segment says open,
+    or the entry has no status segment at all (written before sc-1255 added
+    status tracking). A fully-reported log must not trigger nudges."""
+    if not log_path.exists():
+        return False
+    for raw_line in log_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line.startswith("- "):
+            continue
+        match = re.search(r"\|\s*status:\s*([A-Za-z]+)", line)
+        if match is None or match.group(1).lower() == "open":
+            return True
+    return False
+
+
 def last_user_text(transcript_path):
     with open(transcript_path, "r", encoding="utf-8") as f:
         lines = f.readlines()

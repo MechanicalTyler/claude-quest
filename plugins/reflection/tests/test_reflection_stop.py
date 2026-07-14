@@ -8,6 +8,21 @@ import json
 from io import StringIO
 from unittest.mock import patch
 
+OPEN_ENTRY = (
+    '- **2026-07-14T18:00:00Z** | context: dev-workflow | '
+    'trigger: correction | "quoted correction"'
+)
+OPEN_STATUS_ENTRY = OPEN_ENTRY + " | status: open"
+REPORTED_ENTRY = OPEN_ENTRY + (
+    " | status: reported (report: ~/.claude/reflection/reports/"
+    "2026-07-14T19-47-28.html, at: 2026-07-14T19:47:28Z)"
+)
+
+
+def write_log(reflection_home, lines):
+    reflection_home.mkdir(parents=True, exist_ok=True)
+    (reflection_home / "log.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
 
 class TestDoneTransitionSignal:
     def test_detected_when_call_and_done_result_present(self, stop_hook, transcript_done_transition):
@@ -48,3 +63,36 @@ class TestDoneTransitionSignal:
         # Why: the spec requires " DONE " to match like "done" — value is
         # trimmed and compared case-insensitively (fixture's value is " DONE ").
         assert stop_hook.has_done_transition(transcript_malformed) is True
+
+
+class TestOpenEntryGate:
+    def test_open_status_entry_counts(self, stop_hook, reflection_home):
+        # Why: an explicitly open entry is unreviewed work — the gate must pass.
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        assert stop_hook.has_open_entries(stop_hook.LOG_PATH) is True
+
+    def test_unstatused_entry_counts_as_open(self, stop_hook, reflection_home):
+        # Why: entries written before status tracking existed have no status
+        # segment; they must be treated as open, not silently dropped.
+        write_log(reflection_home, [OPEN_ENTRY])
+        assert stop_hook.has_open_entries(stop_hook.LOG_PATH) is True
+
+    def test_all_reported_returns_false(self, stop_hook, reflection_home):
+        # Why: the redundant-nudge fix — a fully reported log means nothing
+        # new to reflect on, so the hook must stay silent.
+        write_log(reflection_home, [REPORTED_ENTRY, REPORTED_ENTRY])
+        assert stop_hook.has_open_entries(stop_hook.LOG_PATH) is False
+
+    def test_mixed_log_counts_open(self, stop_hook, reflection_home):
+        # Why: one open entry among reported ones is still unreviewed work.
+        write_log(reflection_home, [REPORTED_ENTRY, OPEN_STATUS_ENTRY])
+        assert stop_hook.has_open_entries(stop_hook.LOG_PATH) is True
+
+    def test_missing_log_returns_false(self, stop_hook):
+        # Why: no log file at all means nothing to review — never nudge.
+        assert stop_hook.has_open_entries(stop_hook.LOG_PATH) is False
+
+    def test_empty_log_returns_false(self, stop_hook, reflection_home):
+        # Why: an empty file has no entries; the old any-content gate is gone.
+        write_log(reflection_home, [""])
+        assert stop_hook.has_open_entries(stop_hook.LOG_PATH) is False
