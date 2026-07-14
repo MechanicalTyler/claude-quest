@@ -138,6 +138,23 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 - Minimum 3-5 relevant file references with explanations (all from the repo currently being specced)
 - Format: `` `path/to/file.rs:123-145` — [Feature name] — Uses pattern X for [purpose] ``
 
+**Change-Scope Classification (terraform/configmap detection):**
+
+After the repo's change-scope files are identified above, classify this repo's
+spec scope. Compute this once per repo (inside the per-repo loop); it is read
+later by Phase 8 (QA Perspective) and Phase 10 (Test Requirements / Validation
+Checklist):
+
+- **terraform/configmap-only** — EVERY file in the identified change scope is
+  either a `*.tf` file or a YAML manifest declaring `kind: ConfigMap`
+- **default (mixed/code)** — anything else; all downstream behavior is
+  unchanged from today
+
+Classification is all-or-nothing: a single application-code file in the scope
+means **default** — a partial match must never suppress a real test
+requirement. The signal is the actual investigated file scope, never the
+story's `story_type`, title, or other metadata.
+
 ---
 
 ## Phase 6: Research & Decision Making
@@ -208,6 +225,20 @@ Analyze from four perspectives sequentially:
 - What are potential pitfalls or gotchas?
 
 ### C. QA Perspective
+
+> **Terraform/configmap exception (do not remove):** when Phase 5 classified this
+> repo's change scope as **terraform/configmap-only**, the verification mechanism
+> is `terraform plan`/`apply` — not a written regression/unit test. Without this
+> branch, write-spec asked for regression tests on terraform-only stories and
+> produced an incorrect, hand-corrected acceptance criterion on sc-1234. This
+> note exists so the exception cannot silently regress.
+
+**When the Phase 5 classification is terraform/configmap-only**, replace the
+standard question set with:
+- Does `terraform plan` show exactly the intended diff, with no unintended changes?
+- Where the change is deployed to dev, does `terraform apply` succeed in dev?
+
+**When the classification is default (mixed/code)**, use the standard question set:
 - What are the happy path test scenarios?
 - What are the error/edge case scenarios?
 - What manual testing steps should be included in the PR?
@@ -292,11 +323,28 @@ Place the required content sections into the template's structure as follows:
 | Constraints, risks, gotchas | Callout boxes inside the relevant section | NEVER collapse |
 | Alternatives considered, background, edge-case detail | `<details class="supporting">` blocks | Collapsed by default |
 | Implementation Steps | `#implementation-steps` ordered list | NEVER collapse |
-| Test Requirements | `#test-requirements` section | NEVER collapse |
+| Test Requirements (content varies by Phase 5 classification — see below) | `#test-requirements` section | NEVER collapse |
 | Manual Testing (Happy Path / Error Scenarios / UX Verification) | `#manual-testing` section + h3 subsections | NEVER collapse |
-| Validation Checklist (acceptance criteria) | `#validation-checklist` interactive checklist | NEVER collapse |
+| Validation Checklist (acceptance criteria; content varies by Phase 5 classification — see below) | `#validation-checklist` interactive checklist | NEVER collapse |
 
 Critical content — requirements, risks, implementation steps, acceptance criteria, summaries — must never be hidden inside collapsed sections. Only supporting detail may be collapsed.
+
+**Terraform/configmap-only variant** (when Phase 5 classified this repo's change
+scope as terraform/configmap-only):
+
+- **Test Requirements** — `#test-requirements` states that no automated tests
+  are required, names `terraform plan` (and `terraform apply` in dev, where the
+  change is dev-deployed) as the verification mechanism, and cross-references
+  the Implementation Step that runs it. Never emit a generic regression-test ask.
+- **Validation Checklist** — never invent a "write automated tests" acceptance
+  criterion. Emit one concrete AC of the form "`terraform plan` confirms
+  <the intended diff> with no other unintended changes", plus a `badge-waived`
+  item documenting that no automated regression/config test was added because
+  `terraform plan` review is this repo's verification method (the template
+  defines `.badge-waived` alongside the other `.badge-*` classes).
+
+For the default (mixed/code) classification, both sections keep the existing
+generic guidance unchanged.
 
 ### Anti-patterns (explicitly forbidden)
 
