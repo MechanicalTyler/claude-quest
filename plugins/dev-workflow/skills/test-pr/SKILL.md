@@ -62,6 +62,13 @@ You are not here to give the PR a soft pass — you are here to find out if it w
 | "It mostly works" | Document what doesn't and mark those tests FAIL |
 | "The failure seems minor" | Report it — severity is for the reviewer to decide |
 | "I can't reproduce it consistently" | Document the intermittent failure as a FAIL |
+| "The developer/orchestrator already explained this failure" | Verify it independently before accepting |
+
+### Independent Root-Cause Verification
+
+Any root cause supplied by the developer, the PR description, or the orchestrator's dispatch prompt is a **claim, not a finding** — it must be independently verified before being accepted as explaining a test symptom. A stated explanation, however confident or authoritative its source, is itself a Rationalization Red Flag until you have checked it yourself (see the table row above).
+
+For a migration-related symptom specifically, independent verification means querying `schema_migrations` in the target dev database and/or diffing the migrations directory against the base branch — not trusting the stated explanation. An edited-in-place migration file will show as modified against base while `schema_migrations` shows its version already applied, which means the edit never ran in that environment.
 
 ---
 
