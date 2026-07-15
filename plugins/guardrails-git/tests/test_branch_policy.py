@@ -22,7 +22,21 @@ def run_policy(command, current_branch, monkeypatch, capsys):
     return None
 
 
-BLOCKED_CREATION_OFF_MAIN = [
+def mirror_git_frontends(commands):
+    # Why: authenticated commands in this workspace route through the gitp and
+    # git-as-app.sh wrappers instead of bare git; every policy case must hold
+    # for those spellings too or the whole branch policy is bypassable (sc-1266).
+    mirrored = []
+    for cmd in commands:
+        mirrored.append(cmd)
+        for variant in (cmd.replace("git ", "gitp "),
+                        cmd.replace("git ", "git-as-app.sh developer ")):
+            if variant != cmd:
+                mirrored.append(variant)
+    return mirrored
+
+
+BLOCKED_CREATION_OFF_MAIN = mirror_git_frontends([
     "git checkout -b feature/new-thing",
     "git checkout -B feature/new-thing",
     "git checkout --orphan feature/new-thing",
@@ -44,7 +58,7 @@ BLOCKED_CREATION_OFF_MAIN = [
     "git switch -Cfeature/new-thing",
     "git switch -c=feature/new-thing",
     "git switch --create=feature/new-thing",
-]
+])
 
 
 @pytest.mark.parametrize("command", BLOCKED_CREATION_OFF_MAIN)
@@ -61,7 +75,7 @@ def test_branch_creation_allowed_on_main(command, monkeypatch, capsys):
     assert run_policy(command, "main", monkeypatch, capsys) is None
 
 
-ALLOWED_NON_CREATION = [
+ALLOWED_NON_CREATION = mirror_git_frontends([
     "git branch",
     "git branch -a",
     "git branch -l",
@@ -91,7 +105,7 @@ ALLOWED_NON_CREATION = [
     "git status && git log --oneline",
     'echo "git branch x"',
     "git stash list",
-]
+])
 
 
 @pytest.mark.parametrize("command", ALLOWED_NON_CREATION)
@@ -99,12 +113,12 @@ def test_non_creation_forms_allowed(command, monkeypatch, capsys):
     assert run_policy(command, "feature/existing", monkeypatch, capsys) is None
 
 
-BLOCKED_MAIN_CHECKOUT = [
+BLOCKED_MAIN_CHECKOUT = mirror_git_frontends([
     "git checkout main",
     "git switch main",
     "git checkout -q main",
     "cd /repo && git checkout main",
-]
+])
 
 
 @pytest.mark.parametrize("command", BLOCKED_MAIN_CHECKOUT)
@@ -114,7 +128,7 @@ def test_checkout_main_blocked(command, monkeypatch, capsys):
     assert "checkout the main branch" in decision["reason"]
 
 
-BLOCKED_WORKTREE = [
+BLOCKED_WORKTREE = mirror_git_frontends([
     "git worktree add ../wt",
     "git worktree add ../wt -b feature/new",
     "git worktree add --detach ../wt",
@@ -122,7 +136,7 @@ BLOCKED_WORKTREE = [
     "git worktree remove ../wt",
     "git worktree prune",
     "git worktree",
-]
+])
 
 
 @pytest.mark.parametrize("command", BLOCKED_WORKTREE)
