@@ -1,0 +1,4 @@
+{"type":"user","message":{"role":"user","content":"Move the story to done"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"mcp__shortcut__stories-update","input":
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_02","name":"mcp__shortcut__stories-update","input":{"storyPublicId":1242,"workflow_state_id":500000010}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_02","content":"State now {\"type\": \" DONE \"}"}]}}

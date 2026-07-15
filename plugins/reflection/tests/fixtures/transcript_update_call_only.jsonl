@@ -1,0 +1,3 @@
+{"type":"user","message":{"role":"user","content":"bump the story estimate"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"mcp__shortcut__stories-update","input":{"storyPublicId":1242,"estimate":3}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"Updated story sc-1242."}]}}
