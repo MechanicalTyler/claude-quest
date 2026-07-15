@@ -226,13 +226,13 @@ Check the results for any workflow whose name contains the word "terraform" (cas
 
 #### Migration Immutability Check
 
-Reuse the `gh pr view {PR_NUMBER} --json files,commits` call from Terraform Plan Validation above — only the `.files` array is needed for this check. Each entry carries a `changeType` field (values: `ADDED` / `MODIFIED` / `REMOVED` / `RENAMED` / `COPIED` / `CHANGED`), so no additional API call is required.
+Reuse the `gh pr view {PR_NUMBER} --json files,commits` call from Terraform Plan Validation above — only the `.files` array is needed for this check. Each entry carries a `changeType` field (GitHub's `PatchStatus` enum: `ADDED` / `CHANGED` / `COPIED` / `DELETED` / `MODIFIED` / `RENAMED`), so no additional API call is required. Note the payload exposes only `path`, `additions`, `deletions`, and `changeType` per file — there is no previous-filename or base-tree signal, so this check only evaluates conditions computable from those fields.
 
 Filter `.files` to entries whose `path` contains a `migrations/` directory segment.
 
 **If no migration files changed, or every changed migration file has `changeType: ADDED`:** Skip this section entirely — adding new migration files is the normal, expected pattern.
 
-**If any such file has `changeType: MODIFIED`, or a `RENAMED` entry resolves to a pre-existing migration file:** record a **blocking finding** naming each offending file path and its change type. Migration files are immutable once applied: migration runners (e.g. `golang-migrate`) never re-run an applied migration, so editing an existing migration file silently diverges every environment that already ran it — the schema change must ship as a new migration file instead. Carry the finding forward to Phase 6, where it is force-included in Required Changes and blocks APPROVE (see the Migration Immutability gate there).
+**If any such file has `changeType: MODIFIED` or `changeType: RENAMED`:** record a **blocking finding** naming each offending file path and its change type. (`RENAMED` is blocked unconditionally: the payload carries no previous-filename or base-tree data to distinguish a rename of an existing migration from a rename of a file added in this same PR, and renaming an already-applied migration is itself a divergence — the runner's ledger records the old filename/version — so the conservative flag is correct. If the rename is genuinely PR-internal, the developer can say so and the reviewer verifies it from the commit list already in hand.) Migration files are immutable once applied: migration runners (e.g. `golang-migrate`) never re-run an applied migration, so editing an existing migration file silently diverges every environment that already ran it — the schema change must ship as a new migration file instead. Carry the finding forward to Phase 6, where it is force-included in Required Changes and blocks APPROVE (see the Migration Immutability gate there).
 
 ---
 
