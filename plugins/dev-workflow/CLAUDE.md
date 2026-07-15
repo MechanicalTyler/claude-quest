@@ -103,7 +103,7 @@ Epic state (not committed): `~/.claude/dev-workflow/epics/[epic-slug]/`
 Content is mostly Markdown skill definitions, plus a small number of static assets (e.g., `skills/write-spec/spec-template.html`) — there is no compiled code, no tests to run, and no build step. Changes are made by editing `.md` files (and the occasional asset file) in `skills/` and `commands/`.
 
 When modifying a skill:
-- Update the version in `.claude-plugin/plugin.json` if changing behavior
+- Update the version in `.claude-plugin/plugin.json` if changing behavior, **and** bump the matching entry's `version` in the repo-root `.claude-plugin/marketplace.json` to the same value — the two drift independently and only the second one is what marketplace consumers actually see
 - Maintain phase numbering consistency within skills (phases are referenced by number in other skills and documentation)
 - Preserve the adapter interface contracts in `interface.md` files — adapters must implement all required operations
 - Test skill changes by invoking them with `/start <role>` in a target repository
