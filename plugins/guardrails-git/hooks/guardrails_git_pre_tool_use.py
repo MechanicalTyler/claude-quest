@@ -20,7 +20,9 @@ def create_timeout_error_message(command_type, wanted_timeout, current_timeout):
 # Policy: new branches may only be created from 'main', and 'main' itself may
 # not be checked out. Enforced on shlex tokens per shell segment so equivalent
 # forms (git branch <name>, git switch -c, git worktree add, chained commands,
-# git -C <dir> ...) are all covered, not just 'git checkout -b'.
+# git -C <dir> ...) are all covered, not just 'git checkout -b'. Recognized
+# front-ends include the gitp/ghp and git-as-app.sh/gh-as-app.sh wrappers in
+# addition to plain git/gh.
 
 # Any of these flags means 'git branch' is listing/deleting/moving/copying/
 # configuring — not creating a branch.
@@ -78,19 +80,45 @@ def tokenize_segments(command):
     return segments
 
 
+# Recognized git/gh front-end tokens, each mapped to how many positional
+# (non-flag) tokens to skip after it — the wrapper's persona argument —
+# before the real subcommand.
+GIT_FRONTENDS = {'git': 0, 'gitp': 0, 'git-as-app.sh': 1}
+GH_FRONTENDS = {'gh': 0, 'ghp': 0, 'gh-as-app.sh': 1}
+
+
+def _find_frontend(segment, frontends):
+    """(index, positional-skip count) of the first front-end token in the
+    segment, or None."""
+    for i, tok in enumerate(segment):
+        if tok in frontends:
+            return i, frontends[tok]
+    return None
+
+
 def parse_git_invocation(segment):
-    """If the segment invokes git, return (subcommand, args, dir from -C);
-    otherwise None. Skips git's global options to find the subcommand."""
-    if 'git' not in segment:
+    """If the segment invokes a git front-end (git, gitp, git-as-app.sh),
+    return (subcommand, args, dir from -C); otherwise None. Skips the
+    wrapper's persona argument and git's global options to find the
+    subcommand."""
+    found = _find_frontend(segment, GIT_FRONTENDS)
+    if found is None:
         return None
-    rest = segment[segment.index('git') + 1:]
+    idx, skip = found
+    rest = segment[idx + 1:]
     git_dir = None
-    while rest and rest[0].startswith('-'):
-        opt = rest.pop(0)
-        if opt == '-C' and rest:
-            git_dir = rest.pop(0)
-        elif opt in ('-c', '--git-dir', '--work-tree') and rest:
+    while rest:
+        if rest[0].startswith('-'):
+            opt = rest.pop(0)
+            if opt == '-C' and rest:
+                git_dir = rest.pop(0)
+            elif opt in ('-c', '--git-dir', '--work-tree') and rest:
+                rest.pop(0)
+        elif skip:
             rest.pop(0)
+            skip -= 1
+        else:
+            break
     if not rest:
         return None
     return rest[0], rest[1:], git_dir
@@ -106,12 +134,25 @@ def git_invocations(command):
 
 
 def gh_invocations(command):
-    """Token lists following 'gh' in each shell segment of the command."""
+    """Token lists following a gh front-end (gh, ghp, gh-as-app.sh) in each
+    shell segment, with the wrapper's persona argument stripped."""
     try:
         segments = tokenize_segments(command)
     except ValueError:
         return []
-    return [seg[seg.index('gh') + 1:] for seg in segments if 'gh' in seg]
+    invocations = []
+    for seg in segments:
+        found = _find_frontend(seg, GH_FRONTENDS)
+        if found is None:
+            continue
+        idx, skip = found
+        rest = seg[idx + 1:]
+        while rest and skip:
+            if not rest[0].startswith('-'):
+                skip -= 1
+            rest.pop(0)
+        invocations.append(rest)
+    return invocations
 
 
 def _matches_opt(tok, opts):
