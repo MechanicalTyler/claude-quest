@@ -17,19 +17,19 @@
       "name": "notifications",
       "source": "./plugins/notifications",
       "description": "System notifications when Claude completes tasks or needs your attention (macOS + Slack)",
-      "version": "1.6.1"
+      "version": "1.8.0"
     },
     {
       "name": "attention-hub",
       "source": "./plugins/attention-hub",
       "description": "Self-hosted, zero-dependency dashboard server that tracks which coding-agent sessions are waiting on you",
-      "version": "1.0.0"
+      "version": "1.2.0"
     },
     {
       "name": "dev-workflow",
       "source": "./plugins/dev-workflow",
       "description": "Role-based development workflow subagents with pluggable PM and notes adapters",
-      "version": "2.27.0"
+      "version": "2.35.0"
     },
     {
       "name": "guardrails-git",
@@ -65,7 +65,7 @@
       "name": "reflection",
       "source": "./plugins/reflection",
       "description": "Passively watches every session for moments the agent didn't meet expectations, logs them, nudges /reflect at session end, and synthesizes root-cause-attributed improvement reports",
-      "version": "0.1.0"
+      "version": "0.3.0"
     }
   ]
 }
