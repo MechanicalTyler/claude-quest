@@ -28,6 +28,24 @@ def run_check(check, command, monkeypatch, capsys, branch="feature/x", timeout=N
     return None
 
 
+def mirror_git_frontends(commands):
+    # Why: authenticated commands in this workspace route through the gitp and
+    # git-as-app.sh wrappers instead of bare git; every check must hold for
+    # those spellings too or it is bypassable by spelling alone (sc-1266).
+    mirrored = []
+    for cmd in commands:
+        mirrored.append(cmd)
+        for variant in (cmd.replace("git ", "gitp "),
+                        cmd.replace("git ", "git-as-app.sh developer ")):
+            if variant != cmd:
+                mirrored.append(variant)
+    return mirrored
+
+
+GIT_WRAPPER_PREFIXES = ["gitp", "git-as-app.sh developer"]
+GH_WRAPPER_PREFIXES = ["ghp", "gh-as-app.sh reviewer"]
+
+
 # --- commit on main -------------------------------------------------------------
 
 def test_commit_on_main_blocked(monkeypatch, capsys):
@@ -52,15 +70,50 @@ def test_chained_commit_on_main_blocked(monkeypatch, capsys):
                      monkeypatch, capsys, branch="main") is not None
 
 
+@pytest.mark.parametrize("prefix", GIT_WRAPPER_PREFIXES)
+def test_commit_on_main_blocked_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: commit-to-main protection must hold when the commit is routed
+    # through the gitp / git-as-app.sh wrappers, or the guardrail is
+    # bypassable by spelling alone (sc-1266).
+    decision = run_check(hook.check_git_commit_branch, f"{prefix} commit -m 'x'",
+                         monkeypatch, capsys, branch="main")
+    assert decision is not None
+    assert "main" in decision["reason"]
+
+
+@pytest.mark.parametrize("prefix", GIT_WRAPPER_PREFIXES)
+def test_commit_off_main_allowed_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: widening front-end recognition must not tighten policy — a normal
+    # wrapper commit on a feature branch stays allowed (sc-1266).
+    assert run_check(hook.check_git_commit_branch, f"{prefix} commit -m 'x'",
+                     monkeypatch, capsys, branch="feature/x") is None
+
+
+def test_quoted_wrapper_commit_not_matched(monkeypatch, capsys):
+    # Why: a quoted mention of a wrapper name is not an invocation; mirrors
+    # the existing quoted-git protection for the new front-ends (sc-1266).
+    assert run_check(hook.check_git_commit_branch, 'echo "gitp commit"',
+                     monkeypatch, capsys, branch="main") is None
+
+
+@pytest.mark.parametrize("prefix", GIT_WRAPPER_PREFIXES)
+def test_chained_commit_on_main_blocked_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: wrapper commits hidden behind && chains must be caught the same
+    # way chained bare-git commits already are (sc-1266).
+    assert run_check(hook.check_git_commit_branch,
+                     f"{prefix} add . && {prefix} commit -m 'x'",
+                     monkeypatch, capsys, branch="main") is not None
+
+
 # --- --no-verify -----------------------------------------------------------------
 
-BLOCKED_NO_VERIFY = [
+BLOCKED_NO_VERIFY = mirror_git_frontends([
     "git commit --no-verify -m 'x'",
     "git push --no-verify",
     "git commit -n -m 'x'",
     "git add . && git commit --no-verify -m 'x'",
     "git -C /somedir commit --no-verify -m 'x'",
-]
+])
 
 
 @pytest.mark.parametrize("command", BLOCKED_NO_VERIFY)
@@ -70,13 +123,13 @@ def test_no_verify_blocked(command, monkeypatch, capsys):
     assert "no-verify" in decision["reason"]
 
 
-ALLOWED_NO_VERIFY = [
+ALLOWED_NO_VERIFY = mirror_git_frontends([
     "git commit -m 'mentions --no-verify in the message'",
     "git commit -m 'x'",
     "grep -r no-verify docs/",
     "git push origin feature/x",
     "git log -n 5",
-]
+])
 
 
 @pytest.mark.parametrize("command", ALLOWED_NO_VERIFY)
@@ -103,6 +156,24 @@ def test_clean_commit_allowed(monkeypatch, capsys):
                      'git commit -m "feat: add widget"', monkeypatch, capsys) is None
 
 
+@pytest.mark.parametrize("prefix", GIT_WRAPPER_PREFIXES)
+def test_commit_boilerplate_blocked_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: AI-boilerplate screening on commit messages must apply to
+    # wrapper-routed commits identically to bare git (sc-1266).
+    decision = run_check(hook.check_git_commit_boilerplate,
+                         f'{prefix} commit -m "feat: x\n\nGenerated with Claude Code"',
+                         monkeypatch, capsys)
+    assert decision is not None
+
+
+@pytest.mark.parametrize("prefix", GIT_WRAPPER_PREFIXES)
+def test_clean_commit_allowed_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: clean wrapper commits must pass — recognition widened, policy
+    # unchanged (sc-1266).
+    assert run_check(hook.check_git_commit_boilerplate,
+                     f'{prefix} commit -m "feat: add widget"', monkeypatch, capsys) is None
+
+
 def test_pr_create_boilerplate_blocked(monkeypatch, capsys):
     decision = run_check(hook.check_pr_create_boilerplate,
                          'gh pr create --title t --body "AI-generated implementation"',
@@ -121,6 +192,32 @@ def test_pr_create_boilerplate_without_gh_allowed(monkeypatch, capsys):
                      'echo "gh pr create AI-generated"', monkeypatch, capsys) is None
 
 
+@pytest.mark.parametrize("prefix", GH_WRAPPER_PREFIXES)
+def test_pr_create_boilerplate_blocked_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: PR-description boilerplate screening must apply when PRs are
+    # created through ghp / gh-as-app.sh, the required path in this
+    # workspace (sc-1266).
+    decision = run_check(hook.check_pr_create_boilerplate,
+                         f'{prefix} pr create --title t --body "AI-generated implementation"',
+                         monkeypatch, capsys)
+    assert decision is not None
+
+
+@pytest.mark.parametrize("prefix", GH_WRAPPER_PREFIXES)
+def test_pr_create_clean_allowed_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: clean wrapper-routed PR creation stays allowed (sc-1266).
+    assert run_check(hook.check_pr_create_boilerplate,
+                     f'{prefix} pr create --title t --body "Adds widget"',
+                     monkeypatch, capsys) is None
+
+
+def test_pr_create_boilerplate_without_wrapper_invocation_allowed(monkeypatch, capsys):
+    # Why: quoted wrapper mention is not an invocation — no false positive
+    # from the widened recognition (sc-1266).
+    assert run_check(hook.check_pr_create_boilerplate,
+                     'echo "ghp pr create AI-generated"', monkeypatch, capsys) is None
+
+
 def test_pr_comment_boilerplate_blocked(monkeypatch, capsys):
     decision = run_check(
         hook.check_pr_comment_boilerplate,
@@ -133,6 +230,26 @@ def test_pr_comment_clean_allowed(monkeypatch, capsys):
     assert run_check(
         hook.check_pr_comment_boilerplate,
         'gh api repos/owner/repo/issues/5/comments -f body="Fixed in abc123"',
+        monkeypatch, capsys) is None
+
+
+@pytest.mark.parametrize("prefix", GH_WRAPPER_PREFIXES)
+def test_pr_comment_boilerplate_blocked_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: PR-comment boilerplate screening must apply to wrapper-routed
+    # gh api comment calls (sc-1266).
+    decision = run_check(
+        hook.check_pr_comment_boilerplate,
+        f'{prefix} api repos/owner/repo/issues/5/comments -f body="Generated by Claude"',
+        monkeypatch, capsys)
+    assert decision is not None
+
+
+@pytest.mark.parametrize("prefix", GH_WRAPPER_PREFIXES)
+def test_pr_comment_clean_allowed_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: clean wrapper-routed PR comments stay allowed (sc-1266).
+    assert run_check(
+        hook.check_pr_comment_boilerplate,
+        f'{prefix} api repos/owner/repo/issues/5/comments -f body="Fixed in abc123"',
         monkeypatch, capsys) is None
 
 
@@ -155,6 +272,25 @@ def test_quoted_git_commit_no_timeout_required(monkeypatch, capsys):
                      monkeypatch, capsys) is None
 
 
+@pytest.mark.parametrize("prefix", GIT_WRAPPER_PREFIXES)
+def test_commit_requires_timeout_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: the commit timeout requirement must fire for wrapper commits too,
+    # or wrapper-routed commits silently lose the long-timeout protection
+    # (sc-1266).
+    decision = run_check(hook.add_timeout_to_git_commit, f"{prefix} commit -m 'x'",
+                         monkeypatch, capsys)
+    assert decision is not None
+    assert "900000" in decision["reason"]
+
+
+@pytest.mark.parametrize("prefix", GIT_WRAPPER_PREFIXES)
+def test_commit_with_timeout_allowed_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: wrapper commits carrying the required timeout pass unchanged
+    # (sc-1266).
+    assert run_check(hook.add_timeout_to_git_commit, f"{prefix} commit -m 'x'",
+                     monkeypatch, capsys, timeout=900000) is None
+
+
 def test_push_requires_timeout(monkeypatch, capsys):
     decision = run_check(hook.add_timeout_to_git_push, "git push origin x",
                          monkeypatch, capsys)
@@ -164,6 +300,24 @@ def test_push_requires_timeout(monkeypatch, capsys):
 
 def test_push_with_timeout_allowed(monkeypatch, capsys):
     assert run_check(hook.add_timeout_to_git_push, "git push origin x",
+                     monkeypatch, capsys, timeout=900000) is None
+
+
+@pytest.mark.parametrize("prefix", GIT_WRAPPER_PREFIXES)
+def test_push_requires_timeout_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: the push timeout requirement must fire for wrapper pushes too
+    # (sc-1266).
+    decision = run_check(hook.add_timeout_to_git_push, f"{prefix} push origin x",
+                         monkeypatch, capsys)
+    assert decision is not None
+    assert "900000" in decision["reason"]
+
+
+@pytest.mark.parametrize("prefix", GIT_WRAPPER_PREFIXES)
+def test_push_with_timeout_allowed_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: wrapper pushes carrying the required timeout pass unchanged
+    # (sc-1266).
+    assert run_check(hook.add_timeout_to_git_push, f"{prefix} push origin x",
                      monkeypatch, capsys, timeout=900000) is None
 
 
@@ -181,4 +335,29 @@ def test_gh_run_watch_with_timeout_allowed(monkeypatch, capsys):
 
 def test_quoted_gh_run_watch_no_timeout_required(monkeypatch, capsys):
     assert run_check(hook.add_timeout_to_gh_run_watch, 'echo "gh run watch"',
+                     monkeypatch, capsys) is None
+
+
+@pytest.mark.parametrize("prefix", GH_WRAPPER_PREFIXES)
+def test_gh_run_watch_requires_timeout_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: the run-watch timeout requirement must fire when routed through
+    # ghp / gh-as-app.sh (sc-1266).
+    decision = run_check(hook.add_timeout_to_gh_run_watch, f"{prefix} run watch 123",
+                         monkeypatch, capsys)
+    assert decision is not None
+    assert "1800000" in decision["reason"]
+
+
+@pytest.mark.parametrize("prefix", GH_WRAPPER_PREFIXES)
+def test_gh_run_watch_with_timeout_allowed_via_wrapper(prefix, monkeypatch, capsys):
+    # Why: wrapper run-watch carrying the required timeout passes unchanged
+    # (sc-1266).
+    assert run_check(hook.add_timeout_to_gh_run_watch, f"{prefix} run watch 123",
+                     monkeypatch, capsys, timeout=1800000) is None
+
+
+def test_quoted_wrapper_run_watch_no_timeout_required(monkeypatch, capsys):
+    # Why: quoted wrapper mention must not trigger the timeout requirement
+    # (sc-1266).
+    assert run_check(hook.add_timeout_to_gh_run_watch, 'echo "ghp run watch"',
                      monkeypatch, capsys) is None
