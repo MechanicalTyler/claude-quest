@@ -224,6 +224,16 @@ Check the results for any workflow whose name contains the word "terraform" (cas
       - Changes **clearly match** what the PR description says it will do → note the plan output and proceed.
     - **Plan exits cleanly with no changes:** Add a brief note ("No infrastructure drift detected — terraform plan clean") and proceed.
 
+#### Migration Immutability Check
+
+Reuse the `gh pr view {PR_NUMBER} --json files,commits` call from Terraform Plan Validation above — only the `.files` array is needed for this check. Each entry carries a `changeType` field (values: `ADDED` / `MODIFIED` / `REMOVED` / `RENAMED` / `COPIED` / `CHANGED`), so no additional API call is required.
+
+Filter `.files` to entries whose `path` contains a `migrations/` directory segment.
+
+**If no migration files changed, or every changed migration file has `changeType: ADDED`:** Skip this section entirely — adding new migration files is the normal, expected pattern.
+
+**If any such file has `changeType: MODIFIED`, or a `RENAMED` entry resolves to a pre-existing migration file:** record a **blocking finding** naming each offending file path and its change type. Migration files are immutable once applied: migration runners (e.g. `golang-migrate`) never re-run an applied migration, so editing an existing migration file silently diverges every environment that already ran it — the schema change must ship as a new migration file instead. Carry the finding forward to Phase 6, where it is force-included in Required Changes and blocks APPROVE (see the Migration Immutability gate there).
+
 ---
 
 ## Phase 3.5: Re-Read PR Description and Comments
@@ -467,6 +477,8 @@ gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews -f event="REQUEST_CHANGES"
 3. no required changes exist.
 
 If the CI gate did not pass (failed, cancelled, or timed-out/unconfirmed) on a non-exempt repo, the verdict is **REQUEST_CHANGES** regardless of score — a high score never overrides a non-passing CI gate.
+
+**Migration immutability is likewise a necessary precondition for APPROVE — independent of the 1–10 score.** Any finding recorded by the Migration Immutability Check (Phase 3) must be force-included in the review's Required Changes section, explicitly naming the check, the offending file path(s), and each file's change type. An approval produced while a Migration Immutability Check finding exists is invalid — the verdict is **REQUEST_CHANGES** regardless of score.
 
 Submit formal GitHub review with decision:
 - **APPROVE** only if the CI gate passed (or the repo is dev-build-CI-exempt) **and** score ≥ 8 **and** no required changes
