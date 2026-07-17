@@ -91,6 +91,20 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 >
 > OVERRIDE: After brainstorming completes, do NOT invoke `superpowers:writing-plans`.
 > Return to Phase 5 (ULTRATHINK) — the brainstorming output informs that analysis.
+>
+> OVERRIDE (interactive mode only — collapse the redundant gate): When running
+> interactively, if brainstorming's investigation (exploring context, asking
+> clarifying questions, proposing approaches) required ZERO clarifying questions
+> posed to the user, skip brainstorming's standalone design-approval stop. Instead,
+> produce a short design summary (chosen approach plus rationale) in conversation
+> only, and return immediately to Phase 5 carrying that summary forward — it will be
+> presented at the User Approval Gate for a single combined design + spec approval.
+> If at least one clarifying question was needed, run brainstorming's full flow
+> unchanged — present the design and get explicit approval here, exactly as today
+> (the two-gate path). This collapse is confined to the interactive mode described
+> below and introduces NO autonomous-mode branch: Phase 4 has no documented
+> autonomous-mode handling today (unlike Phases 6 and 7), and this override does not
+> add, remove, or resolve that pre-existing gap.
 
 **Interactive mode — full-understanding mandate:** When running in interactive mode (you can ask the user questions), it is your job to fully understand the entire feature before writing the spec. Keep asking the user clarifying questions — in a back-and-forth — until no material ambiguity about scope, behavior, edge cases, or intent remains. A spec you do not fully understand is a spec you cannot write correctly. This overrides the general "questions are a last resort" posture in `standards.md` *for spec writing specifically*: still investigate the codebase first, but where investigation cannot settle a question and you are interactive, **ask rather than assume**. Do not move past this phase with an understanding you would describe as partial.
 
