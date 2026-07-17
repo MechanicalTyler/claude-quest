@@ -179,6 +179,8 @@ write-spec already writes one spec per repo named in the story (satisfying the "
 
 **Mandatory confirmation gate (interactive path only):** Do NOT advance to start-development until the user has explicitly approved the spec(s) through write-spec's approval gate. If the user requests changes, let write-spec revise and re-present until approved. Only on explicit approval do you proceed.
 
+Once this gate is satisfied, no further user confirmation is required or expected through start-development, review-pr, test-pr, or the fix loops — proceeding through those stages is documented pipeline behavior, not a Process Fidelity deviation.
+
 **State ownership:** write-spec owns the "Ready for Dev" transition and the `claude-written` label. The orchestrator does not duplicate them.
 
 ---

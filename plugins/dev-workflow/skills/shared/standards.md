@@ -312,6 +312,7 @@ Comments are short and succinct, the way a working developer writes them. Commen
 - **No reasoning comments** — Do not narrate your thought process, alternatives you rejected, or why you chose an approach. The code is the deliverable; the path you took to it is not.
 - **Succinct** — A few words on intent or a non-obvious effect. If the code is self-explanatory, add no comment.
 - **Exception — tests** — The mandatory "why" comment on every test (see Testing Standards above) is **required** and stands apart from this rule. A test's reason for existing is the one place reasoning belongs in code.
+- **No ticket/story references** — Never cite the PM ticket or story ID inline in a code comment (e.g. `(sc-33)`), including in test "why" comments. That reference belongs in the commit message and PR description — not in source that outlives the ticket.
 
 ---
 
