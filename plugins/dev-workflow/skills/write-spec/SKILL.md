@@ -392,6 +392,13 @@ Present all generated specs to the user in a summary table:
 | [repo-name] | [path/to/spec.html] |
 | … | … |
 
+**Combined checkpoint (collapsed-gate path):** When Phase 4 took the zero-question
+collapsed path (the standalone design-approval stop was skipped), first present the
+carried-forward design summary from Phase 4 above the specs table, so this single
+approval covers both the design and the finished spec(s) together. When Phase 4 took
+the two-gate path (the design was already approved separately during Phase 4),
+present the specs table only — unchanged from today.
+
 Ask:
 > "The above specs have been written. Please review them and let me know:
 > 1. Approve all — proceed to link specs and mark the story ready for development
