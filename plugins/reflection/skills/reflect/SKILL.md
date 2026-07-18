@@ -26,7 +26,7 @@ Read `~/.claude/reflection/log.md`.
 
   Parse each entry's `status`: `open` (the default for new entries), or `reported (report: {path}, at: {ISO-8601 timestamp})` once a report has covered it. An entry with no status segment at all (written before status tracking existed) is treated as `open`.
 
-  A `reported` entry may carry up to two optional trailing fields after its status segment (added with sc-1311): `| story: sc-XXXX` (a follow-on story has been filed for the finding) or `| declined: {ISO-8601 timestamp}` (the user explicitly declined tracking it). Neither field changes the meaning of the `status:` value itself; a `reported` entry with neither field means the report exists but remediation was never decided.
+  A `reported` entry may carry up to two optional trailing fields after its status segment (added with sc-1311): `| story: sc-XXXX` (a follow-on story has been filed for the finding) or `| declined: {ISO-8601 timestamp}` (the user explicitly declined tracking it). Neither field changes the meaning of the `status:` value itself. A `reported` entry with neither field is a normal terminal state, not a pending decision: it is either a non-root-caused finding (nothing fixable to file) or a legacy entry written before these fields existed.
 
   > Why `status` exists: without it, a group already covered by a report is re-synthesized as new on every run — in the sc-1242 follow-up session, `/reflect` re-derived the identical root-cause write-up for the same two log entries across two consecutive runs, even after the finding had already been filed as sc-1254. Status makes "already tracked" structural instead of ad-hoc prose.
 
