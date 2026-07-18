@@ -119,7 +119,7 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > - Set the active repo root to that repo's directory.
 > - Filter acceptance criteria and testing instructions to items tagged `[{repo-name}]`, `[all]`, or untagged.
 > - The notes adapter resolves `repo_root` to the repo currently being specced.
-> - On completion of the loop, proceed to the **User Approval Gate** (after Phase 10) before Phase 11.
+> - On completion of the loop, proceed to Phase 11 (Adversarial Review), then the **User Approval Gate**, then Phase 12.
 >
 > **When only one repo is in scope**, execute Phases 5–10 once with no loop overhead — existing behavior unchanged.
 
@@ -373,13 +373,27 @@ Then use the notes adapter to write this spec:
 - The notes adapter resolves `repo_root` to the repo currently being specced
 - Follow notes adapter instructions to write the spec to the correct location within that repo
 
-Record the spec path for use in the approval gate and Phase 11. When in the per-repo loop, do NOT confirm to the user after each individual spec — accumulate all paths and present them together at the approval gate.
+Record the spec path for use in the approval gate and Phase 12. When in the per-repo loop, do NOT confirm to the user after each individual spec — accumulate all paths and present them together at the approval gate.
+
+---
+
+## Phase 11: Adversarial Review
+
+Read and follow the adversarial review procedure in `skills/shared/adversarial-review.md` with these context variables:
+
+- `story_id`: the story ID from `$ARGUMENTS`
+- `review_target`: "spec document"
+- `review_context`: the full Claude Instructions spec content written in Phase 10
+
+The adversarial agent verifies the spec completely and accurately captures all story requirements, acceptance criteria, and testing instructions. It checks that no story requirements were dropped, watered down, or misinterpreted.
+
+**Multi-repo:** run this review once per generated spec, passing that repo's spec as `review_context`. Filter the story's acceptance criteria and testing items to those tagged for that repo (plus `[all]`) when forming expectations, so each repo's spec is judged only against the requirements it owns.
 
 ---
 
 ## User Approval Gate
 
-> **This gate runs after all per-repo specs are written (after the Phase 5–10 loop completes) and BEFORE Phase 11.** Do not proceed to Phase 11 without passing this gate.
+> **This gate runs after Phase 11 (Adversarial Review) resolves — either ACCEPTABLE, or the review exhausted its 5-iteration cap and surfaced the remaining findings to the user per its documented procedure.** Do not proceed to Phase 12 without passing this gate.
 
 **Process Fidelity applies here (see `skills/shared/standards.md` → "Process Fidelity").** This gate must never be silently treated as satisfied — silence or a non-answer is not approval, and weakening, reinterpreting, or bypassing the gate requires asking the user for explicit permission first.
 
@@ -404,18 +418,18 @@ Ask:
 > 1. Approve all — proceed to link specs and mark the story ready for development
 > 2. Request changes to specific specs — describe what to revise"
 
-- If the user **approves**: proceed to Phase 11.
-- If the user **requests changes**: revise only the affected specs (re-run Phases 5–10 for those repos), re-present the updated specs, and repeat this gate. Do not proceed to Phase 11 until the user explicitly approves.
+- If the user **approves**: proceed to Phase 12.
+- If the user **requests changes**: revise only the affected specs (re-run Phases 5–10 for those repos), re-run Phase 11 (Adversarial Review) on each revised spec, then re-present the updated specs and repeat this gate — a revised spec never returns to the gate unreviewed. Do not proceed to Phase 12 until the user explicitly approves.
 
 **Autonomous mode (cannot ask):**
 
-Record all spec paths as written. Output a summary noting that user approval was skipped due to non-interactive execution, and list each repo and spec path. Proceed directly to Phase 11.
+Record all spec paths as written. Output a summary noting that user approval was skipped due to non-interactive execution, and list each repo and spec path. Proceed directly to Phase 12.
 
 **Single-repo shortcut:** When only one repo is in scope, the approval gate still applies — present the single spec path and ask for approval before linking.
 
 ---
 
-## Phase 11: Link Specs to PM Ticket
+## Phase 12: Link Specs to PM Ticket
 
 After user approval, update the **single original PM story** (not per-repo) to reference all generated specs.
 
@@ -435,20 +449,6 @@ If the PM adapter does not support comments or updates — note this to the user
 **"Ready for Dev" transition and `claude-written` label:** Fire these **ONCE** on the single story after all specs are linked. State transitions and labels are applied once per run, not per repo.
 
 **State ownership:** write-spec owns the "Ready for Dev" transition; start-development owns the "In Development" transition. Each skill fires only its own transition — never the other's.
-
----
-
-## Phase 12: Adversarial Review
-
-Read and follow the adversarial review procedure in `skills/shared/adversarial-review.md` with these context variables:
-
-- `story_id`: the story ID from `$ARGUMENTS`
-- `review_target`: "spec document"
-- `review_context`: the full Claude Instructions spec content written in Phase 10
-
-The adversarial agent verifies the spec completely and accurately captures all story requirements, acceptance criteria, and testing instructions. It checks that no story requirements were dropped, watered down, or misinterpreted.
-
-**Multi-repo:** run this review once per generated spec, passing that repo's spec as `review_context`. Filter the story's acceptance criteria and testing items to those tagged for that repo (plus `[all]`) when forming expectations, so each repo's spec is judged only against the requirements it owns.
 
 ---
 
