@@ -147,6 +147,11 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 - Locate similar features for reference
 - Understand current architecture and integration points
 - Document specific files, functions, and line numbers
+- **Repeated-pattern exhaustiveness:** when the story describes a bug tied to a code
+  pattern that occurs in more than one place (the same check, redirect, call, handler,
+  or config stanza), grep this repo for EVERY call site of that pattern and confirm
+  which sites are affected before writing the spec's scope — never scope only the
+  site(s) the story names. The spec must list every affected site found.
 
 **Required Output:**
 - Minimum 3-5 relevant file references with explanations (all from the repo currently being specced)
