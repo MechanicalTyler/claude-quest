@@ -20,11 +20,17 @@ No required arguments.
 Read `~/.claude/reflection/log.md`.
 
 - If the file does not exist, or exists but is empty (no entries), note "no logged entries" and continue to Phase 3 with nothing to synthesize yet — Phase 2's catch-up scan may still surface entries to synthesize.
-- Otherwise, parse all entries. Each entry is one line in this pipe-delimited format (the fifth `status` segment was added with sc-1255):
+- Otherwise, parse all entries. Each entry is one line in this pipe-delimited format (the fifth `status` segment was added with sc-1255; the sixth `session` segment with sc-1322):
 
-  `- **{ISO-8601 timestamp}** | context: {note} | trigger: {type} | {quote} | status: open`
+  `- **{ISO-8601 timestamp}** | context: {note} | trigger: {type} | {quote} | status: open | session: {session-id}`
 
   Parse each entry's `status`: `open` (the default for new entries), or `reported (report: {path}, at: {ISO-8601 timestamp})` once a report has covered it. An entry with no status segment at all (written before status tracking existed) is treated as `open`.
+
+  The `session` segment is required on every new entry: it records the id of the
+  session the logged moment occurred in, placed after `status` and before the optional
+  `story`/`declined` segments so required segments group before optional ones. An entry
+  with no `session` segment (written before session tracking existed) is treated as
+  `session: unknown` — never attributed to any real session.
 
   A `reported` entry may carry up to two optional trailing fields after its status segment (added with sc-1311): `| story: sc-XXXX` (a follow-on story has been filed for the finding) or `| declined: {ISO-8601 timestamp}` (the user explicitly declined tracking it). Neither field changes the meaning of the `status:` value itself. A `reported` entry with neither field is a normal terminal state, not a pending decision: it is either a non-root-caused finding (nothing fixable to file) or a legacy entry written before these fields existed.
 
@@ -34,13 +40,19 @@ Read `~/.claude/reflection/log.md`.
 
 Two passes, in order:
 
-**Pass A — live conversation.** Review the current conversation directly (it's already in context; no file read needed) for any of the five trigger types (correction of a claim; "no"/"don't"/"stop doing X"; a repeated/rephrased request; pushback on a proposed approach; visible frustration/escalation) that are not already reflected in the log. Append any newly found entries to `~/.claude/reflection/log.md` in the entry format from Phase 1, ending with `| status: open`.
+**Pass A — live conversation.** Review the current conversation directly (it's already in context; no file read needed) for any of the five trigger types (correction of a claim; "no"/"don't"/"stop doing X"; a repeated/rephrased request; pushback on a proposed approach; visible frustration/escalation) that are not already reflected in the log. Append any newly found entries to `~/.claude/reflection/log.md` in the entry format from Phase 1, ending with `| status: open`. Stamp each newly appended entry's `session` segment with the live session's id, read from the `CLAUDE_CODE_SESSION_ID` environment variable.
 
-**Pass B — most recent prior session.** Locate the current project's folder under `~/.claude/projects/` and find the most recently modified `.jsonl` transcript file in it, excluding the live session's own transcript file. If no such other file exists, skip this pass — that is not an error. Otherwise, read that transcript, scan its user-turn text for the same five trigger types, and append any newly found entries to the log, each ending with `| status: open`.
+**Pass B — most recent prior session.** Locate the current project's folder under `~/.claude/projects/` and find the most recently modified `.jsonl` transcript file in it, excluding the live session's own transcript file. If no such other file exists, skip this pass — that is not an error. Otherwise, read that transcript, scan its user-turn text for the same five trigger types, and append any newly found entries to the log, each ending with `| status: open`. Stamp each entry appended from this pass with that prior transcript's own session id — the transcript's `.jsonl` filename without extension — not the live session's id.
 
 ## Phase 3: Synthesize with root-cause attribution
 
 Group all log entries (original + newly caught-up) by their context note.
+
+Use each entry's `session` segment as supporting context when synthesizing: recurrence
+across multiple sessions signals a durable gap, while repeats within one session may be a
+single-session misstep — say which kind a group is when it affects the root-cause read.
+Entries with `session: unknown` still group normally; they just contribute nothing to the
+same-session vs. cross-session distinction.
 
 Before writing up a context group, check its entries' `status`:
 
