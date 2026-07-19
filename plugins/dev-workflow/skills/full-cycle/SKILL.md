@@ -179,6 +179,17 @@ write-spec already writes one spec per repo named in the story (satisfying the "
 
 **Mandatory confirmation gate (interactive path only):** Do NOT advance to start-development until the user has explicitly approved the spec(s) through write-spec's approval gate. If the user requests changes, let write-spec revise and re-present until approved. Only on explicit approval do you proceed.
 
+**Hard gate — recorded approval (interactive path only):** when the user approves, write
+the checkpoint immediately with `approval_text` (the user's literal approval message,
+verbatim) and `approval_timestamp` (ISO-8601) per `skills/shared/context-compaction.md`.
+Then, immediately before dispatching the start-development subagent, read
+`~/.claude/dev-workflow/state/{story-id}.json` back and verify both fields are present and
+non-empty. If either is missing or empty, do NOT dispatch start-development — stop,
+re-request explicit approval from the user, record it in the checkpoint, and re-run this
+check. Prose approval that was never recorded does not satisfy the gate. This check fires
+only at this write-spec → start-development boundary — no other stage or resume path reads
+these fields.
+
 Once this gate is satisfied, no further user confirmation is required or expected through start-development, review-pr, test-pr, or the fix loops — proceeding through those stages is documented pipeline behavior, not a Process Fidelity deviation.
 
 **State ownership:** write-spec owns the "Ready for Dev" transition and the `claude-written` label. The orchestrator does not duplicate them.
@@ -344,7 +355,7 @@ boundary and loop iteration, using the stage and key facts at that moment:
 | Moment | `stage` value | Notes |
 |--------|---------------|-------|
 | After create-story returns | `"write-spec"` | `story_id` now known |
-| After spec approval gate | `"start-development"` | — |
+| After spec approval gate | `"start-development"` | record `approval_text`/`approval_timestamp` |
 | After start-development subagent returns | `"review-pr"` | record `pr_numbers` |
 | After each address-pr-comments + review-pr iteration | `"review-loop"` | increment `review_loop_count` |
 | After each address-pr-comments + test-pr iteration | `"test-loop"` | increment `test_loop_count` |
