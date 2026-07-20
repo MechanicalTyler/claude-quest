@@ -1,7 +1,7 @@
 {
   "name": "reflection",
   "description": "Passively watches every session for moments the agent didn't meet expectations, logs them, nudges /reflect at session end, and synthesizes root-cause-attributed improvement reports",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": {
     "name": "MechanicalTyler"
   },

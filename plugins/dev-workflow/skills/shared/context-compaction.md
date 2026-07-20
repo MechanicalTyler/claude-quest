@@ -17,6 +17,8 @@ Schema:
   "pr_numbers": [42],
   "review_loop_count": 1,
   "test_loop_count": 0,
+  "approval_text": "Approved — proceed with the spec as written.",
+  "approval_timestamp": "2026-06-10T16:05:00Z",
   "next_action": "re-dispatch review-pr subagent for PR 42",
   "updated_at": "2026-06-10T17:30:00Z"
 }
@@ -27,7 +29,12 @@ Schema:
 full-cycle writes the checkpoint at **every** stage boundary and loop iteration:
 
 - After create-story returns a story ID
-- After the user approves the spec in write-spec (before start-development begins)
+- After the user approves the spec in write-spec (before start-development begins) —
+  record `approval_text` (the user's literal approval message, verbatim) and
+  `approval_timestamp` (ISO-8601 time the approval was given). These two fields are the
+  mechanical evidence that the spec-approval gate actually fired; full-cycle refuses to
+  dispatch start-development without them (see full-cycle's "Hard gate — recorded
+  approval").
 - After each stage subagent (start-development, review-pr, test-pr, address-pr-comments) returns
 - After each review-loop iteration (increment `review_loop_count`)
 - After each test-loop iteration (increment `test_loop_count`)

@@ -93,16 +93,15 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > Return to Phase 5 (ULTRATHINK) — the brainstorming output informs that analysis.
 >
 > OVERRIDE (interactive mode only — collapse the redundant gate): When running
-> interactively, if brainstorming's investigation (exploring context, asking
-> clarifying questions, proposing approaches) required ZERO clarifying questions
-> posed to the user, skip brainstorming's standalone design-approval stop. Instead,
-> produce a short design summary (chosen approach plus rationale) in conversation
-> only, and return immediately to Phase 5 carrying that summary forward — it will be
-> presented at the User Approval Gate for a single combined design + spec approval.
-> If at least one clarifying question was needed, run brainstorming's full flow
-> unchanged — present the design and get explicit approval here, exactly as today
-> (the two-gate path). This collapse is confined to the interactive mode described
-> below and introduces NO autonomous-mode branch: Phase 4 has no documented
+> interactively, run brainstorming's investigation normally — explore context and ask
+> however many clarifying questions are needed, including zero — but ALWAYS skip
+> brainstorming's standalone design-approval stop, regardless of question count.
+> Never ask the user to approve a design before a finished spec document exists for
+> them to read. Instead, produce a short design summary (chosen approach plus
+> rationale) in conversation only, and return immediately to Phase 5 carrying that
+> summary forward — it will be presented at the User Approval Gate for a single
+> combined design + spec approval. This collapse is confined to the interactive mode
+> described below and introduces NO autonomous-mode branch: Phase 4 has no documented
 > autonomous-mode handling today (unlike Phases 6 and 7), and this override does not
 > add, remove, or resolve that pre-existing gap.
 
@@ -147,6 +146,11 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 - Locate similar features for reference
 - Understand current architecture and integration points
 - Document specific files, functions, and line numbers
+- **Repeated-pattern exhaustiveness:** when the story describes a bug tied to a code
+  pattern that occurs in more than one place (the same check, redirect, call, handler,
+  or config stanza), grep this repo for EVERY call site of that pattern and confirm
+  which sites are affected before writing the spec's scope — never scope only the
+  site(s) the story names. The spec must list every affected site found.
 
 **Required Output:**
 - Minimum 3-5 relevant file references with explanations (all from the repo currently being specced)
@@ -406,12 +410,11 @@ Present all generated specs to the user in a summary table:
 | [repo-name] | [path/to/spec.html] |
 | … | … |
 
-**Combined checkpoint (collapsed-gate path):** When Phase 4 took the zero-question
-collapsed path (the standalone design-approval stop was skipped), first present the
-carried-forward design summary from Phase 4 above the specs table, so this single
-approval covers both the design and the finished spec(s) together. When Phase 4 took
-the two-gate path (the design was already approved separately during Phase 4),
-present the specs table only — unchanged from today.
+**Combined checkpoint:** Phase 4 always defers design approval to this gate — its
+standalone design-approval stop never fires, regardless of how many clarifying
+questions were asked. First present the carried-forward design summary from Phase 4
+above the specs table, so this single approval covers both the design and the
+finished spec(s) together.
 
 Ask:
 > "The above specs have been written. Please review them and let me know:
