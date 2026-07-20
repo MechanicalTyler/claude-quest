@@ -295,6 +295,12 @@ Before writing the final spec, use the writing-plans methodology to structure th
 
 ## Phase 10: Write Claude Instructions
 
+**Same-turn Write enforcement:** any statement in the current turn that claims the spec is
+being written or has been written — e.g. "writing the spec now," "the spec is complete" —
+must be accompanied by an actual `Write` tool call in that same turn. A claim with no
+matching same-turn `Write` call is a process violation, not a valid status update. Do not
+describe the spec as written unless a `Write` call for it actually executed in this turn.
+
 **Spec writing rules:**
 - Describe behavior and requirements, not code. No code blocks, pseudocode, or function signatures.
 - File references (e.g., `path/to/file.rs`) are acceptable for pointing developers to the right location. Code excerpts from those files are not.
