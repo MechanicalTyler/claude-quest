@@ -198,9 +198,20 @@ Once this gate is satisfied, no further user confirmation is required or expecte
 
 ## Stage — start-development (subagent)
 
+Before dispatching, resolve the target repo's path per `shared/repo-discovery.md`'s two-path
+detection. If that procedure's single-repo shortcut applies (inside one git repo, or the
+story names exactly one repo in "Repos to modify"), carry the resolved path forward into the
+dispatch prompt below as `{resolved-repo-path}`. For a multi-repo story, do not resolve a
+single path here — omit the `Repo path:` field entirely and let the dispatched subagent's own
+per-repo discovery-and-loop run unmodified.
+
 **Dispatch the Agent tool** with `subagent_type: dev-workflow-developer` (model: resolved from `models.stages.start-development` → `models.implementation` → default `sonnet`). The worker's body already invokes `dev-workflow:start-development` autonomously; your dispatch prompt supplies only the variable inputs:
 
-> Story/task ID: `{story-id}`. Run autonomously. [For an epic task, also pass the PM-adapter override, branch name, and the "do NOT use git worktrees" override.]
+> Story/task ID: `{story-id}`. Repo path: `{resolved-repo-path}`. Run autonomously. [For an epic task, also pass the PM-adapter override, branch name, and the "do NOT use git worktrees" override.]
+
+Single-repo case only: include the `Repo path:` field when the single-repo shortcut applies, as
+resolved above. For a multi-repo story, omit the `Repo path:` field entirely and dispatch the
+template unchanged — do not drop the epic-task bracketed clause in either case.
 
 The subagent branches, implements with TDD, and opens the PR (one PR per repo for a multi-repo story). It returns its autonomous-mode key/value result.
 

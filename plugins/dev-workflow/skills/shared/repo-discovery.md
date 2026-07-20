@@ -1,13 +1,14 @@
 # Repo Discovery
 
-Shared procedure for determining which repo(s) a story or task operates on. `create-story`, `write-spec`, and `start-development` all use this — keep behavior identical across them.
+Shared procedure for determining which repo(s) a story or task operates on. `create-story`, `write-spec`, `start-development`, and `full-cycle` all use this — keep behavior identical across them.
 
 ## Two-path detection
 
 Run `git rev-parse --show-toplevel` (via the Bash tool):
 
 - **Path 1 — inside a repo:** output is a non-empty absolute path (e.g. `/workspace/my-service`). You are inside one git repo. Use that path as the single repo root; skip all sub-folder scanning. This is the single-repo path — behave exactly as today.
-- **Path 2 — parent/workspace folder:** output contains "not a git repository" or is empty. You are not inside a git repo. Use Glob to find `{CWD}/*/.git` (one level deep only). Each matching parent folder is a repo root. Each repo is its own checkout in its own sibling folder with its own feature branch.
+- **Path 2 — parent/workspace folder:** output contains "not a git repository" or is empty. You are not inside a git repo. Use Glob to find `{CWD}/*/.git`, `{CWD}/*/*/.git`, and `{CWD}/*/*/*/.git` (one, two, and three levels deep) — a matching repo checkout may sit in a nested subdirectory, not just directly under `{CWD}`. Each matching folder (the parent of the `.git` entry) is a repo root. Each repo is its own checkout in its own folder with its own feature branch.
+- **Not found:** if no `.git` match turns up after searching all three levels, STOP and report to the user/orchestrator that no matching repo could be located on disk. Never clone a new copy, never improvise a location, and never proceed with a fabricated repo root.
 
 ## Service name
 

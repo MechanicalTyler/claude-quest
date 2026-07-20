@@ -68,7 +68,12 @@ If you have a story ID:
 
 ### Repo Discovery
 
-Determine which checkout(s) to operate on per `skills/shared/repo-discovery.md` (two-path detection, the "Repos to modify" precedence rules, per-item repo tags, and the single-repo shortcut). Each Path-2 repo is its own checkout in its own sibling folder with its own feature branch.
+If the dispatch prompt supplied an explicit repo path (a `Repo path:` field), use it directly
+as the resolved single repo root and skip re-running `skills/shared/repo-discovery.md`'s
+two-path detection — the orchestrator already resolved it. Only fall back to running the full
+procedure below (including its multi-repo per-repo loop) when no repo path was supplied.
+
+Otherwise, determine which checkout(s) to operate on per `skills/shared/repo-discovery.md` (two-path detection, the "Repos to modify" precedence rules, per-item repo tags, and the single-repo shortcut). Each Path-2 repo is its own checkout in its own sibling folder with its own feature branch.
 
 ---
 
