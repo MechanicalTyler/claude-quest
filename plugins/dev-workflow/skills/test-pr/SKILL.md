@@ -149,7 +149,9 @@ Some repos legitimately have no dev deploy CI (e.g. documentation-only or plugin
 - **Default is gated.** A repo absent from `deploy_gate_exempt_repos` is gated. The `deploy_command` `fallback` entry is NOT an exemption — falling back to the fallback deploy instruction still requires a successful dev deploy CI run.
 - **Absence of a deploy CI is not an exemption.** For a non-exempt repo with no runnable dev deploy CI, the verdict is **REQUEST_CHANGES + `tests-failing`**, never a skip.
 - **Announce every skip.** When the gate is skipped by exemption, the test report MUST state that functional dev testing was skipped by explicit exemption (naming the repo and `deploy_gate_exempt_repos`) and describe how the change was otherwise validated. Silent skipping is forbidden.
-- **Process Fidelity applies here (see `skills/shared/standards.md` → "Process Fidelity", hard-fail carve-out) — and it does not soften this gate.** Silently treating a non-exempt repo as if it were listed in `deploy_gate_exempt_repos`, or silently overriding a failing or missing dev deploy CI result, must STOP and be flagged to the user. This creates no user-grantable bypass of the deploy gate itself — its hard-fail default and config-driven exemption list stay exactly as strict as documented above.
+- **Prove it — the exemption claim must show its work.** Immediately after the skip statement, the test report MUST include the literal verification command and its output, e.g. `jq '.deploy_gate_exempt_repos' ~/.claude/dev-workflow/config.json` and the resulting array. A prose skip statement with no verification command and output next to it is not a valid exemption claim.
+- **A missing verification line invalidates the exemption claim.** If the test report asserts an exemption but does not show the verification command and its output, treat the claim as unverified — this is a gate failure (**REQUEST_CHANGES**), never a pass, and never something to silently correct or wave through.
+- **Process Fidelity applies here (see `skills/shared/standards.md` → "Process Fidelity", hard-fail carve-out) — and it does not soften this gate.** Silently treating a non-exempt repo as if it were listed in `deploy_gate_exempt_repos`, silently overriding a failing or missing dev deploy CI result, or asserting an exemption without the required verification line must STOP and be flagged to the user. This creates no user-grantable bypass of the deploy gate itself — its hard-fail default and config-driven exemption list stay exactly as strict as documented above.
 
 Read `~/.claude/dev-workflow/config.json` for `deploy_command`.
 
@@ -308,7 +310,7 @@ If Phase 5 produced **3 or more independent test failures** across different sub
 [APPROVE / REQUEST CHANGES with reasoning]
 ```
 
-**A successful fresh dev deploy CI run is a necessary precondition for an APPROVE recommendation.** The recommendation may be APPROVE only if the dev deploy CI reached conclusion `success` on the PR branch's current HEAD (or the repo is dev-deploy-CI-exempt and the report says so) **and** all test scenarios passed. A deploy failure, a missing/unrunnable deploy CI on a non-exempt repo, a non-`success` deploy CI conclusion, or a local-only deploy yields **REQUEST CHANGES** regardless of any local validation.
+**A successful fresh dev deploy CI run is a necessary precondition for an APPROVE recommendation.** The recommendation may be APPROVE only if the dev deploy CI reached conclusion `success` on the PR branch's current HEAD (or the repo is dev-deploy-CI-exempt and the report shows the verification command and output per the Dev Deploy CI Exemption section above) **and** all test scenarios passed. A deploy failure, a missing/unrunnable deploy CI on a non-exempt repo, a non-`success` deploy CI conclusion, a local-only deploy, or an exemption claim missing its verification line yields **REQUEST CHANGES** regardless of any local validation.
 
 ---
 
@@ -332,8 +334,8 @@ gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews -f event="REQUEST_CHANGES"
 ### Submit
 
 Submit formal GitHub review using the actual PR number:
-- **APPROVE** (`gh pr review {PR_NUMBER} --approve`) only if a fresh dev deploy CI run concluded `success` on current HEAD (or the repo is dev-deploy-CI-exempt and the report says so) **and** all tests pass
-- **REQUEST_CHANGES** (`gh pr review {PR_NUMBER} --request-changes`) if the dev deploy gate was not satisfied on a non-exempt repo (deploy failed, no runnable deploy CI, non-`success` conclusion, or local-only deploy) **or** any test fails
+- **APPROVE** (`gh pr review {PR_NUMBER} --approve`) only if a fresh dev deploy CI run concluded `success` on current HEAD (or the repo is dev-deploy-CI-exempt with a verified exemption claim) **and** all tests pass
+- **REQUEST_CHANGES** (`gh pr review {PR_NUMBER} --request-changes`) if the dev deploy gate was not satisfied on a non-exempt repo (deploy failed, no runnable deploy CI, non-`success` conclusion, or local-only deploy), if an exemption claim is missing its verification line, **or** any test fails
 
 A successful dev deploy CI run is a precondition for both APPROVE and the `tested-in-dev` label below. Never APPROVE + `tested-in-dev` without it.
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**reflection** is a standalone Claude plugin (v0.4.0) that tracks agent-performance inconsistencies across sessions. It is fully decoupled from `dev-workflow` — it has no dependency on it and makes no changes to it — so it works in any session, with or without other plugins installed.
+**reflection** is a standalone Claude plugin (v0.4.0) that tracks agent-performance inconsistencies across sessions. It has no hard dependency on `dev-workflow` and makes no changes to it, so it works in any session, with or without other plugins installed. The one exception is a runtime-detected, optional soft integration in the `reflect` skill's remediation offer: if an installed skill matches a story-creation naming pattern (e.g. `*:create-story`), reflect may offer to invoke it directly to self-file a bundled ticket — falling back to its standalone "file it yourself" flow whenever no such skill is detected.
 
 ## Architecture
 
@@ -62,4 +62,4 @@ tests/
 
 Content is hook scripts plus a Markdown skill definition — there is no compiled code and no build step. The Stop hook has real branching logic (dual-signal detection, open-entries gating) covered by a pytest suite: run `python3 -m pytest plugins/reflection/tests/` from the repo root. The reflect skill's behavior is agent-driven at runtime, not deterministic code, so it remains verified through manual scenarios rather than unit tests. When changing behavior, bump the version in `.claude-plugin/plugin.json`.
 
-**Do not** add a dependency on or integration with `plugins/dev-workflow` — this plugin is deliberately standalone so it works in any session.
+**Do not** add a hard dependency on or required integration with `plugins/dev-workflow` — this plugin is deliberately standalone so it works in any session. The `reflect` skill's remediation offer may probe for and optionally invoke an already-installed story-creation-capable skill (runtime-detected by naming pattern, e.g. `*:create-story`) to self-file a bundled ticket; this soft integration must always degrade cleanly to the standalone "file it yourself" flow when no such skill is installed, and must never become a required import or hard dependency on any specific plugin.

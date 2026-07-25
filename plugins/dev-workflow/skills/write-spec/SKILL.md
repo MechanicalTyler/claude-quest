@@ -151,6 +151,11 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
   or config stanza), grep this repo for EVERY call site of that pattern and confirm
   which sites are affected before writing the spec's scope — never scope only the
   site(s) the story names. The spec must list every affected site found.
+- **Data-completeness claims must be verified, not asserted.** Before writing a claim
+  like "this covers every field," "all X are handled," or any other completeness/scope
+  statement into the spec, verify it against the actual field mappings, schema, or code
+  — grep/read the real source of truth and confirm the claim holds. Never write a
+  completeness claim from general impression alone.
 
 **Required Output:**
 - Minimum 3-5 relevant file references with explanations (all from the repo currently being specced)

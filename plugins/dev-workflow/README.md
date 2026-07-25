@@ -105,6 +105,15 @@ Each is an array of repository names (matching `git rev-parse --show-toplevel | 
 
 A non-passing CI/deploy result on a non-exempt repo always yields `REQUEST_CHANGES`, never `APPROVE`. A local/Makefile/script deploy never satisfies the dev deploy gate — only a successful dev deploy CI run does.
 
+**Exemption claims must show their work.** A skip sentence alone is not enough — the review/test report must also include the literal verification command and its output immediately after the skip sentence, e.g.:
+
+```bash
+$ jq '.ci_gate_exempt_repos' ~/.claude/dev-workflow/config.json
+["whoof-app", "claude-quest", ...]
+```
+
+A missing verification line invalidates the exemption claim and is treated as a gate failure (`REQUEST_CHANGES`), not a pass.
+
 ## Adapters
 
 **PM adapters** (`skills/pm-adapter/`): `shortcut`, `linear`, `github-issues`
