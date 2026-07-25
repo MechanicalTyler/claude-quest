@@ -139,7 +139,9 @@ Some repos legitimately have no dev build CI (e.g. documentation-only or plugin 
 - **Default is gated.** A repo that is absent from `ci_gate_exempt_repos` is gated. The `review_ci_command` `fallback` entry is NOT an exemption — falling back to the fallback CI instruction still requires the gate to run and pass.
 - **Absence of a CI workflow is not an exemption.** If a non-exempt repo has no dev build CI workflow at all, that is a **REQUEST_CHANGES**, not a skip. Never treat "no CI found" as auto-exempt.
 - **Announce every skip.** When the gate is skipped by exemption, the review body MUST state it explicitly, e.g. "Dev build CI gate skipped: repo `<name>` is explicitly exempt in `ci_gate_exempt_repos`." Silent skipping is forbidden.
-- **Process Fidelity applies here (see `skills/shared/standards.md` → "Process Fidelity", hard-fail carve-out) — and it does not soften this gate.** Silently treating a non-exempt repo as if it were listed in `ci_gate_exempt_repos`, silently overriding a failing, missing, or cancelled CI result, or silently expanding who counts as exempt must STOP and be flagged to the user. No user answer converts any of those into a passing verdict the CI did not produce — the gate's pass/fail logic and its config-driven exemption list stay exactly as strict as documented above.
+- **Prove it — the exemption claim must show its work.** Immediately after the skip sentence, the review body MUST include the literal verification command and its output, e.g. `jq '.ci_gate_exempt_repos' ~/.claude/dev-workflow/config.json` and the resulting array. A prose skip sentence with no verification command and output next to it is not a valid exemption claim.
+- **A missing verification line invalidates the exemption claim.** If the review body asserts an exemption but does not show the verification command and its output, treat the claim as unverified — this is a gate failure (**REQUEST_CHANGES**), never a pass, and never something to silently correct or wave through.
+- **Process Fidelity applies here (see `skills/shared/standards.md` → "Process Fidelity", hard-fail carve-out) — and it does not soften this gate.** Silently treating a non-exempt repo as if it were listed in `ci_gate_exempt_repos`, silently overriding a failing, missing, or cancelled CI result, silently expanding who counts as exempt, or asserting an exemption without the required verification line must STOP and be flagged to the user. No user answer converts any of those into a passing verdict the CI did not produce — the gate's pass/fail logic and its config-driven exemption list stay exactly as strict as documented above.
 
 The dev build CI is the build workflow described under "Load CI Configuration" and "Required Workflows" below; this gate makes triggering and waiting on it non-negotiable. Run it as the first action of Phase 3.
 
@@ -472,17 +474,17 @@ gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews -f event="REQUEST_CHANGES"
 ```
 
 **Dev build CI is a necessary precondition for APPROVE — independent of the 1–10 score.** A review may be **APPROVE only if all** of the following hold:
-1. The dev build CI (and every required CI check) reached a `success` conclusion on the PR's current HEAD — **or** the repo is dev-build-CI-exempt (listed in `ci_gate_exempt_repos`), in which case the review body states the gate was skipped by exemption; **and**
+1. The dev build CI (and every required CI check) reached a `success` conclusion on the PR's current HEAD — **or** the repo is dev-build-CI-exempt (listed in `ci_gate_exempt_repos`), in which case the review body states the gate was skipped by exemption **and** includes the verification command and its output per the Dev Build CI Exemption section above; **and**
 2. score ≥ 8; **and**
 3. no required changes exist.
 
-If the CI gate did not pass (failed, cancelled, or timed-out/unconfirmed) on a non-exempt repo, the verdict is **REQUEST_CHANGES** regardless of score — a high score never overrides a non-passing CI gate.
+If the CI gate did not pass (failed, cancelled, or timed-out/unconfirmed) on a non-exempt repo, the verdict is **REQUEST_CHANGES** regardless of score — a high score never overrides a non-passing CI gate. An exemption claim missing its verification line is likewise **REQUEST_CHANGES**, not an APPROVE.
 
 **Migration immutability is likewise a necessary precondition for APPROVE — independent of the 1–10 score.** Any finding recorded by the Migration Immutability Check (Phase 3) must be force-included in the review's Required Changes section, explicitly naming the check, the offending file path(s), and each file's change type. An approval produced while a Migration Immutability Check finding exists is invalid — the verdict is **REQUEST_CHANGES** regardless of score.
 
 Submit formal GitHub review with decision:
-- **APPROVE** only if the CI gate passed (or the repo is dev-build-CI-exempt) **and** score ≥ 8 **and** no required changes
-- **REQUEST_CHANGES** if the CI gate did not pass on a non-exempt repo, or required changes exist
+- **APPROVE** only if the CI gate passed (or the repo is dev-build-CI-exempt with a verified exemption claim) **and** score ≥ 8 **and** no required changes
+- **REQUEST_CHANGES** if the CI gate did not pass on a non-exempt repo, if an exemption claim is missing its verification line, or if required changes exist
 - **COMMENT** if neutral/informational
 
 Use the actual PR number:
