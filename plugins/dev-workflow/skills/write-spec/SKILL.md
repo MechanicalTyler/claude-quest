@@ -383,6 +383,8 @@ generic guidance unchanged.
 - Heading nesting deeper than three levels (`h1` > `h2` > `h3` maximum)
 - Any external dependency: CDN scripts, webfonts, frameworks, analytics, or network requests of any kind — the file must remain fully self-contained and offline-capable
 
+Before writing, re-run the notes adapter's "Resolve spec folder" procedure now — re-derive the spec path fresh at this point in the flow rather than relying on adapter state loaded back in Phase 1. This matters most when `specs_path` is configured (especially templated), since a stale reference to the default `docs/specs` layout can otherwise persist across many intervening phases.
+
 Then use the notes adapter to write this spec:
 - Service name is the basename of the repo currently being specced (`git -C {repo_root} rev-parse --show-toplevel | xargs basename`)
 - The notes adapter resolves `repo_root` to the repo currently being specced
@@ -450,10 +452,10 @@ After user approval, update the **single original PM story** (not per-repo) to r
 Use the PM adapter to add a comment or description update to the story. The comment should include one entry per repo spec:
 - The spec file path for each repo (relative to that repo's own root — the repo is identified by its tag, since each repo's spec lives at the same path within its own checkout)
 - A brief summary of what each spec covers
-- Example format (multi-repo) — each spec lives at the same relative path inside its own repo checkout, so qualify each by its checkout folder:
+- Example format (multi-repo) — each spec lives at whatever path the notes adapter resolved for that repo in Phase 10 (this may differ from the default `docs/specs` layout when `specs_path` is configured), so qualify each by its checkout folder:
   > **Implementation Specs Written**
-  > - `[api]` Spec: `api/docs/specs/{story-id}.html` — Covers: [1-2 sentence summary]
-  > - `[web]` Spec: `web/docs/specs/{story-id}.html` — Covers: [1-2 sentence summary]
+  > - `[api]` Spec: `{resolved-spec-path}` — Covers: [1-2 sentence summary]
+  > - `[web]` Spec: `{resolved-spec-path}` — Covers: [1-2 sentence summary]
   > Written by: Claude Write Spec workflow
 
 If the PM adapter supports attaching files or adding external links, prefer adding one external link per repo spec (not per story). If it supports only one external link, add a comment instead with all paths.
