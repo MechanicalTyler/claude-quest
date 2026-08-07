@@ -147,7 +147,7 @@ Process each level as follows:
    - The instruction: **Implement the plan directly — for each task write a failing test, make it pass, refactor, and commit. Do NOT invoke `superpowers:subagent-driven-development`, `superpowers:executing-plans`, or any skill that spawns sub-agents; you are a leaf sub-agent and cannot dispatch further sub-agents.**
    - The instruction: **Do NOT invoke `superpowers:using-git-worktrees`. Develop in the current branch within this repo's own checkout folder.** Pass this override to any nested `finishing-a-development-branch` invocation.
    - Per-repo internal code review instructions (see "Internal Code Review" below). The sub-agent implements and self-reviews, then reports back — PR creation happens in Step 4 from the main agent.
-   - Per-repo Code Comment Compliance Check instructions (see "Code Comment Compliance Check" below) — include the complete regex patterns, comment-marker table, and blocking policy from that subsection in this sub-agent's dispatch prompt, not merely a reference to its name.
+   - The Code Comment Compliance Check instructions: reference `skills/shared/code-comment-check.md` by path in this sub-agent's dispatch prompt (mirroring how `adversarial-review.md` is dispatched by reference) — do not inline the full regex table into every per-repo prompt.
 
 3. **A later level does not start until every sub-agent in the prior level has finished successfully.** If any sub-agent in a level fails, stop, diagnose, fix, and retry that repo before advancing.
 
@@ -239,26 +239,9 @@ Before declaring work complete, run the steps below in order.
 
 ### Code Comment Compliance Check
 
-Run this as a mechanical grep, not a prose reminder — it backstops the "Code Comments" rule in `skills/shared/standards.md`, which was violated even though the rule was already written down.
-
-1. **Find changed lines.** `git fetch origin`, then `git diff origin/HEAD --name-only` for the changed-file list. For each changed file, run `git diff origin/HEAD -U0 -- {file}` and keep only lines prefixed with a single `+` (excluding the `+++` file-header line) — these are the lines added or modified on this branch.
-
-2. **Identify comment lines.** Among those added/modified lines, a line counts as a comment when, ignoring leading whitespace, it starts with a line-comment marker recognized for that file's extension, or falls inside an added block-comment marker recognized for that extension:
-   - `.tf` (HCL) — line markers `#` and `//` (HCL accepts both), block marker `/* … */`
-   - `.yaml`/`.yml`, `.py`, `.sh`, `.rb` — `#` only
-   - `.go`, `.js`, `.ts`, `.tsx`, `.jsx`, `.java`, `.c`, `.cpp`, `.rs` — `//` line marker and `/* … */` block marker
-   - `.sql`, `.lua` — `--` line marker only
-
-   A block-comment marker is only detected when the diff makes the opening delimiter itself an added (`+`-prefixed) line; because `git diff -U0` isolates changed lines with no surrounding context, a line that is textually inside a block comment whose opening delimiter was not itself touched by this branch cannot be identified as a comment by this check and is out of scope — a known limitation of the `-U0` approach. Unrecognized extensions are skipped (not blocked).
-
-3. **Match patterns** against each comment line's text, case-insensitive, "on the same line" as the concrete reading of "adjacent" (informally, within about 40 characters):
-   - (a) story ID — `\bsc-[0-9]+\b`
-   - (b) commit hash — `\b(commit(s|ted)?|sha|hash|rev)\b.{0,40}\b[0-9a-f]{7,40}\b` or `\b[0-9a-f]{7,40}\b.{0,40}\b(commit(s|ted)?|sha|hash|rev)\b`
-   - (c) CI run ID — `\b(run|ci)\b.{0,40}\b[0-9]+\b` or `\b[0-9]+\b.{0,40}\b(run|ci)\b` or a substring matching `github\.com/[^\s]+/actions/runs/[0-9]+` — no minimum digit count.
-
-4. **On any match:** do not declare work complete. Report the file, line, and which pattern matched; the offending citation must be rephrased or removed per the "Code Comments" rule in `skills/shared/standards.md`, and the check re-run. There is no suppression or override path — this blocks on any match, even given the heuristic's occasional false positive (e.g. a line reading "retry after the run completes, 120000ms" would trip pattern (c); rephrase it rather than bypass the check).
-
-5. **Multi-repo execution scope.** In the multi-repo path, this check must run *inside each per-repo sub-agent, from that sub-agent's own repo root*, as part of its own self-review before it reports back to the main agent (mirroring how "Internal Code Review" is already scoped per-repo in that path) — see the dispatch payload bullet in Step 3 above. The main agent never runs this check itself from the multi-repo workspace parent. In the single-repo path, it runs once, from that repo's root, as part of Pre-Completion Verification, exactly as described above.
+Read and follow `skills/shared/code-comment-check.md` in full — the base-ref resolution, diff
+commands, comment-marker table, regex patterns, blocking policy, and multi-repo execution scope
+all live there (shared with `address-pr-comments/SKILL.md`, which runs the identical check).
 
 ### Terraform Plan Check (if applicable)
 

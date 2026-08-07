@@ -116,7 +116,7 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > For each iteration:
 > - Run the Phase 2 existing-spec check for this repo first. If the user chooses to skip the repo, move to the next iteration without spec'ing it.
 > - Set the active repo root to that repo's directory.
-> - Filter acceptance criteria and testing instructions to items tagged `[{repo-name}]`, `[all]`, or untagged.
+> - Filter acceptance criteria and testing instructions **by repo tag only**, treating repo tags and environment tags (`[dev]`/`[prod]`, per `create-story/SKILL.md`'s "Multi-environment stories" subsection) as independent tag classes: keep an item whenever its repo-tag component is `[{repo-name}]`, `[all]`, or absent — regardless of whether it also carries an environment tag, and including a bare `[dev]`/`[prod]` item with no repo-tag component at all. Never drop an item for carrying only an environment tag; that tag class is not this filter's concern.
 > - The notes adapter resolves `repo_root` to the repo currently being specced.
 > - On completion of the loop, proceed to Phase 11 (Adversarial Review), then the **User Approval Gate**, then Phase 12.
 >
@@ -388,7 +388,7 @@ Before writing, re-run the notes adapter's "Resolve spec folder" procedure now �
 Then use the notes adapter to write this spec:
 - Service name is the basename of the repo currently being specced (`git -C {repo_root} rev-parse --show-toplevel | xargs basename`)
 - The notes adapter resolves `repo_root` to the repo currently being specced
-- Compute the adapter's complete final file path — run that same notes adapter's own path-resolution logic (folder plus filename) through to its actual write target, the identical computation the adapter's own Write spec step is about to perform — and state it to the user in one line (e.g. `Writing spec to {resolved-path}`) before invoking the adapter's Write spec operation. The announced value must always be the complete file path including filename, never a bare folder. This fires for every notes adapter, and once per repo when the per-repo loop (Phases 5–10) runs for a multi-repo story.
+- Compute the adapter's complete final file path — run that same notes adapter's own path-resolution logic (folder plus filename) through to its actual write target, the identical computation the adapter's own Write spec step is about to perform — and state it to the user in one line (e.g. `Writing spec to {resolved-path}`) before invoking the adapter's Write spec operation. The announced value must always be the **absolute** file path including filename — never a bare folder, and never a relative or templated value (e.g. an unresolved `specs_path` token); if the adapter's own resolution logic yields a relative path, resolve it to absolute (relative to `repo_root`) before announcing it. This fires for every notes adapter, and once per repo when the per-repo loop (Phases 5–10) runs for a multi-repo story.
 - Follow notes adapter instructions to write the spec to the correct location within that repo
 
 Record the spec path for use in the approval gate and Phase 12. When in the per-repo loop, do NOT confirm to the user after each individual spec — accumulate all paths and present them together at the approval gate (this does not include the one-line resolved-path announcement printed immediately before each write above — that always fires per repo; only the full spec summary/approval prompt is deferred to the gate).
@@ -405,7 +405,7 @@ Read and follow the adversarial review procedure in `skills/shared/adversarial-r
 
 The adversarial agent verifies the spec completely and accurately captures all story requirements, acceptance criteria, and testing instructions. It checks that no story requirements were dropped, watered down, or misinterpreted.
 
-**Multi-repo:** run this review once per generated spec, passing that repo's spec as `review_context`. Filter the story's acceptance criteria and testing items to those tagged for that repo (plus `[all]`) when forming expectations, so each repo's spec is judged only against the requirements it owns.
+**Multi-repo:** run this review once per generated spec, passing that repo's spec as `review_context`. Filter the story's acceptance criteria and testing items using the same repo-tag-only, tag-class-aware filter as the per-repo loop above (Phases 5–10) — items tagged for that repo, `[all]`, untagged, or carrying only an environment tag (`[dev]`/`[prod]`) with no repo-tag component — when forming expectations, so each repo's spec is judged only against the requirements it owns.
 
 ---
 

@@ -228,7 +228,7 @@ The goal: anyone tailing the output can answer "what is it doing right now, and 
 ## File and Command Operations
 
 - **Use Write tool for files** — Never use `cat` or `echo` with redirection to write files
-- **Stay within repository** — Do not `cd` outside the repository directory. This does not restrict a skill's own explicitly-documented, temporary, read-only investigative clone made purely to read a named-but-not-locally-found repo (`create-story/SKILL.md`'s Phase 0 git-host search is such a case) — reading from that clone's location is not "outside the repository directory" in the sense this rule was written to prevent (wandering `cd` calls with no defined scope or cleanup).
+- **Stay within repository** — Do not `cd` outside the repository directory. The sole exception is `create-story/SKILL.md` Phase 0 step 3 (its Phase 3 deferred re-run included): a temporary, read-only investigative clone made purely to read a named-but-not-locally-found repo, at the scratch location and with the cleanup and validation rules that step documents. No other skill, step, or self-judged "documented, temporary, read-only" excursion qualifies — this is a single named case, not a class.
 
 ---
 
