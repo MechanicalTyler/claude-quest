@@ -388,9 +388,10 @@ Before writing, re-run the notes adapter's "Resolve spec folder" procedure now �
 Then use the notes adapter to write this spec:
 - Service name is the basename of the repo currently being specced (`git -C {repo_root} rev-parse --show-toplevel | xargs basename`)
 - The notes adapter resolves `repo_root` to the repo currently being specced
+- Compute the adapter's complete final file path — run that same notes adapter's own path-resolution logic (folder plus filename) through to its actual write target, the identical computation the adapter's own Write spec step is about to perform — and state it to the user in one line (e.g. `Writing spec to {resolved-path}`) before invoking the adapter's Write spec operation. The announced value must always be the complete file path including filename, never a bare folder. This fires for every notes adapter, and once per repo when the per-repo loop (Phases 5–10) runs for a multi-repo story.
 - Follow notes adapter instructions to write the spec to the correct location within that repo
 
-Record the spec path for use in the approval gate and Phase 12. When in the per-repo loop, do NOT confirm to the user after each individual spec — accumulate all paths and present them together at the approval gate.
+Record the spec path for use in the approval gate and Phase 12. When in the per-repo loop, do NOT confirm to the user after each individual spec — accumulate all paths and present them together at the approval gate (this does not include the one-line resolved-path announcement printed immediately before each write above — that always fires per repo; only the full spec summary/approval prompt is deferred to the gate).
 
 ---
 

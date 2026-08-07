@@ -228,7 +228,7 @@ The goal: anyone tailing the output can answer "what is it doing right now, and 
 ## File and Command Operations
 
 - **Use Write tool for files** — Never use `cat` or `echo` with redirection to write files
-- **Stay within repository** — Do not `cd` outside the repository directory
+- **Stay within repository** — Do not `cd` outside the repository directory. This does not restrict a skill's own explicitly-documented, temporary, read-only investigative clone made purely to read a named-but-not-locally-found repo (`create-story/SKILL.md`'s Phase 0 git-host search is such a case) — reading from that clone's location is not "outside the repository directory" in the sense this rule was written to prevent (wandering `cd` calls with no defined scope or cleanup).
 
 ---
 
@@ -313,6 +313,7 @@ Comments are short and succinct, the way a working developer writes them. Commen
 - **Succinct** — A few words on intent or a non-obvious effect. If the code is self-explanatory, add no comment.
 - **Exception — tests** — The mandatory "why" comment on every test (see Testing Standards above) is **required** and stands apart from this rule. A test's reason for existing is the one place reasoning belongs in code.
 - **No ticket/story references** — Never cite the PM ticket or story ID inline in a code comment (e.g. `(sc-33)`), including in test "why" comments. That reference belongs in the commit message and PR description — not in source that outlives the ticket.
+- **No commit-hash or CI-run-ID citations** — Never cite a commit hash/SHA or a CI run ID inline in a code comment (e.g. `// see commit a1b2c3d`, `// verified in run 31183656861`), for the same reason — they belong in the commit message or PR description, not in source that outlives them.
 
 ---
 
