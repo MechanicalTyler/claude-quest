@@ -88,9 +88,9 @@ reading of "adjacent" (informally, within about 40 characters):
 Do not declare work complete. Report the file, line, and which pattern matched; the offending
 citation must be rephrased or removed per the "Code Comments" rule in `skills/shared/standards.md`,
 and the check re-run. There is no suppression or override path — this blocks on any match, even
-given the heuristic's occasional false positive (e.g. a line reading "CI timeout 300" or "retry
-after the run completes, 120000 ms" would trip pattern (c); rephrase it rather than bypass the
-check).
+given the heuristic's occasional false positive (e.g. a line reading "let the migration run for
+100000000 ms before checking" or "the nightly batch run processed 12345678 rows" would trip
+pattern (c); rephrase it rather than bypass the check).
 
 ## Execution scope
 
