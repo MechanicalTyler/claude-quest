@@ -9,6 +9,7 @@ Run `git rev-parse --show-toplevel` (via the Bash tool):
 - **Path 1 — inside a repo:** output is a non-empty absolute path (e.g. `/workspace/my-service`). You are inside one git repo. Use that path as the single repo root; skip all sub-folder scanning. This is the single-repo path — behave exactly as today.
 - **Path 2 — parent/workspace folder:** output contains "not a git repository" or is empty. You are not inside a git repo. Use Glob to find `{CWD}/*/.git`, `{CWD}/*/*/.git`, and `{CWD}/*/*/*/.git` (one, two, and three levels deep) — a matching repo checkout may sit in a nested subdirectory, not just directly under `{CWD}`. Each matching folder (the parent of the `.git` entry) is a repo root. Each repo is its own checkout in its own folder with its own feature branch.
 - **Not found:** if no `.git` match turns up after searching all three levels, STOP and report to the user/orchestrator that no matching repo could be located on disk. Never clone a new copy, never improvise a location, and never proceed with a fabricated repo root.
+  This prohibition governs resolving the repo(s) this procedure itself is trying to establish as the operating repo root(s) via two-path detection. The sole exception is `create-story/SKILL.md` Phase 0 step 3 (its Phase 3 deferred re-run included), which makes its own temporary, read-only, shallow clone of a *different*, explicitly-named repo purely for investigation, stored outside this procedure's own Path 2 glob search tree — that step states its scratch location's placement outside this glob explicitly. No other caller of this procedure is authorized to make such a clone. That investigative clone is never treated as a repo root by this procedure and must not be substituted as one.
 
 ## Service name
 
@@ -25,6 +26,8 @@ There are two repo-determination signals — on-disk discovery (above) and the s
 ## Per-item repo tags
 
 Acceptance-criteria and testing-instruction items may carry a bracketed repo marker (e.g. `[api]`, `[web]`). Items tagged `[all]` or untagged apply to every repo. Skills filter scope per repo using these tags.
+
+Items may also carry an environment tag (`[dev]`, `[prod]`) in the same bracket syntax, per `create-story/SKILL.md`'s "Multi-environment stories" subsection — this is independent of, and does not change, the repo-tag filtering behavior described above.
 
 ## Single-repo shortcut
 

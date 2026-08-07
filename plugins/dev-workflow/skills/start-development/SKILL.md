@@ -147,6 +147,7 @@ Process each level as follows:
    - The instruction: **Implement the plan directly — for each task write a failing test, make it pass, refactor, and commit. Do NOT invoke `superpowers:subagent-driven-development`, `superpowers:executing-plans`, or any skill that spawns sub-agents; you are a leaf sub-agent and cannot dispatch further sub-agents.**
    - The instruction: **Do NOT invoke `superpowers:using-git-worktrees`. Develop in the current branch within this repo's own checkout folder.** Pass this override to any nested `finishing-a-development-branch` invocation.
    - Per-repo internal code review instructions (see "Internal Code Review" below). The sub-agent implements and self-reviews, then reports back — PR creation happens in Step 4 from the main agent.
+   - The Code Comment Compliance Check instructions: reference `skills/shared/code-comment-check.md` by path in this sub-agent's dispatch prompt (mirroring how `adversarial-review.md` is dispatched by reference) — do not inline the full regex table into every per-repo prompt.
 
 3. **A later level does not start until every sub-agent in the prior level has finished successfully.** If any sub-agent in a level fails, stop, diagnose, fix, and retry that repo before advancing.
 
@@ -235,6 +236,12 @@ subagent-driven-development), so this review is their first independent review �
 ## Pre-Completion Verification
 
 Before declaring work complete, run the steps below in order.
+
+### Code Comment Compliance Check
+
+Read and follow `skills/shared/code-comment-check.md` in full — the base-ref resolution, diff
+commands, comment-marker table, regex patterns, blocking policy, and multi-repo execution scope
+all live there (shared with `address-pr-comments/SKILL.md`, which runs the identical check).
 
 ### Terraform Plan Check (if applicable)
 

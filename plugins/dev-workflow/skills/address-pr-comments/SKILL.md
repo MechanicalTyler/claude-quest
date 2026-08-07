@@ -77,12 +77,24 @@ Address each item from the checklist:
 - Apply the full RED-GREEN-REFACTOR cycle for code changes:
   > Invoke Skill: `superpowers:test-driven-development`
 - Address items in checklist order — do not skip or defer
-- Do not change anything outside the scope of reviewer feedback
+- Do not change anything outside the scope of reviewer feedback. Exception: the Code Comment Compliance Check in Step 5 requires rephrasing or removing any matched ticket/commit-hash/CI-run-ID citation with no suppression path, even when the offending comment predates this review/fix round and no reviewer flagged it — this is the one carve-out to this rule.
 - Commit frequently with descriptive messages referencing the item being addressed
 
 ---
 
 ## Step 5: Verify
+
+### Code Comment Compliance Check
+
+Read and follow `skills/shared/code-comment-check.md` in full — the base-ref resolution, diff
+commands, comment-marker table, regex patterns, and blocking policy all live there (shared with
+`start-development/SKILL.md`, which runs the identical check). The offending citation must be
+rephrased or removed per the "Code Comments" rule in `skills/shared/standards.md` (see the Step 4
+carve-out above).
+
+This check runs once, from the current repo root, as part of Step 5 — `address-pr-comments` has no
+multi-repo path, no repo discovery, and no per-repo sub-agent dispatch, so only the "Single-repo
+path" bullet of that file's "Execution scope" section applies here.
 
 > Invoke Skill: `superpowers:verification-before-completion`
 >
