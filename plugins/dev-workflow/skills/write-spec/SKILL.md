@@ -81,6 +81,19 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > Focus on: gaps or contradictions in the stated acceptance criteria,
 > and architectural questions within the stated scope.
 >
+> Also raise, for each significant requested capability — a distinct feature or flow
+> the story explicitly asks for, not a minor implementation detail or edge case — an
+> open viability question: is it still worth building? Raise this question here,
+> alongside the gap/contradiction questions above; do not answer it yet — codebase
+> investigation has not happened at this point in the flow (see "Before the
+> ULTRATHINK deep-dive" above). Phase 5/6 investigation resolves each question, and
+> Phase 7 gates on that resolution (see those phases below).
+>
+> Record the raised questions as a **Viability List** — one line per significant
+> requested capability, each starting status `open` — and carry it forward alongside
+> the design summary below. This list is produced once, story-wide, here in Phase 4;
+> later phases resolve and re-assert it, they do not re-derive or re-open it.
+>
 > OVERRIDE: This invocation runs inside write-spec, whose SCOPE BOUNDARY forbids any
 > file write or commit besides the spec itself. Keep the entire design discussion
 > in-conversation only — SKIP brainstorming's checklist step 6 (writing a design doc
@@ -99,9 +112,10 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > Never ask the user to approve a design before a finished spec document exists for
 > them to read. Instead, produce a short design summary (chosen approach plus
 > rationale) in conversation only, and return immediately to Phase 5 carrying that
-> summary forward — it will be presented at the User Approval Gate for a single
-> combined design + spec approval. This collapse is confined to the interactive mode
-> described below and introduces NO autonomous-mode branch: Phase 4 has no documented
+> summary and the Viability List forward — both will be presented at the User
+> Approval Gate for a single combined design + spec approval. This collapse is
+> confined to the interactive mode described below and introduces NO autonomous-mode
+> branch: Phase 4 has no documented
 > autonomous-mode handling today (unlike Phases 6 and 7), and this override does not
 > add, remove, or resolve that pre-existing gap.
 
@@ -118,6 +132,14 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > - Set the active repo root to that repo's directory.
 > - Filter acceptance criteria and testing instructions **by repo tag only**, treating repo tags and environment tags (`[dev]`/`[prod]`, per `create-story/SKILL.md`'s "Multi-environment stories" subsection) as independent tag classes: keep an item whenever its repo-tag component is `[{repo-name}]`, `[all]`, or absent — regardless of whether it also carries an environment tag, and including a bare `[dev]`/`[prod]` item with no repo-tag component at all. Never drop an item for carrying only an environment tag; that tag class is not this filter's concern.
 > - The notes adapter resolves `repo_root` to the repo currently being specced.
+> - Phase 4's Viability List (see above) is resolved once, story-wide, using the
+>   first repo's Phase 5/6 investigation in loop order — even when a listed
+>   capability spans multiple repos. Carry the resolved list forward unchanged for
+>   repo 2..N: each of those repos' Phase 7 gates re-assert the already-settled
+>   entries relevant to that repo (filtered by repo tag, same rule as above) rather
+>   than re-deriving them. If a capability's viability genuinely cannot be settled
+>   until a later repo's own investigation, resolve it there instead — but once any
+>   entry is resolved, no subsequent repo may reopen it.
 > - On completion of the loop, proceed to Phase 11 (Adversarial Review), then the **User Approval Gate**, then Phase 12.
 >
 > **When only one repo is in scope**, execute Phases 5–10 once with no loop overhead — existing behavior unchanged.
@@ -196,6 +218,11 @@ For each significant technical decision:
    - **Interactive mode:** Per the full-understanding mandate in Phase 4, ask whenever investigation cannot resolve a question that affects scope, behavior, edge cases, or intent — the high-stakes bar does not apply to spec writing. Always investigate the codebase, docs, and git history first; ask about what investigation genuinely cannot settle. Do not leave a question unresolved by choosing not to ask.
    - **Autonomous mode (no AskUserQuestion available):** You cannot ask. Resolve every question by investigation. Where investigation cannot fully settle a question, make the most reasonable decision, label it `[Inference]` with rationale, and proceed. Never emit an `[Open Question]` — see Phase 7.
 
+**Resolving the Viability List:** this investigation is also what resolves each entry
+on Phase 4's Viability List — settle every entry to `confirmed` or `descoped` (see
+Phase 7's "Viability List resolution" below for what those states mean and require);
+never leave one `open` once this phase is done.
+
 Document decisions using this format:
 ```
 **Decision: [Topic]**
@@ -217,6 +244,32 @@ After deep research, assess whether you have enough information to write a spec 
 - [ ] Acceptance criteria can be mapped to concrete implementation steps
 - [ ] Edge cases and error states are understood or clearly deferrable
 - [ ] No critical unknowns remain that would block implementation
+- [ ] Every entry on Phase 4's Viability List is resolved — none remain `open`
+
+**Viability List resolution:** Phase 6 investigation resolves each Viability List
+entry to one of two states:
+- `confirmed` — investigation supports building it as requested; proceed normally.
+- `descoped` — a deliberate decision that the capability should not be built. This is
+  a genuine scope change, not an implementation detail, and write-spec never makes
+  that call unilaterally:
+  - **Interactive mode:** treat a candidate descope as an unresolved gap under the
+    Decision block below — take it back to the user and get explicit confirmation
+    before removing anything from the spec. Only resolve an entry as `descoped` once
+    the user has confirmed it. Record a confirmed descope as a `Viability Descope`
+    callout in the spec itself, naming the capability, the rationale, and that the
+    user confirmed it, so Phase 11's adversarial review (which independently
+    re-derives expectations from the story) has a traceable artifact to check
+    against instead of reading the omission as a dropped requirement.
+  - **Autonomous mode:** you cannot get that confirmation, so never resolve an entry
+    as `descoped` here — resolve the doubt as `confirmed` with an `[Inference]`-
+    labeled rationale instead (per Phase 6), keep building the capability as
+    requested, and name the concern in the Phase 12 PM comment so a human sees it on
+    the ticket and can descope later, outside this workflow.
+
+**Multi-repo re-assertion:** for repo 2..N in the per-repo loop (see "Phases 5–10:
+Per-Repo Sequential Loop" above), this criterion is a cheap re-check of the
+already-resolved list, filtered to this repo's capabilities by repo tag — not a
+fresh judgment.
 
 **No open questions in the final spec.** A finished spec must never contain `[Open Question]` items. Every question must be resolved before the spec is written — either automatically through investigation, or, in interactive mode, through back-and-forth with the user. Resolve them; do not defer them.
 
@@ -404,6 +457,15 @@ Read and follow the adversarial review procedure in `skills/shared/adversarial-r
 - `review_context`: the full Claude Instructions spec content written in Phase 10
 
 The adversarial agent verifies the spec completely and accurately captures all story requirements, acceptance criteria, and testing instructions. It checks that no story requirements were dropped, watered down, or misinterpreted.
+
+**Viability descopes are not dropped requirements:** if the spec written in Phase 10
+contains a `Viability Descope` callout (per Phase 7's "Viability List resolution")
+for a story-requested capability, that omission was a deliberate, user-confirmed
+scope change — not a missed requirement. Add this instruction alongside the three
+context variables above when spawning the subagent: treat a capability covered by a
+`Viability Descope` callout as satisfied by that documented, confirmed descope rather
+than as a FAIL for a dropped requirement, while still verifying every other
+requirement normally.
 
 **Multi-repo:** run this review once per generated spec, passing that repo's spec as `review_context`. Filter the story's acceptance criteria and testing items using the same repo-tag-only, tag-class-aware filter as the per-repo loop above (Phases 5–10) — items tagged for that repo, `[all]`, untagged, or carrying only an environment tag (`[dev]`/`[prod]`) with no repo-tag component — when forming expectations, so each repo's spec is judged only against the requirements it owns.
 
