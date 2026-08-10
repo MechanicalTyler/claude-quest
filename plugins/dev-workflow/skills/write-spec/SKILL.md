@@ -81,6 +81,13 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > Focus on: gaps or contradictions in the stated acceptance criteria,
 > and architectural questions within the stated scope.
 >
+> Also ask, for each significant requested capability — a distinct feature or flow the
+> story explicitly asks for, not a minor implementation detail or edge case — whether it
+> is still worth building given what codebase investigation reveals. Surface this
+> viability question the same way and at the same point as the gap/contradiction
+> questions above: before Phase 9/10 spec-writing and before Phase 11's adversarial
+> review.
+>
 > OVERRIDE: This invocation runs inside write-spec, whose SCOPE BOUNDARY forbids any
 > file write or commit besides the spec itself. Keep the entire design discussion
 > in-conversation only — SKIP brainstorming's checklist step 6 (writing a design doc
@@ -217,6 +224,9 @@ After deep research, assess whether you have enough information to write a spec 
 - [ ] Acceptance criteria can be mapped to concrete implementation steps
 - [ ] Edge cases and error states are understood or clearly deferrable
 - [ ] No critical unknowns remain that would block implementation
+- [ ] No significant requested capability identified in Phase 4 has an unresolved
+      viability question — investigation confirmed it is still worth building, or the
+      scope was revised/flagged, before this gate passes
 
 **No open questions in the final spec.** A finished spec must never contain `[Open Question]` items. Every question must be resolved before the spec is written — either automatically through investigation, or, in interactive mode, through back-and-forth with the user. Resolve them; do not defer them.
 
