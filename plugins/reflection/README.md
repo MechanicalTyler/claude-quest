@@ -4,8 +4,7 @@ Passively watches every Claude Code session for moments the agent didn't meet ex
 
 ## What it does
 
-- **SessionStart hook**: injects standing watch-and-log instructions into every session (with or without any other plugin installed). The agent watches for five trigger types and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission.
-- **Stop hook**: at what looks like a natural end of session — either a sign-off phrase like "bye" / "that's all" / "done for now", or a project-management story observed moving to a done-type state in the session's own transcript — blocks the session from ending and asks the agent to run `/reflect` first, but only while at least one entry in `~/.claude/reflection/log.md` is still `open`. Fires once per session, so a false-positive match only costs one nudge.
+- **SessionStart hook**: injects standing watch-and-log instructions into every session (with or without any other plugin installed). The agent watches for five trigger types and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission. The same hook also checks `~/.claude/reflection/log.md` for at least one entry that is still `open` (or has no status segment) and, when found, appends a `/reflect` nudge to the instructions it emits. Runs exactly once per session by construction, so no separate marker file is needed to avoid repeat nudging.
 - **`/reflect` skill**: reads the log, catches up on anything from the live conversation or the most recent prior session in the current project that wasn't already captured, groups recurring problems, attributes each to a specific root cause, and writes a self-contained HTML report.
 
 ## Trigger types
@@ -39,9 +38,9 @@ Each report groups findings by root cause, and every finding is attributed to ei
 
 `/reflect` never edits another skill's or plugin's files — it only appends catch-up entries to the log and writes its own report.
 
-## Session-end nudge
+## Session-start nudge
 
-Completion is detected by either of two signals: a sign-off heuristic (regex over phrases like "bye", "that's all", "done for now") in the last user message, or a done-transition — the transcript shows a story/task update tool call plus a done-type state in a tool result, meaning the session ended by moving a story to Done rather than by saying goodbye. Both are imprecise by nature — they can miss a real completion, or match a session that isn't actually ending. Each session gets at most one nudge (tracked at `~/.claude/reflection/state/{session_id}.nudged`), so a false match costs one extra "run /reflect?" prompt, not a repeating nag. A log whose entries are all `reported` never nudges — there is nothing left to reflect on.
+Rather than guessing when a session is "ending", the nudge fires at the start of the next session: the SessionStart hook checks whether `~/.claude/reflection/log.md` has at least one entry that is still `open` (or has no status segment at all), and if so appends a `/reflect` nudge to the instructions it injects. A log whose entries are all `reported` never nudges — there is nothing left to reflect on. Because SessionStart only runs once per session, the nudge naturally fires at most once per session with no marker file required.
 
 ## Installation
 

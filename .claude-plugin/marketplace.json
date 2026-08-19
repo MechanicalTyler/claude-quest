@@ -64,8 +64,8 @@
     {
       "name": "reflection",
       "source": "./plugins/reflection",
-      "description": "Passively watches every session for moments the agent didn't meet expectations, logs them, nudges /reflect at session end, and synthesizes root-cause-attributed improvement reports",
-      "version": "0.6.0"
+      "description": "Passively watches every session for moments the agent didn't meet expectations, logs them, nudges /reflect at session start, and synthesizes root-cause-attributed improvement reports",
+      "version": "0.7.0"
     }
   ]
 }
