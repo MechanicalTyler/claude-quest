@@ -398,6 +398,8 @@ For a story spanning multiple repos, defer to the existing skills' built-in mult
 
 The orchestrator then runs the review → test cycle (including the loops) **for each resulting PR** independently. A later stage for one PR does not block a different PR. *[Inference — the sc-1043 target (`claude-plugin-dev-workflow`) is a single repo; this generalizes the single-repo flow without changing it.]*
 
+**Batch concurrent dispatches within the review → test cycle.** When a round of this cycle's per-PR Agent-tool dispatches spans multiple distinct repos, dispatch the concurrent ones in a single batch — mirroring `epic/SKILL.md` Phase 6's "dispatch the concurrent ones in a single batch" rule — rather than dispatching one repo at a time. This applies only to the review → test cycle's repeated per-PR dispatches; it does not extend to start-development, which is always a single Agent-tool dispatch per story — that stage's own per-repo looping happens entirely inside the dispatched `dev-workflow-developer` subagent. Follow `shared/standards.md`'s "Subagent Wait Discipline" section (specifically "Background dispatch is reserved for genuine concurrency") for how the batched dispatches must be tracked and waited on.
+
 ---
 
 ## Completion Criteria

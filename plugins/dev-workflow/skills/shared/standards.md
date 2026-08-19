@@ -141,6 +141,15 @@ reviewers). Even then:
   A user watching the session must always be able to tell that work is actively in
   progress, not silence they have to interrupt to interpret.
 
+**Answering an incidental question does not resolve a dispatch.** Answering an incidental,
+read-only user question — a status check, a tangential clarification — while a subagent
+dispatch is still outstanding is never itself a valid stopping point for the turn. The
+question and its answer are unrelated to the outstanding dispatch; responding to one does
+not discharge the other. The turn must still either resolve the dispatch (block for its
+result, per "Default: dispatch to block" above) or, for a genuinely backgrounded dispatch,
+restate what's in flight and the next check-in (per "State what's in flight before you
+stop" above) before ending.
+
 **On resume from any wait**, whether from a blocking result or a wake event, immediately
 state what came back and what happens next — do not let the session's next visible action
 be unrelated to the thing it was just waiting on.
