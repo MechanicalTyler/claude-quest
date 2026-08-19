@@ -20,7 +20,7 @@ The hook also checks `has_open_entries(LOG_PATH)` — true when `~/.claude/refle
 
 ### `reflect` skill
 
-`skills/reflect/SKILL.md`, invoked via `/reflect`, runs four phases:
+`skills/reflect/SKILL.md`, invoked via `/reflect`, runs the following phases:
 
 1. **Read the log** — read `~/.claude/reflection/log.md`; if missing/empty, note "no logged entries" and continue. Parse each entry's `status` segment (`open` or `reported (...)`; a missing segment is treated as `open`).
 2. **Catch-up scan** — scan the live conversation for uncaptured trigger moments and append them (each ending with `| status: open`); then locate the most recently modified `.jsonl` transcript under the current project's `~/.claude/projects/` folder (excluding the live session's own file) and scan it too, skipping this part if no other transcript exists.

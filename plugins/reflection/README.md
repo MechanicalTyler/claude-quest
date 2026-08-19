@@ -9,7 +9,7 @@ Passively watches every Claude Code session for moments the agent didn't meet ex
 
 ## Trigger types
 
-The hook watches for five kinds of corrective moment:
+The hook watches for the following kinds of corrective moment:
 
 1. The user corrects a factual claim.
 2. The user says "no" / "don't" / "stop doing X".

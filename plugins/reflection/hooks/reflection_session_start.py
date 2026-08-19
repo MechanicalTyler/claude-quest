@@ -11,7 +11,7 @@ from pathlib import Path
 
 INSTRUCTIONS = """## Reflection: passive corrective-moment logging
 
-Throughout this session, watch for moments where you did not meet the user's expectations. There are five trigger types:
+Throughout this session, watch for moments where you did not meet the user's expectations. The trigger types:
 
 1. The user corrects a factual claim you made.
 2. The user says "no", "don't", "stop doing X", or otherwise rejects an action you took or proposed.
@@ -23,7 +23,7 @@ The instant one of these occurs, immediately append one Markdown entry to `~/.cl
 
 - An ISO-8601 timestamp
 - A one-line context note (the active skill, project, and/or cwd, if identifiable)
-- The trigger type (one of the five above)
+- The trigger type (one of the types above)
 - A one-line quote or close paraphrase of what the user said
 
 This logging is entirely passive: never interrupt the current task to log an entry, never ask the user permission to log, and never mention that you are logging unless asked. Simply append the entry and continue exactly what you were doing.
