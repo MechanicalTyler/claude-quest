@@ -66,9 +66,9 @@ limitation of the `-U0` approach. Unrecognized extensions are skipped (not block
 
 ## Step 4: Match patterns
 
-**These are PCRE patterns — run with `grep -P` (or `rg`).** A POSIX-ERE-only `grep` on PATH
-(e.g. ugrep without `-P`) will silently under-match or mis-match some of these — verify `-P` (or
-`rg`) is actually what executes before trusting a clean result.
+**Patterns (a)-(c) are PCRE patterns — run with `grep -P` (or `rg`).** A POSIX-ERE-only `grep` on
+PATH (e.g. ugrep without `-P`) will silently under-match or mis-match some of these — verify `-P`
+(or `rg`) is actually what executes before trusting a clean result.
 
 Match against each comment line's text, case-insensitive, "on the same line" as the concrete
 reading of "adjacent" (informally, within about 40 characters):
@@ -82,9 +82,39 @@ reading of "adjacent" (informally, within about 40 characters):
   thresholds) that are not run IDs while still matching real CI run IDs, which run 9-11 digits.
   The `actions/runs/` URL alternative has no digit floor because the URL shape itself is
   unambiguous.
+
+**Pattern (d) is not a single-line PCRE match** — a "contiguous run longer than N lines" is a
+run-length count across consecutive lines, not something one line's text can satisfy on its own.
+It is checked separately, per file, after (a)-(c):
+
 - (d) verbose comment block — a contiguous run of added (`+`-prefixed) comment lines, per Step 3's
   per-extension comment-line detection, with no non-comment or blank line breaking the run, whose
-  count exceeds 4 lines.
+  count exceeds 4 lines. A `@@` hunk header always ends the current run — Step 2 keeps only
+  `+`-prefixed lines and discards hunk headers, so without this rule two unrelated comment blocks
+  from opposite ends of a file would splice into one run. **Exempt from the count:** a PEP-723
+  inline-script header, i.e. a run whose first line is a `#!` shebang and whose second line is
+  `# /// script` — a Python interpreter directive, not an authored comment. Skip the whole header
+  (through its closing `# ///` line) rather than trimming it line-by-line; anything genuinely
+  authored immediately after the header starts its own, separately-counted run.
+
+  For each changed file, run per-hunk (substitute the file's actual comment-line marker(s) from
+  Step 3 for `#`/`//` below):
+
+  ```bash
+  git diff {base}...HEAD -U0 -- {file} | awk '
+    /^@@/          { streak = 0; next }
+    /^\+#!/        { streak = 0; next }               # shebang line, never counted
+    /^\+# \/\/\/ script/ { in_pep723 = 1; next }       # PEP-723 header open, skip through close
+    in_pep723 && /^\+# \/\/\/$/ { in_pep723 = 0; next }
+    in_pep723      { next }
+    /^\+[[:space:]]*(#|\/\/)/ {
+      streak++
+      if (streak > 4) { print FILENAME ": pattern (d) verbose comment block"; exit 1 }
+      next
+    }
+    { streak = 0 }
+  '
+  ```
 
 ## Step 5: On any match
 
