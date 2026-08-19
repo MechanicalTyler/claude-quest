@@ -4,7 +4,7 @@ Passively watches every Claude Code session for moments the agent didn't meet ex
 
 ## What it does
 
-- **SessionStart hook**: injects standing watch-and-log instructions into every session (with or without any other plugin installed). The agent watches for the trigger types described below and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission. The same hook also checks `~/.claude/reflection/log.md` for at least one entry that is still `open` (or has no status segment) and, when found, appends a `/reflect` nudge to the instructions it emits. Runs exactly once per session by construction, so no separate marker file is needed to avoid repeat nudging.
+- **SessionStart hook**: injects standing watch-and-log instructions on every SessionStart event (with or without any other plugin installed). SessionStart fires on `startup`, `resume`, `clear`, `compact`, and `fork` — multiple times within one real session, not once — so the base instructions are re-emitted each time by design. The agent watches for the trigger types described below and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission. The same hook also checks `~/.claude/reflection/log.md` for at least one entry that is still `open` (or has no status segment) and, when found, appends a `/reflect` nudge to the instructions it emits, gated by a per-session-id marker file under `~/.claude/reflection/state/` so the nudge itself still fires at most once per actual session.
 - **`/reflect` skill**: reads the log, catches up on anything from the live conversation or the most recent prior session in the current project that wasn't already captured, groups recurring problems, attributes each to a specific root cause, and writes a self-contained HTML report.
 
 ## Trigger types
@@ -40,7 +40,7 @@ Each report groups findings by root cause, and every finding is attributed to ei
 
 ## Session-start nudge
 
-Rather than guessing when a session is "ending", the nudge fires at the start of the next session: the SessionStart hook checks whether `~/.claude/reflection/log.md` has at least one entry that is still `open` (or has no status segment at all), and if so appends a `/reflect` nudge to the instructions it injects. A log whose entries are all `reported` never nudges — there is nothing left to reflect on. Because SessionStart only runs once per session, the nudge naturally fires at most once per session with no marker file required.
+Rather than guessing when a session is "ending", the nudge fires at the start of the next session: the SessionStart hook checks whether `~/.claude/reflection/log.md` has at least one entry that is still `open` (or has no status segment at all), and if so appends a `/reflect` nudge to the instructions it injects. A log whose entries are all `reported` never nudges — there is nothing left to reflect on. SessionStart fires on `startup`, `resume`, `clear`, `compact`, and `fork`, so it can run several times within one real session; a marker file at `~/.claude/reflection/state/{session_id}.nudged` (keyed by session ID, which survives compaction) ensures the nudge still fires at most once per actual session rather than once per SessionStart event.
 
 ## Installation
 

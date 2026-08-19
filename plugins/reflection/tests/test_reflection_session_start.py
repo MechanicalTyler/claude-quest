@@ -129,3 +129,60 @@ class TestSessionStartNudge:
         write_log(reflection_home, [OPEN_STATUS_ENTRY])
         output = run_main(session_start_hook, capsys)
         assert output["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+
+
+class TestNudgeDedup:
+    def test_second_session_start_same_session_id_does_not_renudge(
+        self, session_start_hook, reflection_home, capsys
+    ):
+        # Why: SessionStart fires multiple times per real session (resume,
+        # clear, compact, fork) — the nudge must fire once per session id,
+        # not once per SessionStart event.
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        first = run_main(session_start_hook, capsys)
+        assert "Unreviewed reflection log entries" in first["hookSpecificOutput"]["additionalContext"]
+
+        second = run_main(session_start_hook, capsys)
+        assert "Unreviewed reflection log entries" not in second["hookSpecificOutput"]["additionalContext"]
+
+    def test_base_instructions_still_present_after_dedup_suppresses_nudge(
+        self, session_start_hook, reflection_home, capsys
+    ):
+        # Why: dedup must only suppress the nudge, never the base
+        # watch-and-log instructions.
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        run_main(session_start_hook, capsys)
+        second = run_main(session_start_hook, capsys)
+        assert "Reflection: passive corrective-moment logging" in second["hookSpecificOutput"]["additionalContext"]
+
+    def test_different_session_id_renudges(self, session_start_hook, reflection_home, capsys):
+        # Why: dedup is scoped per session id — a genuinely new session with
+        # the same still-open log must still get nudged.
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        with patch("sys.stdin", StringIO(json.dumps({"session_id": "s1"}))):
+            try:
+                session_start_hook.main()
+            except SystemExit:
+                pass
+        first = json.loads(capsys.readouterr().out.strip())
+        assert "Unreviewed reflection log entries" in first["hookSpecificOutput"]["additionalContext"]
+
+        with patch("sys.stdin", StringIO(json.dumps({"session_id": "s2"}))):
+            try:
+                session_start_hook.main()
+            except SystemExit:
+                pass
+        second = json.loads(capsys.readouterr().out.strip())
+        assert "Unreviewed reflection log entries" in second["hookSpecificOutput"]["additionalContext"]
+
+    def test_missing_session_id_never_dedups(self, session_start_hook, reflection_home, capsys):
+        # Why: a payload with no session_id must never crash or accidentally
+        # suppress the nudge (already_nudged/mark_nudged both no-op).
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        with patch("sys.stdin", StringIO(json.dumps({}))):
+            try:
+                session_start_hook.main()
+            except SystemExit:
+                pass
+        output = json.loads(capsys.readouterr().out.strip())
+        assert "Unreviewed reflection log entries" in output["hookSpecificOutput"]["additionalContext"]

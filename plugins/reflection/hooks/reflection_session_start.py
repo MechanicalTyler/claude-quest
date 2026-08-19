@@ -37,6 +37,7 @@ NUDGE = """
 `~/.claude/reflection/log.md` has at least one entry that has not been reviewed yet. Run `/reflect` now to synthesize it into a report."""
 
 LOG_PATH = Path.home() / ".claude" / "reflection" / "log.md"
+NUDGE_DIR = Path.home() / ".claude" / "reflection" / "state"
 
 # Only a top-level entry (`- **{ISO timestamp}** | ...`) carries a status
 # segment. Legacy multi-line entries use unrelated sub-bullets ("- Context:",
@@ -60,12 +61,30 @@ def has_open_entries(log_path):
     return False
 
 
+def already_nudged(session_id):
+    """SessionStart fires on startup, resume, clear, compact, and fork — not
+    once per session — so the nudge needs its own per-session-id dedup marker
+    (mirrors the old Stop hook's ~/.claude/reflection/state/{id}.nudged)."""
+    if not session_id:
+        return False
+    return (NUDGE_DIR / f"{session_id}.nudged").exists()
+
+
+def mark_nudged(session_id):
+    if not session_id:
+        return
+    NUDGE_DIR.mkdir(parents=True, exist_ok=True)
+    (NUDGE_DIR / f"{session_id}.nudged").touch()
+
+
 def main():
     try:
-        json.load(sys.stdin)
+        payload = json.load(sys.stdin)
+        session_id = payload.get("session_id", "") if isinstance(payload, dict) else ""
         context = INSTRUCTIONS
-        if has_open_entries(LOG_PATH):
+        if has_open_entries(LOG_PATH) and not already_nudged(session_id):
             context += NUDGE
+            mark_nudged(session_id)
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",
