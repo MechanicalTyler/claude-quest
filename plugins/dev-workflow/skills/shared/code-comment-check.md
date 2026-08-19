@@ -82,15 +82,19 @@ reading of "adjacent" (informally, within about 40 characters):
   thresholds) that are not run IDs while still matching real CI run IDs, which run 9-11 digits.
   The `actions/runs/` URL alternative has no digit floor because the URL shape itself is
   unambiguous.
+- (d) verbose comment block — a contiguous run of added (`+`-prefixed) comment lines, per Step 3's
+  per-extension comment-line detection, with no non-comment or blank line breaking the run, whose
+  count exceeds 4 lines.
 
 ## Step 5: On any match
 
-Do not declare work complete. Report the file, line, and which pattern matched; the offending
-citation must be rephrased or removed per the "Code Comments" rule in `skills/shared/standards.md`,
-and the check re-run. There is no suppression or override path — this blocks on any match, even
-given the heuristic's occasional false positive (e.g. a line reading "let the migration run for
-100000000 ms before checking" or "the nightly batch run processed 12345678 rows" would trip
-pattern (c); rephrase it rather than bypass the check).
+Do not declare work complete. Report the file, line, and which pattern matched (including pattern
+(d)'s line-count threshold when that is the match); the offending citation or verbose block must be
+rephrased, trimmed, or removed per the "Code Comments" rule in `skills/shared/standards.md`, and the
+check re-run. There is no suppression or override path — this blocks on any match, even given the
+heuristic's occasional false positive (e.g. a line reading "let the migration run for 100000000 ms
+before checking" or "the nightly batch run processed 12345678 rows" would trip pattern (c); rephrase
+it rather than bypass the check).
 
 ## Execution scope
 

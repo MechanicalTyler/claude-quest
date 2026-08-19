@@ -77,7 +77,7 @@ Address each item from the checklist:
 - Apply the full RED-GREEN-REFACTOR cycle for code changes:
   > Invoke Skill: `superpowers:test-driven-development`
 - Address items in checklist order — do not skip or defer
-- Do not change anything outside the scope of reviewer feedback. Exception: the Code Comment Compliance Check in Step 5 requires rephrasing or removing any matched ticket/commit-hash/CI-run-ID citation with no suppression path, even when the offending comment predates this review/fix round and no reviewer flagged it — this is the one carve-out to this rule.
+- Do not change anything outside the scope of reviewer feedback. Never clone, check out, or read another repository's files during a fix loop — not even to investigate a cross-repo constraint (e.g. a schema or config another repo defines). Investigate via documentation, the PR description, or by asking the user instead. Exception: the Code Comment Compliance Check in Step 5 requires rephrasing or removing any matched ticket/commit-hash/CI-run-ID citation with no suppression path, even when the offending comment predates this review/fix round and no reviewer flagged it — this is the one carve-out to this rule.
 - Commit frequently with descriptive messages referencing the item being addressed
 
 ---
