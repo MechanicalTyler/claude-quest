@@ -5,7 +5,9 @@
 # ///
 
 import json
+import re
 import sys
+from pathlib import Path
 
 INSTRUCTIONS = """## Reflection: passive corrective-moment logging
 
@@ -28,14 +30,41 @@ This logging is entirely passive: never interrupt the current task to log an ent
 
 The user can run `/reflect` at any time to review the accumulated log and get a synthesized report — you do not need to do anything else with this log yourself."""
 
+NUDGE = """
+
+## Unreviewed reflection log entries
+
+`~/.claude/reflection/log.md` has at least one entry that has not been reviewed yet. Run `/reflect` now to synthesize it into a report."""
+
+LOG_PATH = Path.home() / ".claude" / "reflection" / "log.md"
+
+
+def has_open_entries(log_path):
+    """At least one log entry still needs review: status segment says open,
+    or the entry has no status segment at all (written before sc-1255 added
+    status tracking). A fully-reported log must not trigger nudges."""
+    if not log_path.exists():
+        return False
+    for raw_line in log_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line.startswith("- "):
+            continue
+        match = re.search(r"\|\s*status:\s*([A-Za-z]+)", line)
+        if match is None or match.group(1).lower() == "open":
+            return True
+    return False
+
 
 def main():
     try:
         json.load(sys.stdin)
+        context = INSTRUCTIONS
+        if has_open_entries(LOG_PATH):
+            context += NUDGE
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",
-                "additionalContext": INSTRUCTIONS,
+                "additionalContext": context,
             }
         }
         print(json.dumps(output))
