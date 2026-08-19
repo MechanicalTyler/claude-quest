@@ -290,6 +290,7 @@ The Story Creation Gate below is a specific instance of this rule; where the two
 - **Permission ask everywhere else** — In any other context — including when `create-story` was auto-triggered by a conversational phrase, or when any other skill believes a story is needed — ask the user for explicit permission FIRST, before any interviewing, drafting, or adapter calls. Only an explicit yes proceeds
 - **Autonomous contexts never create** — An agent with no ability to ask (autonomous mode, dispatched subagent) must NEVER create a story under any circumstances. Stop and report that a story would be needed, naming what it wanted to create
 - **Applies to every creation path** — The gate covers stories, tickets, issues, and subtasks, created via ANY mechanism: adapter instructions, direct MCP tools, CLI commands (`gh issue create`, `jira issue create`), or raw API calls
+- **Carve-out: fixes that unblock the current PR's own gate** — A fix discovered mid-pipeline that exists only to unblock the current PR's own CI/review/test gate lands on that PR's existing branch, never a new story/branch/PR. Friction from the branch-policy default is a signal the fix belongs on the current branch, not a problem to route around
 
 Reading, updating, commenting on, and labeling existing stories are unaffected — the gate restricts creation only.
 
@@ -323,6 +324,7 @@ Comments are short and succinct, the way a working developer writes them. Commen
 - **Exception — tests** — The mandatory "why" comment on every test (see Testing Standards above) is **required** and stands apart from this rule. A test's reason for existing is the one place reasoning belongs in code.
 - **No ticket/story references** — Never cite the PM ticket or story ID inline in a code comment (e.g. `(sc-33)`), including in test "why" comments. That reference belongs in the commit message and PR description — not in source that outlives the ticket.
 - **No commit-hash or CI-run-ID citations** — Never cite a commit hash/SHA or a CI run ID inline in a code comment (e.g. `// see commit a1b2c3d`, `// verified in run 31183656861`), for the same reason — they belong in the commit message or PR description, not in source that outlives them.
+- **No stale counted items** — Comments and documentation prose (code comments, README, CLAUDE.md, any generated doc) must not embed a count that will drift as items are added or removed (e.g. "all 8 images", "4 of the 5 pieces"). Describe the collection in general terms instead ("all images", "the relevant pieces").
 
 ---
 
