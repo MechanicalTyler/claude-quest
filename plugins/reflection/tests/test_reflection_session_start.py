@@ -1,8 +1,10 @@
 """Tests for reflection_session_start.py — the SessionStart hook always emits
 the base watch-and-log instructions, and conditionally appends a /reflect
-nudge when the log has at least one entry that is still open (or unstatused).
-The nudge moved here from the old Stop hook so it fires once, at session
-start, instead of guessing when a session is "ending"."""
+nudge when the log has at least one entry that is still open (or unstatused)
+AND the event's source is "startup". SessionStart also fires on resume,
+clear, compact, and fork — those must never nudge, since they are
+continuations of a session the user already started, not the start of a new
+one."""
 
 import json
 from io import StringIO
@@ -29,8 +31,9 @@ def write_log(reflection_home, lines):
     (reflection_home / "log.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def run_main(session_start_hook, capsys):
-    with patch("sys.stdin", StringIO(json.dumps({"session_id": "s1"}))):
+def run_main(session_start_hook, capsys, source="startup", session_id="s1"):
+    payload = {"session_id": session_id, "source": source}
+    with patch("sys.stdin", StringIO(json.dumps(payload))):
         try:
             session_start_hook.main()
         except SystemExit:
@@ -97,19 +100,19 @@ class TestSessionStartNudge:
         context = output["hookSpecificOutput"]["additionalContext"]
         assert "Unreviewed reflection log entries" not in context
 
-    def test_open_entry_nudges(self, session_start_hook, reflection_home, capsys):
-        # Why: acceptance criterion — an explicitly open entry must produce a
-        # /reflect nudge appended to additionalContext.
+    def test_open_entry_nudges_on_startup(self, session_start_hook, reflection_home, capsys):
+        # Why: acceptance criterion — an explicitly open entry on a startup
+        # event must produce a /reflect nudge appended to additionalContext.
         write_log(reflection_home, [OPEN_STATUS_ENTRY])
-        output = run_main(session_start_hook, capsys)
+        output = run_main(session_start_hook, capsys, source="startup")
         context = output["hookSpecificOutput"]["additionalContext"]
         assert "Unreviewed reflection log entries" in context
 
-    def test_unstatused_entry_nudges(self, session_start_hook, reflection_home, capsys):
+    def test_unstatused_entry_nudges_on_startup(self, session_start_hook, reflection_home, capsys):
         # Why: unstatused entries count as open — the nudge condition must
         # match has_open_entries exactly, not a stricter "status: open" check.
         write_log(reflection_home, [OPEN_ENTRY])
-        output = run_main(session_start_hook, capsys)
+        output = run_main(session_start_hook, capsys, source="startup")
         context = output["hookSpecificOutput"]["additionalContext"]
         assert "Unreviewed reflection log entries" in context
 
@@ -125,7 +128,7 @@ class TestSessionStartNudge:
         # Why: the nudge must be appended to, not a replacement for, the base
         # instructions.
         write_log(reflection_home, [OPEN_STATUS_ENTRY])
-        output = run_main(session_start_hook, capsys)
+        output = run_main(session_start_hook, capsys, source="startup")
         context = output["hookSpecificOutput"]["additionalContext"]
         assert "Reflection: passive corrective-moment logging" in context
 
@@ -133,62 +136,70 @@ class TestSessionStartNudge:
         # Why: regression guard — the hook must keep declaring itself as a
         # SessionStart hook regardless of nudge state.
         write_log(reflection_home, [OPEN_STATUS_ENTRY])
-        output = run_main(session_start_hook, capsys)
+        output = run_main(session_start_hook, capsys, source="startup")
         assert output["hookSpecificOutput"]["hookEventName"] == "SessionStart"
 
 
-class TestNudgeDedup:
-    def test_second_session_start_same_session_id_does_not_renudge(
-        self, session_start_hook, reflection_home, capsys
-    ):
-        # Why: SessionStart fires multiple times per real session (resume,
-        # clear, compact, fork) — the nudge must fire once per session id,
-        # not once per SessionStart event.
+class TestNudgeSourceFiltering:
+    def test_resume_never_nudges(self, session_start_hook, reflection_home, capsys):
+        # Why: resume is a continuation of an existing session, not a new
+        # one — it must never nudge even with open entries.
         write_log(reflection_home, [OPEN_STATUS_ENTRY])
-        first = run_main(session_start_hook, capsys)
-        assert "Unreviewed reflection log entries" in first["hookSpecificOutput"]["additionalContext"]
+        output = run_main(session_start_hook, capsys, source="resume")
+        context = output["hookSpecificOutput"]["additionalContext"]
+        assert "Unreviewed reflection log entries" not in context
 
-        second = run_main(session_start_hook, capsys)
-        assert "Unreviewed reflection log entries" not in second["hookSpecificOutput"]["additionalContext"]
-
-    def test_base_instructions_still_present_after_dedup_suppresses_nudge(
-        self, session_start_hook, reflection_home, capsys
-    ):
-        # Why: dedup must only suppress the nudge, never the base
-        # watch-and-log instructions.
+    def test_clear_never_nudges(self, session_start_hook, reflection_home, capsys):
         write_log(reflection_home, [OPEN_STATUS_ENTRY])
-        run_main(session_start_hook, capsys)
-        second = run_main(session_start_hook, capsys)
-        assert "Reflection: passive corrective-moment logging" in second["hookSpecificOutput"]["additionalContext"]
+        output = run_main(session_start_hook, capsys, source="clear")
+        context = output["hookSpecificOutput"]["additionalContext"]
+        assert "Unreviewed reflection log entries" not in context
 
-    def test_different_session_id_renudges(self, session_start_hook, reflection_home, capsys):
-        # Why: dedup is scoped per session id — a genuinely new session with
-        # the same still-open log must still get nudged.
+    def test_compact_never_nudges(self, session_start_hook, reflection_home, capsys):
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        output = run_main(session_start_hook, capsys, source="compact")
+        context = output["hookSpecificOutput"]["additionalContext"]
+        assert "Unreviewed reflection log entries" not in context
+
+    def test_fork_never_nudges(self, session_start_hook, reflection_home, capsys):
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        output = run_main(session_start_hook, capsys, source="fork")
+        context = output["hookSpecificOutput"]["additionalContext"]
+        assert "Unreviewed reflection log entries" not in context
+
+    def test_missing_source_never_nudges(self, session_start_hook, reflection_home, capsys):
+        # Why: an unrecognized/absent source must fail closed (no nudge),
+        # never crash.
         write_log(reflection_home, [OPEN_STATUS_ENTRY])
         with patch("sys.stdin", StringIO(json.dumps({"session_id": "s1"}))):
             try:
                 session_start_hook.main()
             except SystemExit:
                 pass
-        first = json.loads(capsys.readouterr().out.strip())
+        output = json.loads(capsys.readouterr().out.strip())
+        context = output["hookSpecificOutput"]["additionalContext"]
+        assert "Unreviewed reflection log entries" not in context
+
+    def test_base_instructions_present_on_non_startup_sources(
+        self, session_start_hook, reflection_home, capsys
+    ):
+        # Why: the base watch-and-log instructions must ship on every
+        # SessionStart event, not just startup — only the nudge is
+        # startup-gated, so a compact mid-session doesn't lose the reminder.
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        output = run_main(session_start_hook, capsys, source="compact")
+        context = output["hookSpecificOutput"]["additionalContext"]
+        assert "Reflection: passive corrective-moment logging" in context
+
+    def test_repeated_startup_events_nudge_every_time(
+        self, session_start_hook, reflection_home, capsys
+    ):
+        # Why: there is no marker-file dedup anymore — the nudge is a pure
+        # function of (source, log state), so it fires every startup event
+        # while entries remain open, not just the first.
+        write_log(reflection_home, [OPEN_STATUS_ENTRY])
+        first = run_main(session_start_hook, capsys, source="startup")
         assert "Unreviewed reflection log entries" in first["hookSpecificOutput"]["additionalContext"]
 
-        with patch("sys.stdin", StringIO(json.dumps({"session_id": "s2"}))):
-            try:
-                session_start_hook.main()
-            except SystemExit:
-                pass
-        second = json.loads(capsys.readouterr().out.strip())
+        second = run_main(session_start_hook, capsys, source="startup")
         assert "Unreviewed reflection log entries" in second["hookSpecificOutput"]["additionalContext"]
-
-    def test_missing_session_id_never_dedups(self, session_start_hook, reflection_home, capsys):
-        # Why: a payload with no session_id must never crash or accidentally
-        # suppress the nudge (already_nudged/mark_nudged both no-op).
-        write_log(reflection_home, [OPEN_STATUS_ENTRY])
-        with patch("sys.stdin", StringIO(json.dumps({}))):
-            try:
-                session_start_hook.main()
-            except SystemExit:
-                pass
-        output = json.loads(capsys.readouterr().out.strip())
-        assert "Unreviewed reflection log entries" in output["hookSpecificOutput"]["additionalContext"]
