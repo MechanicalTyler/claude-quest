@@ -37,11 +37,6 @@ NUDGE = """
 `~/.claude/reflection/log.md` has at least one entry that has not been reviewed yet. Run `/reflect` now to synthesize it into a report."""
 
 LOG_PATH = Path.home() / ".claude" / "reflection" / "log.md"
-# Per-session-id marker files, not an in-memory or "once ever" flag: SessionStart
-# fires on startup, resume, clear, compact, and fork within what a user considers
-# one session, so a durable per-session-id marker is required to nudge at most
-# once per real session.
-NUDGE_DIR = Path.home() / ".claude" / "reflection" / "state"
 
 # Only a top-level entry (`- **{ISO timestamp}** | ...`) carries a status
 # segment. Legacy multi-line entries use unrelated sub-bullets ("- Context:",
@@ -65,38 +60,23 @@ def has_open_entries(log_path):
     return False
 
 
-def already_nudged(session_id):
-    """SessionStart fires on startup, resume, clear, compact, and fork — not
-    once per session — so the nudge needs its own per-session-id dedup marker
-    (mirrors the old Stop hook's ~/.claude/reflection/state/{id}.nudged)."""
-    if not session_id:
-        return False
-    return (NUDGE_DIR / f"{session_id}.nudged").exists()
-
-
-def mark_nudged(session_id):
-    if not session_id:
-        return
-    NUDGE_DIR.mkdir(parents=True, exist_ok=True)
-    (NUDGE_DIR / f"{session_id}.nudged").touch()
-
-
 def main():
     try:
         payload = json.load(sys.stdin)
-        session_id = payload.get("session_id", "") if isinstance(payload, dict) else ""
+        source = payload.get("source", "") if isinstance(payload, dict) else ""
     except Exception:
-        session_id = ""
+        source = ""
 
     # Base instructions must always ship (CLAUDE.md: "always present, regardless
     # of log state") even if the nudge decision itself fails partway through —
-    # e.g. a corrupt log.md or an unwritable state dir must only cost the nudge,
-    # never the instructions.
+    # e.g. a corrupt log.md must only cost the nudge, never the instructions.
     context = INSTRUCTIONS
+    # SessionStart also fires on resume/clear/compact/fork, all of which are
+    # continuations of a session the user already started — the nudge must
+    # only fire once, at the one event (startup) that begins a real session.
     try:
-        if has_open_entries(LOG_PATH) and not already_nudged(session_id):
+        if source == "startup" and has_open_entries(LOG_PATH):
             context += NUDGE
-            mark_nudged(session_id)
     except Exception:
         pass
 
