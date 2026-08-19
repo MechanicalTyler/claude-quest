@@ -91,28 +91,40 @@ It is checked separately, per file, after (a)-(c):
   per-extension comment-line detection, with no non-comment or blank line breaking the run, whose
   count exceeds 4 lines. A `@@` hunk header always ends the current run — Step 2 keeps only
   `+`-prefixed lines and discards hunk headers, so without this rule two unrelated comment blocks
-  from opposite ends of a file would splice into one run. **Exempt from the count:** a PEP-723
-  inline-script header, i.e. a run whose first line is a `#!` shebang and whose second line is
-  `# /// script` — a Python interpreter directive, not an authored comment. Skip the whole header
-  (through its closing `# ///` line) rather than trimming it line-by-line; anything genuinely
-  authored immediately after the header starts its own, separately-counted run.
+  from opposite ends of a file would splice into one run. **Exempt from the count:**
+  - A PEP-723 inline-script header, i.e. a run whose first line is a `#!` shebang and whose second
+    line is `# /// script` — a Python interpreter directive, not an authored comment. Skip the
+    whole header (through its closing `# ///` line) rather than trimming it line-by-line; anything
+    genuinely authored immediately after the header starts its own, separately-counted run.
+  - The mandatory test "why" comment required by `skills/shared/standards.md`'s Testing Standards
+    (and carved out from the Code Comments rule at `standards.md:324`) — a run of added comment
+    lines in a test file that immediately follows an added test-declaration line (`def test_...`,
+    `it(...)`, `test(...)`, `describe(...)`, or the file's equivalent). This is the one place
+    `standards.md` mandates the reasoning live in the comment, so a longer block there is not the
+    problem pattern (d) exists to catch. The exemption covers only the single run immediately
+    following the test declaration; any later comment block in the same test body is not exempt
+    and is counted normally.
 
   For each changed file, run per-hunk (substitute the file's actual comment-line marker(s) from
   Step 3 for `#`/`//` below):
 
   ```bash
-  git diff {base}...HEAD -U0 -- {file} | awk '
-    /^@@/          { streak = 0; next }
-    /^\+#!/        { streak = 0; next }               # shebang line, never counted
+  git diff {base}...HEAD -U0 -- {file} | awk -v is_test="$(echo {file} | grep -qiE 'test' && echo 1 || echo 0)" '
+    /^@@/          { streak = 0; prev_test_def = 0; in_test_comment = 0; next }
+    /^\+#!/        { streak = 0; prev_test_def = 0; next }               # shebang line, never counted
     /^\+# \/\/\/ script/ { in_pep723 = 1; next }       # PEP-723 header open, skip through close
     in_pep723 && /^\+# \/\/\/$/ { in_pep723 = 0; next }
     in_pep723      { next }
+    is_test && /^\+[[:space:]]*(def[[:space:]]+test_|it\(|test\(|describe\()/ {
+      streak = 0; prev_test_def = 1; in_test_comment = 0; next
+    }
     /^\+[[:space:]]*(#|\/\/)/ {
+      if (streak == 0 && prev_test_def) { in_test_comment = 1 }
       streak++
-      if (streak > 4) { print FILENAME ": pattern (d) verbose comment block"; exit 1 }
+      if (!in_test_comment && streak > 4) { print FILENAME ": pattern (d) verbose comment block"; exit 1 }
       next
     }
-    { streak = 0 }
+    { streak = 0; prev_test_def = 0; in_test_comment = 0 }
   '
   ```
 
