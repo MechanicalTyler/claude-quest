@@ -38,6 +38,11 @@ NUDGE = """
 
 LOG_PATH = Path.home() / ".claude" / "reflection" / "log.md"
 
+# Only a top-level entry (`- **{ISO timestamp}** | ...`) carries a status
+# segment. Legacy multi-line entries use unrelated sub-bullets ("- Context:",
+# "- Quote:") that must not be mistaken for entries in their own right.
+ENTRY_PREFIX = re.compile(r"^- \*\*[^*]+\*\*\s*\|")
+
 
 def has_open_entries(log_path):
     """At least one log entry still needs review: status segment says open,
@@ -47,7 +52,7 @@ def has_open_entries(log_path):
         return False
     for raw_line in log_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
-        if not line.startswith("- "):
+        if not ENTRY_PREFIX.match(line):
             continue
         match = re.search(r"\|\s*status:\s*([A-Za-z]+)", line)
         if match is None or match.group(1).lower() == "open":

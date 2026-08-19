@@ -17,6 +17,11 @@ REPORTED_ENTRY = OPEN_ENTRY + (
     " | status: reported (report: ~/.claude/reflection/reports/"
     "2026-07-14T19-47-28.html, at: 2026-07-14T19:47:28Z)"
 )
+LEGACY_SUB_BULLETS = [
+    "- Context: dev-workflow",
+    '- Quote: "quoted correction"',
+    "- Trigger type: correction",
+]
 
 
 def write_log(reflection_home, lines):
@@ -56,6 +61,20 @@ class TestHasOpenEntries:
     def test_empty_log_returns_false(self, session_start_hook, reflection_home):
         write_log(reflection_home, [""])
         assert session_start_hook.has_open_entries(session_start_hook.LOG_PATH) is False
+
+    def test_legacy_sub_bullets_do_not_count_as_open(self, session_start_hook, reflection_home):
+        # Why: sub-bullets under a reported entry ("- Context:", "- Quote:")
+        # start with "- " but carry no status segment of their own — they
+        # must not latch has_open_entries true once the real entry is
+        # reported.
+        write_log(reflection_home, [REPORTED_ENTRY, *LEGACY_SUB_BULLETS])
+        assert session_start_hook.has_open_entries(session_start_hook.LOG_PATH) is False
+
+    def test_mixed_log_counts_open(self, session_start_hook, reflection_home):
+        # Why: the realistic production shape — some entries already
+        # reported, one still open — must still return True.
+        write_log(reflection_home, [REPORTED_ENTRY, OPEN_STATUS_ENTRY])
+        assert session_start_hook.has_open_entries(session_start_hook.LOG_PATH) is True
 
 
 class TestSessionStartNudge:
