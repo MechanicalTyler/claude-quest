@@ -322,7 +322,7 @@ Because review-pr and test-pr both submit reviews on the same PR (and as the sam
 
 ## Loop Safety Guard
 
-Neither the review loop nor the test loop may run forever. Track an attempt count per loop. After **3** fix-and-recheck cycles for a given loop without reaching approval/passing, **stop** and surface the situation to the user with: the PR number, the outstanding review/test feedback, and the cycle count. Do not continue looping. *[Inference — not specified in the story; included as a correctness safeguard for an automated loop.]*
+Neither the review loop nor the test loop may run forever. Track an attempt count per loop, **per PR** — when a story spans multiple repos/PRs (see Multi-Repo Handling), each PR's review loop and each PR's test loop has its own independent 3-cycle cap; one PR hitting the cap does not stop another PR's loop. After **3** fix-and-recheck cycles for a given PR's loop without reaching approval/passing, **stop that PR's loop** and surface the situation to the user with: the PR number, the outstanding review/test feedback, and the cycle count. Do not continue looping that PR. Other PRs' loops continue independently. *[Inference — not specified in the story; included as a correctness safeguard for an automated loop.]*
 
 ---
 
@@ -374,6 +374,8 @@ boundary and loop iteration, using the stage and key facts at that moment:
 
 If a checkpoint write fails, surface the error to the user and continue — do not abort.
 
+**Multi-repo note.** The checkpoint's `stage`, `review_loop_count`, and `test_loop_count` are single-valued, but a multi-repo story's PRs progress independently (see Multi-Repo Handling) and can be in different stages/loops at once. In that case these fields record the **least-advanced PR** — the one furthest from `done` — and the per-PR cycle cap in the Loop Safety Guard applies per PR, not to this single persisted counter. This is safe for resume: re-entering at the least-advanced PR's stage/count is always correct, and any more-advanced PR is immediately detected as already past that point from GitHub/PM state per Resume/Entry Detection.
+
 ### High-context handoff
 
 When the context meter (PostToolUse hook) has reported ≥75% usage and full-cycle
@@ -397,6 +399,8 @@ For a story spanning multiple repos, defer to the existing skills' built-in mult
 - start-development already opens one PR per repo.
 
 The orchestrator then runs the review → test cycle (including the loops) **for each resulting PR** independently. A later stage for one PR does not block a different PR. *[Inference — the sc-1043 target (`claude-plugin-dev-workflow`) is a single repo; this generalizes the single-repo flow without changing it.]*
+
+**Batch concurrent dispatches within the review → test cycle.** When a round of this cycle's per-PR Agent-tool dispatches spans multiple distinct repos, issue the concurrent ones as multiple `Agent` tool calls within a single message — mirroring `epic/SKILL.md` Phase 6's "dispatch the concurrent ones in a single batch" rule — rather than dispatching one repo at a time. **This is batching, not backgrounding:** every dispatch in the batch is still blocked on within the same turn per the "sequential — you cannot proceed until it returns" rule above — the turn does not proceed until all of the batch's results are in hand, and none of them is fired into the background to be picked up on a later wake event. Before blocking on the batch, name what was launched — each subagent's role and target PR/repo — per `shared/standards.md`'s "Subagent Wait Discipline" → "State what's in flight before you stop." This applies only to the review → test cycle's repeated per-PR dispatches; it does not extend to start-development, which is always a single Agent-tool dispatch per story — that stage's own per-repo looping happens entirely inside the dispatched `dev-workflow-developer` subagent.
 
 ---
 
