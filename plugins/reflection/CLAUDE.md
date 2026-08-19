@@ -10,9 +10,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### SessionStart hook
 
-`hooks/reflection_session_start.py` runs on every session start and emits an `additionalContext` payload (via `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "..."}}`) instructing the agent to watch for several trigger types throughout the session (correction of a claim, "no"/"don't"/"stop doing X", a repeated/rephrased request, pushback on an approach, visible frustration/escalation) and log each occurrence immediately and passively — no task interruption, no permission-asking. These base instructions are always present, regardless of log state. Like the notifications plugin's hooks, it degrades silently (exit 0, no output) on any error.
+`hooks/reflection_session_start.py` is registered twice in `hooks/hooks.json` under `SessionStart`, each invocation passing a different `--mode` flag, so `hooks.json`'s own matcher mechanism — not an in-script check — decides which half of the behavior runs on which event:
 
-The hook also checks `has_open_entries(LOG_PATH)` — true when `~/.claude/reflection/log.md` has at least one entry whose `status` segment is `open` or absent (entries written before status tracking existed). When true and the SessionStart payload's `source` field is `startup`, a `/reflect` nudge is appended to the base instructions, telling the agent to run `/reflect` now to synthesize the unreviewed entries into a report. A fully-`reported` log never nudges. SessionStart also fires on `resume`, `clear`, `compact`, and `fork` — those are continuations of a session the user already started, not the start of a new one, so the hook still emits the base watch-and-log instructions on those events (so the reminder survives compaction) but never the nudge on anything other than `startup`. This replaces the old Stop-hook approach, which guessed at session-ending moments via a sign-off-phrase regex and a PM done-transition scan of the transcript; both signals were inherently imprecise and could miss a real completion or fire mid-session. Moving the trigger to session start removes that guessing, and gating the nudge on `source == "startup"` gives an exact once-per-session signal without any marker-file persistence.
+- **No matcher, `--mode=instructions`**: fires on every SessionStart event (`startup`, `resume`, `clear`, `compact`, `fork`) and emits an `additionalContext` payload (via `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "..."}}`) instructing the agent to watch for several trigger types throughout the session (correction of a claim, "no"/"don't"/"stop doing X", a repeated/rephrased request, pushback on an approach, visible frustration/escalation) and log each occurrence immediately and passively — no task interruption, no permission-asking. These base instructions are always present, regardless of log state, because this registration carries no matcher restriction.
+- **`matcher: "startup"`, `--mode=nudge`**: fires only on the `startup` event and checks `has_open_entries(LOG_PATH)` — true when `~/.claude/reflection/log.md` has at least one entry whose `status` segment is `open` or absent (entries written before status tracking existed). When true, it emits a standalone `/reflect` nudge telling the agent to run `/reflect` now to synthesize the unreviewed entries into a report. A fully-`reported` log never nudges. `resume`, `clear`, `compact`, and `fork` are continuations of a session the user already started, not the start of a new one — `hooks.json`'s `matcher: "startup"` means this registration is never even invoked for them, so the base instructions from the other registration survive those events (e.g. compaction) without risk of the nudge leaking into them.
+
+Both invocations share one script and its `has_open_entries` helper; only the mode dispatch (`parse_mode`, driven by argv rather than the SessionStart payload's `source` field) and the two mutually exclusive output branches differ. Like the notifications plugin's hooks, both branches degrade silently (exit 0, no output) on any error.
+
+This replaces the old Stop-hook approach, which guessed at session-ending moments via a sign-off-phrase regex and a PM done-transition scan of the transcript; both signals were inherently imprecise and could miss a real completion or fire mid-session. Moving the trigger to session start removes that guessing, and gating the nudge via `hooks.json`'s `matcher: "startup"` gives an exact once-per-session signal without any marker-file persistence or in-script source inspection.
 
 ### Log file
 
@@ -35,14 +40,14 @@ The skill never edits any file other than appending catch-up entries to the log 
 
 ```
 hooks/
-  hooks.json                        # SessionStart hook registration
-  reflection_session_start.py       # Emits watch-and-log instructions on every session start, plus a conditional /reflect nudge when open log entries exist
+  hooks.json                        # Two SessionStart registrations: no-matcher --mode=instructions, matcher:"startup" --mode=nudge
+  reflection_session_start.py       # --mode=instructions: watch-and-log instructions on every session start. --mode=nudge: conditional /reflect nudge when open log entries exist
 skills/
   reflect/
     SKILL.md                        # /reflect: read -> catch-up scan -> synthesize -> report
 tests/
   conftest.py                       # Shared pytest fixtures (HOME redirect, hook module loader)
-  test_reflection_session_start.py  # Unit tests for the SessionStart hook's open-entries gating and nudge logic
+  test_reflection_session_start.py  # Unit tests for both hook modes, the open-entries gate, and the hooks.json matcher registration itself
 .claude-plugin/
   plugin.json                       # Plugin manifest
 ```
