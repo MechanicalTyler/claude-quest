@@ -4,7 +4,7 @@ Passively watches every Claude Code session for moments the agent didn't meet ex
 
 ## What it does
 
-- **SessionStart hook**: injects standing watch-and-log instructions into every session (with or without any other plugin installed). The agent watches for five trigger types and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission. The same hook also checks `~/.claude/reflection/log.md` for at least one entry that is still `open` (or has no status segment) and, when found, appends a `/reflect` nudge to the instructions it emits. Runs exactly once per session by construction, so no separate marker file is needed to avoid repeat nudging.
+- **SessionStart hook**: injects standing watch-and-log instructions into every session (with or without any other plugin installed). The agent watches for the trigger types described below and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission. The same hook also checks `~/.claude/reflection/log.md` for at least one entry that is still `open` (or has no status segment) and, when found, appends a `/reflect` nudge to the instructions it emits. Runs exactly once per session by construction, so no separate marker file is needed to avoid repeat nudging.
 - **`/reflect` skill**: reads the log, catches up on anything from the live conversation or the most recent prior session in the current project that wasn't already captured, groups recurring problems, attributes each to a specific root cause, and writes a self-contained HTML report.
 
 ## Trigger types
