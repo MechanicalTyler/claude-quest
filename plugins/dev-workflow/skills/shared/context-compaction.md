@@ -42,6 +42,12 @@ full-cycle writes the checkpoint at **every** stage boundary and loop iteration:
 The checkpoint **complements** GitHub/PM state — it stores what GitHub cannot: loop counts and
 the orchestrator's next intended action. GitHub/PM remain authoritative for resume detection.
 
+`stage`, `review_loop_count`, and `test_loop_count` are single-valued even though `pr_numbers`
+is a list. For a multi-repo story whose PRs progress independently, these three fields record
+the **least-advanced PR** (see full-cycle's "Multi-Repo Handling" and its checkpoint-writes
+section) — resume re-enters at that PR's stage, and any more-advanced PR is re-derived from
+GitHub/PM state rather than from this file.
+
 ### Checkpoint write failure
 
 If a write fails (disk full, permissions), surface the error to the user and continue.
