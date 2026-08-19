@@ -5,7 +5,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/reflection_session_start.py"
+            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/reflection_session_start.py --mode=instructions"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/reflection_session_start.py --mode=nudge"
           }
         ]
       }

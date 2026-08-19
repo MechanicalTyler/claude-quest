@@ -30,9 +30,7 @@ This logging is entirely passive: never interrupt the current task to log an ent
 
 The user can run `/reflect` at any time to review the accumulated log and get a synthesized report — you do not need to do anything else with this log yourself."""
 
-NUDGE = """
-
-## Unreviewed reflection log entries
+NUDGE = """## Unreviewed reflection log entries
 
 `~/.claude/reflection/log.md` has at least one entry that has not been reviewed yet. Run `/reflect` now to synthesize it into a report."""
 
@@ -60,26 +58,22 @@ def has_open_entries(log_path):
     return False
 
 
-def main():
-    try:
-        payload = json.load(sys.stdin)
-        source = payload.get("source", "") if isinstance(payload, dict) else ""
-    except Exception:
-        source = ""
+def parse_mode(argv):
+    """Which hooks.json registration invoked this run. hooks.json gates the
+    nudge to the "startup" source via its own matcher, so this script no
+    longer needs to inspect the SessionStart payload's source field itself —
+    it only needs to know which half of the split behavior to run. Falls
+    back to "instructions" (the must-always-ship half) on anything
+    unrecognized or missing, rather than risking a silently dropped hook."""
+    for arg in argv[1:]:
+        if arg == "--mode=nudge":
+            return "nudge"
+        if arg == "--mode=instructions":
+            return "instructions"
+    return "instructions"
 
-    # Base instructions must always ship (CLAUDE.md: "always present, regardless
-    # of log state") even if the nudge decision itself fails partway through —
-    # e.g. a corrupt log.md must only cost the nudge, never the instructions.
-    context = INSTRUCTIONS
-    # SessionStart also fires on resume/clear/compact/fork, all of which are
-    # continuations of a session the user already started — the nudge must
-    # only fire once, at the one event (startup) that begins a real session.
-    try:
-        if source == "startup" and has_open_entries(LOG_PATH):
-            context += NUDGE
-    except Exception:
-        pass
 
+def emit(context):
     try:
         output = {
             "hookSpecificOutput": {
@@ -90,6 +84,33 @@ def main():
         print(json.dumps(output))
     except Exception:
         pass
+
+
+def main():
+    # Consume stdin even though neither mode currently needs the payload,
+    # so the hook doesn't leave Claude Code's write blocked on a reader.
+    try:
+        json.load(sys.stdin)
+    except Exception:
+        pass
+
+    mode = parse_mode(sys.argv)
+
+    if mode == "nudge":
+        # hooks.json's "startup" matcher already restricts this registration
+        # to the one SessionStart event that begins a real session; resume/
+        # clear/compact/fork never invoke this mode at all.
+        try:
+            if has_open_entries(LOG_PATH):
+                emit(NUDGE)
+        except Exception:
+            pass
+        sys.exit(0)
+
+    # instructions mode: must always ship (CLAUDE.md: "always present,
+    # regardless of log state"), on every SessionStart source — this
+    # registration carries no matcher, so it fires unconditionally.
+    emit(INSTRUCTIONS)
     sys.exit(0)
 
 
