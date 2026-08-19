@@ -52,13 +52,19 @@ class TestHasOpenEntries:
         assert session_start_hook.has_open_entries(session_start_hook.LOG_PATH) is True
 
     def test_all_reported_returns_false(self, session_start_hook, reflection_home):
+        # Why: a fully-reported log has nothing left to reflect on — it must
+        # not trigger a nudge just because entries exist.
         write_log(reflection_home, [REPORTED_ENTRY, REPORTED_ENTRY])
         assert session_start_hook.has_open_entries(session_start_hook.LOG_PATH) is False
 
     def test_missing_log_returns_false(self, session_start_hook):
+        # Why: no log file yet (first-ever session) must not be mistaken for
+        # an open entry — it must return False, not raise.
         assert session_start_hook.has_open_entries(session_start_hook.LOG_PATH) is False
 
     def test_empty_log_returns_false(self, session_start_hook, reflection_home):
+        # Why: a log file that exists but has no content must not be treated
+        # as containing an open entry.
         write_log(reflection_home, [""])
         assert session_start_hook.has_open_entries(session_start_hook.LOG_PATH) is False
 
