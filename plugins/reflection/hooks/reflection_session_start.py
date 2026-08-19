@@ -5,11 +5,13 @@
 # ///
 
 import json
+import re
 import sys
+from pathlib import Path
 
 INSTRUCTIONS = """## Reflection: passive corrective-moment logging
 
-Throughout this session, watch for moments where you did not meet the user's expectations. There are five trigger types:
+Throughout this session, watch for moments where you did not meet the user's expectations. The trigger types:
 
 1. The user corrects a factual claim you made.
 2. The user says "no", "don't", "stop doing X", or otherwise rejects an action you took or proposed.
@@ -21,27 +23,95 @@ The instant one of these occurs, immediately append one Markdown entry to `~/.cl
 
 - An ISO-8601 timestamp
 - A one-line context note (the active skill, project, and/or cwd, if identifiable)
-- The trigger type (one of the five above)
+- The trigger type (one of the types above)
 - A one-line quote or close paraphrase of what the user said
 
 This logging is entirely passive: never interrupt the current task to log an entry, never ask the user permission to log, and never mention that you are logging unless asked. Simply append the entry and continue exactly what you were doing.
 
 The user can run `/reflect` at any time to review the accumulated log and get a synthesized report — you do not need to do anything else with this log yourself."""
 
+NUDGE = """## Unreviewed reflection log entries
 
-def main():
+`~/.claude/reflection/log.md` has at least one entry that has not been reviewed yet. Run `/reflect` now to synthesize it into a report."""
+
+LOG_PATH = Path.home() / ".claude" / "reflection" / "log.md"
+
+# Only a top-level entry (`- **{ISO timestamp}** | ...`) carries a status
+# segment. Legacy multi-line entries use unrelated sub-bullets ("- Context:",
+# "- Quote:") that must not be mistaken for entries in their own right.
+ENTRY_PREFIX = re.compile(r"^- \*\*[^*]+\*\*\s*\|")
+
+
+def has_open_entries(log_path):
+    """At least one log entry still needs review: status segment says open,
+    or the entry has no status segment at all (written before status
+    tracking existed). A fully-reported log must not trigger nudges."""
+    if not log_path.exists():
+        return False
+    for raw_line in log_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not ENTRY_PREFIX.match(line):
+            continue
+        match = re.search(r"\|\s*status:\s*([A-Za-z]+)", line)
+        if match is None or match.group(1).lower() == "open":
+            return True
+    return False
+
+
+def parse_mode(argv):
+    """Which hooks.json registration invoked this run. hooks.json gates the
+    nudge to the "startup" source via its own matcher, so this script no
+    longer needs to inspect the SessionStart payload's source field itself —
+    it only needs to know which half of the split behavior to run. Falls
+    back to "instructions" (the must-always-ship half) on anything
+    unrecognized or missing, rather than risking a silently dropped hook."""
+    for arg in argv[1:]:
+        if arg == "--mode=nudge":
+            return "nudge"
+        if arg == "--mode=instructions":
+            return "instructions"
+    return "instructions"
+
+
+def emit(context):
     try:
-        json.load(sys.stdin)
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",
-                "additionalContext": INSTRUCTIONS,
+                "additionalContext": context,
             }
         }
         print(json.dumps(output))
-        sys.exit(0)
     except Exception:
+        pass
+
+
+def main():
+    # Consume stdin even though neither mode currently needs the payload,
+    # so the hook doesn't leave Claude Code's write blocked on a reader.
+    try:
+        json.load(sys.stdin)
+    except Exception:
+        pass
+
+    mode = parse_mode(sys.argv)
+
+    if mode == "nudge":
+        # hooks.json's "startup" matcher already restricts this registration
+        # to the one SessionStart event that begins a real session; resume/
+        # clear/compact/fork never invoke this mode at all.
+        try:
+            if has_open_entries(LOG_PATH):
+                emit(NUDGE)
+        except Exception:
+            pass
         sys.exit(0)
+
+    # instructions mode: must always ship (CLAUDE.md: "always present,
+    # regardless of log state"), on every SessionStart source — this
+    # registration carries no matcher, so it fires unconditionally.
+    emit(INSTRUCTIONS)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

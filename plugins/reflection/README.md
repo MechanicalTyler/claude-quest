@@ -4,13 +4,12 @@ Passively watches every Claude Code session for moments the agent didn't meet ex
 
 ## What it does
 
-- **SessionStart hook**: injects standing watch-and-log instructions into every session (with or without any other plugin installed). The agent watches for five trigger types and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission.
-- **Stop hook**: at what looks like a natural end of session — either a sign-off phrase like "bye" / "that's all" / "done for now", or a project-management story observed moving to a done-type state in the session's own transcript — blocks the session from ending and asks the agent to run `/reflect` first, but only while at least one entry in `~/.claude/reflection/log.md` is still `open`. Fires once per session, so a false-positive match only costs one nudge.
+- **SessionStart hook**: registered twice in `hooks.json`, both invoking `reflection_session_start.py` with a different `--mode`. The no-matcher registration (`--mode=instructions`) injects standing watch-and-log instructions on every SessionStart event (with or without any other plugin installed). SessionStart fires on `startup`, `resume`, `clear`, `compact`, and `fork` — multiple times within one real session, not once — so the base instructions are re-emitted each time by design. The agent watches for the trigger types described below and, the moment one occurs, appends an entry to the log — silently, without interrupting the current task or asking permission. The second registration (`--mode=nudge`), gated by `matcher: "startup"` in `hooks.json`, checks `~/.claude/reflection/log.md` for at least one entry that is still `open` (or has no status segment) and, when found, emits a `/reflect` nudge — `resume`, `clear`, `compact`, and `fork` never invoke this registration at all, since `hooks.json`'s matcher restricts it to `startup`.
 - **`/reflect` skill**: reads the log, catches up on anything from the live conversation or the most recent prior session in the current project that wasn't already captured, groups recurring problems, attributes each to a specific root cause, and writes a self-contained HTML report.
 
 ## Trigger types
 
-The hook watches for five kinds of corrective moment:
+The hook watches for the following kinds of corrective moment:
 
 1. The user corrects a factual claim.
 2. The user says "no" / "don't" / "stop doing X".
@@ -39,9 +38,9 @@ Each report groups findings by root cause, and every finding is attributed to ei
 
 `/reflect` never edits another skill's or plugin's files — it only appends catch-up entries to the log and writes its own report.
 
-## Session-end nudge
+## Session-start nudge
 
-Completion is detected by either of two signals: a sign-off heuristic (regex over phrases like "bye", "that's all", "done for now") in the last user message, or a done-transition — the transcript shows a story/task update tool call plus a done-type state in a tool result, meaning the session ended by moving a story to Done rather than by saying goodbye. Both are imprecise by nature — they can miss a real completion, or match a session that isn't actually ending. Each session gets at most one nudge (tracked at `~/.claude/reflection/state/{session_id}.nudged`), so a false match costs one extra "run /reflect?" prompt, not a repeating nag. A log whose entries are all `reported` never nudges — there is nothing left to reflect on.
+Rather than guessing when a session is "ending", the nudge fires at the start of the next session: `hooks.json` registers the `--mode=nudge` invocation with `matcher: "startup"`, so it only ever runs on the one event that begins a real session. That invocation checks whether `~/.claude/reflection/log.md` has at least one entry that is still `open` (or has no status segment at all) and, if so, emits a standalone `/reflect` nudge. A log whose entries are all `reported` never nudges — there is nothing left to reflect on. SessionStart also fires on `resume`, `clear`, `compact`, and `fork` — those are continuations of a session the user already started, not a new one, so `hooks.json`'s matcher never invokes the nudge registration for them; the separate `--mode=instructions` registration (no matcher) still emits the base watch-and-log instructions on every one of those events.
 
 ## Installation
 

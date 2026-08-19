@@ -29,7 +29,7 @@
       "name": "dev-workflow",
       "source": "./plugins/dev-workflow",
       "description": "Role-based development workflow subagents with pluggable PM and notes adapters",
-      "version": "2.41.6"
+      "version": "2.42.0"
     },
     {
       "name": "guardrails-git",
@@ -64,8 +64,8 @@
     {
       "name": "reflection",
       "source": "./plugins/reflection",
-      "description": "Passively watches every session for moments the agent didn't meet expectations, logs them, nudges /reflect at session end, and synthesizes root-cause-attributed improvement reports",
-      "version": "0.6.0"
+      "description": "Passively watches every session for moments the agent didn't meet expectations, logs them, nudges /reflect at session start, and synthesizes root-cause-attributed improvement reports",
+      "version": "0.9.0"
     }
   ]
 }

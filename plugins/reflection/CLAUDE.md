@@ -4,24 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**reflection** is a standalone Claude plugin (v0.4.0) that tracks agent-performance inconsistencies across sessions. It has no hard dependency on `dev-workflow` and makes no changes to it, so it works in any session, with or without other plugins installed. The one exception is a runtime-detected, optional soft integration in the `reflect` skill's remediation offer: if an installed skill matches a story-creation naming pattern (e.g. `*:create-story`), reflect may offer to invoke it directly to self-file a bundled ticket — falling back to its standalone "file it yourself" flow whenever no such skill is detected.
+**reflection** is a standalone Claude plugin that tracks agent-performance inconsistencies across sessions. It has no hard dependency on `dev-workflow` and makes no changes to it, so it works in any session, with or without other plugins installed. The one exception is a runtime-detected, optional soft integration in the `reflect` skill's remediation offer: if an installed skill matches a story-creation naming pattern (e.g. `*:create-story`), reflect may offer to invoke it directly to self-file a bundled ticket — falling back to its standalone "file it yourself" flow whenever no such skill is detected.
 
 ## Architecture
 
 ### SessionStart hook
 
-`hooks/reflection_session_start.py` runs on every session start and emits a fixed `additionalContext` payload (via `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "..."}}`) instructing the agent to watch for five trigger types throughout the session (correction of a claim, "no"/"don't"/"stop doing X", a repeated/rephrased request, pushback on an approach, visible frustration/escalation) and log each occurrence immediately and passively — no task interruption, no permission-asking. Like the notifications plugin's hooks, it degrades silently (exit 0, no output) on any error.
+`hooks/reflection_session_start.py` is registered twice in `hooks/hooks.json` under `SessionStart`, each invocation passing a different `--mode` flag, so `hooks.json`'s own matcher mechanism — not an in-script check — decides which half of the behavior runs on which event:
 
-### Stop hook (session-end `/reflect` nudge)
+- **No matcher, `--mode=instructions`**: fires on every SessionStart event (`startup`, `resume`, `clear`, `compact`, `fork`) and emits an `additionalContext` payload (via `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "..."}}`) instructing the agent to watch for several trigger types throughout the session (correction of a claim, "no"/"don't"/"stop doing X", a repeated/rephrased request, pushback on an approach, visible frustration/escalation) and log each occurrence immediately and passively — no task interruption, no permission-asking. These base instructions are always present, regardless of log state, because this registration carries no matcher restriction.
+- **`matcher: "startup"`, `--mode=nudge`**: fires only on the `startup` event and checks `has_open_entries(LOG_PATH)` — true when `~/.claude/reflection/log.md` has at least one entry whose `status` segment is `open` or absent (entries written before status tracking existed). When true, it emits a standalone `/reflect` nudge telling the agent to run `/reflect` now to synthesize the unreviewed entries into a report. A fully-`reported` log never nudges. `resume`, `clear`, `compact`, and `fork` are continuations of a session the user already started, not the start of a new one — `hooks.json`'s `matcher: "startup"` means this registration is never even invoked for them, so the base instructions from the other registration survive those events (e.g. compaction) without risk of the nudge leaking into them.
 
-`hooks/reflection_stop.py` fires at the end of every turn. It only acts when ALL of these hold: `stop_hook_active` is not set (avoids looping on its own block), the current session hasn't already been nudged (per-session marker at `~/.claude/reflection/state/{session_id}.nudged`), a completion signal is detected (see below), and `~/.claude/reflection/log.md` has at least one entry whose `status` segment is `open` or absent — a fully-`reported` log never nudges.
+Both invocations share one script and its `has_open_entries` helper; only the mode dispatch (`parse_mode`, driven by argv rather than the SessionStart payload's `source` field) and the two mutually exclusive output branches differ. Like the notifications plugin's hooks, both branches degrade silently (exit 0, no output) on any error.
 
-Completion detection is dual-signal; either signal alone is enough:
-
-1. **Sign-off phrase** — the last user message matches a sign-off heuristic (e.g. "bye", "that's all", "done for now").
-2. **PM done-transition** — the session's transcript shows a story/task moved to a done-type workflow state: an `mcp__`-prefixed tool call whose name contains an update-ish verb (`update`/`edit`/`transition`/`move`/`set`) and a story/task-ish noun (`story`/`stories`/`task`/`issue`/`ticket`), plus a done-type `type`/`name`/`state` value (`done`/`closed`/`resolved`/`complete`/`completed`, trimmed, case-insensitive) in any tool result — anywhere in the transcript, in any order. This signal is derived purely from parsing the transcript JSONL; the hook makes no MCP calls. It exists because session sc-1242 ended with a story moved to Done via a plain chat instruction and no sign-off phrase, which the old text-only check missed entirely.
-
-When everything holds, it returns `{"decision": "block", "reason": "..."}` to stop the session from ending and tell the agent to run `/reflect` first — the same "block Stop, inject a reason" mechanism `dev-workflow`'s `compact-injector.sh` uses for `/compact`, but via the hook's own JSON decision output rather than tmux injection. Both signals are inherently imprecise heuristics (a regex over closing phrases; name/result pattern-matching over tool calls) and will occasionally miss a real completion or fire on an unrelated match — the per-session marker caps the cost of a false positive to one nudge.
+This replaces the old Stop-hook approach, which guessed at session-ending moments via a sign-off-phrase regex and a PM done-transition scan of the transcript; both signals were inherently imprecise and could miss a real completion or fire mid-session. Moving the trigger to session start removes that guessing, and gating the nudge via `hooks.json`'s `matcher: "startup"` gives an exact once-per-session signal without any marker-file persistence or in-script source inspection.
 
 ### Log file
 
@@ -29,7 +25,7 @@ When everything holds, it returns `{"decision": "block", "reason": "..."}` to st
 
 ### `reflect` skill
 
-`skills/reflect/SKILL.md`, invoked via `/reflect`, runs four phases:
+`skills/reflect/SKILL.md`, invoked via `/reflect`, runs the following phases:
 
 1. **Read the log** — read `~/.claude/reflection/log.md`; if missing/empty, note "no logged entries" and continue. Parse each entry's `status` segment (`open` or `reported (...)`; a missing segment is treated as `open`).
 2. **Catch-up scan** — scan the live conversation for uncaptured trigger moments and append them (each ending with `| status: open`); then locate the most recently modified `.jsonl` transcript under the current project's `~/.claude/projects/` folder (excluding the live session's own file) and scan it too, skipping this part if no other transcript exists.
@@ -44,22 +40,20 @@ The skill never edits any file other than appending catch-up entries to the log 
 
 ```
 hooks/
-  hooks.json                        # SessionStart + Stop hook registration
-  reflection_session_start.py       # Emits watch-and-log instructions on every session start
-  reflection_stop.py                # Nudges /reflect on a completion signal (sign-off phrase OR PM done-transition), if open log entries exist
+  hooks.json                        # Two SessionStart registrations: no-matcher --mode=instructions, matcher:"startup" --mode=nudge
+  reflection_session_start.py       # --mode=instructions: watch-and-log instructions on every session start. --mode=nudge: conditional /reflect nudge when open log entries exist
 skills/
   reflect/
     SKILL.md                        # /reflect: read -> catch-up scan -> synthesize -> report
 tests/
-  conftest.py                       # Shared pytest fixtures (transcript/log builders)
-  test_reflection_stop.py           # Unit tests for the Stop hook's gating logic
-  fixtures/                         # Transcript JSONL fixtures for the done-transition tests
+  conftest.py                       # Shared pytest fixtures (HOME redirect, hook module loader)
+  test_reflection_session_start.py  # Unit tests for both hook modes, the open-entries gate, and the hooks.json matcher registration itself
 .claude-plugin/
   plugin.json                       # Plugin manifest
 ```
 
 ## Working on This Codebase
 
-Content is hook scripts plus a Markdown skill definition — there is no compiled code and no build step. The Stop hook has real branching logic (dual-signal detection, open-entries gating) covered by a pytest suite: run `python3 -m pytest plugins/reflection/tests/` from the repo root. The reflect skill's behavior is agent-driven at runtime, not deterministic code, so it remains verified through manual scenarios rather than unit tests. When changing behavior, bump the version in `.claude-plugin/plugin.json`.
+Content is hook scripts plus a Markdown skill definition — there is no compiled code and no build step. The SessionStart hook has real branching logic (open-entries gating for the nudge) covered by a pytest suite: run `python3 -m pytest plugins/reflection/tests/` from the repo root. The reflect skill's behavior is agent-driven at runtime, not deterministic code, so it remains verified through manual scenarios rather than unit tests. When changing behavior, bump the version in `.claude-plugin/plugin.json`.
 
 **Do not** add a hard dependency on or required integration with `plugins/dev-workflow` — this plugin is deliberately standalone so it works in any session. The `reflect` skill's remediation offer may probe for and optionally invoke an already-installed story-creation-capable skill (runtime-detected by naming pattern, e.g. `*:create-story`) to self-file a bundled ticket; this soft integration must always degrade cleanly to the standalone "file it yourself" flow when no such skill is installed, and must never become a required import or hard dependency on any specific plugin.

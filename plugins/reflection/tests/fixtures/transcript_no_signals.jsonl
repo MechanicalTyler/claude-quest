@@ -1,2 +1,0 @@
-{"type":"user","message":{"role":"user","content":"how does the parser handle commas?"}}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"It splits on commas and trims whitespace."}]}}
