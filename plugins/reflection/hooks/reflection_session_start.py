@@ -37,6 +37,10 @@ NUDGE = """
 `~/.claude/reflection/log.md` has at least one entry that has not been reviewed yet. Run `/reflect` now to synthesize it into a report."""
 
 LOG_PATH = Path.home() / ".claude" / "reflection" / "log.md"
+# Per-session-id marker files, not an in-memory or "once ever" flag: SessionStart
+# fires on startup, resume, clear, compact, and fork within what a user considers
+# one session, so a durable per-session-id marker is required to nudge at most
+# once per real session.
 NUDGE_DIR = Path.home() / ".claude" / "reflection" / "state"
 
 # Only a top-level entry (`- **{ISO timestamp}** | ...`) carries a status
