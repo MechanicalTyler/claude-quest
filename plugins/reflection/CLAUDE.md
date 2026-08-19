@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**reflection** is a standalone Claude plugin (v0.4.0) that tracks agent-performance inconsistencies across sessions. It has no hard dependency on `dev-workflow` and makes no changes to it, so it works in any session, with or without other plugins installed. The one exception is a runtime-detected, optional soft integration in the `reflect` skill's remediation offer: if an installed skill matches a story-creation naming pattern (e.g. `*:create-story`), reflect may offer to invoke it directly to self-file a bundled ticket — falling back to its standalone "file it yourself" flow whenever no such skill is detected.
+**reflection** is a standalone Claude plugin that tracks agent-performance inconsistencies across sessions. It has no hard dependency on `dev-workflow` and makes no changes to it, so it works in any session, with or without other plugins installed. The one exception is a runtime-detected, optional soft integration in the `reflect` skill's remediation offer: if an installed skill matches a story-creation naming pattern (e.g. `*:create-story`), reflect may offer to invoke it directly to self-file a bundled ticket — falling back to its standalone "file it yourself" flow whenever no such skill is detected.
 
 ## Architecture
 

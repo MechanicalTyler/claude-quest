@@ -41,8 +41,8 @@ LOG_PATH = Path.home() / ".claude" / "reflection" / "log.md"
 
 def has_open_entries(log_path):
     """At least one log entry still needs review: status segment says open,
-    or the entry has no status segment at all (written before sc-1255 added
-    status tracking). A fully-reported log must not trigger nudges."""
+    or the entry has no status segment at all (written before status
+    tracking existed). A fully-reported log must not trigger nudges."""
     if not log_path.exists():
         return False
     for raw_line in log_path.read_text(encoding="utf-8").splitlines():
