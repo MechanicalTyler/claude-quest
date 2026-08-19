@@ -81,10 +81,22 @@ def main():
     try:
         payload = json.load(sys.stdin)
         session_id = payload.get("session_id", "") if isinstance(payload, dict) else ""
-        context = INSTRUCTIONS
+    except Exception:
+        session_id = ""
+
+    # Base instructions must always ship (CLAUDE.md: "always present, regardless
+    # of log state") even if the nudge decision itself fails partway through —
+    # e.g. a corrupt log.md or an unwritable state dir must only cost the nudge,
+    # never the instructions.
+    context = INSTRUCTIONS
+    try:
         if has_open_entries(LOG_PATH) and not already_nudged(session_id):
             context += NUDGE
             mark_nudged(session_id)
+    except Exception:
+        pass
+
+    try:
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",
@@ -92,9 +104,9 @@ def main():
             }
         }
         print(json.dumps(output))
-        sys.exit(0)
     except Exception:
-        sys.exit(0)
+        pass
+    sys.exit(0)
 
 
 if __name__ == "__main__":
