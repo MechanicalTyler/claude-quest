@@ -16,14 +16,14 @@ Schema:
   "repos": {
     "api": {
       "pr_number": 42,
-      "stage": "review-loop",
+      "stage": "review-pr",
       "review_loop_count": 1,
       "test_loop_count": 0,
       "next_action": "re-dispatch review-pr subagent for PR 42"
     },
     "web": {
       "pr_number": 43,
-      "stage": "test-loop",
+      "stage": "review-pr",
       "review_loop_count": 0,
       "test_loop_count": 1,
       "next_action": "re-dispatch test-pr subagent for PR 43"
@@ -40,6 +40,17 @@ name" convention. A single-repo story's `repos` map has exactly one entry and be
 identically to the old single-valued fields, with no special-casing required by consuming
 code paths.
 
+**Stage vocabulary.** `stage` reaches exactly four values in practice: `"write-spec"`,
+`"start-development"`, `"review-pr"`, and `"done"`. `stage` advances to `"review-pr"` once
+a PR exists and stays there through *both* the review loop and the test loop that follow
+it — `review_loop_count` and `test_loop_count` are what distinguish which loop a repo is
+currently in while `stage` reads `"review-pr"`. `stage` advances to its terminal `"done"`
+only when that repo's test-pr passes. This is a distinct, smaller vocabulary from the
+entry-detection `prs=` tuple's `stage` field (`finished` / `test-pr` / `review-pr`, see
+`full-cycle/SKILL.md`'s Resume / Entry Detection); when initializing a checkpoint entry
+from a parsed tuple, map the tuple's `stage` to the checkpoint's: `finished` → `"done"`,
+`test-pr` or `review-pr` → `"review-pr"`.
+
 ### Write points
 
 full-cycle writes the checkpoint at **every** stage boundary and loop iteration. Every
@@ -51,6 +62,14 @@ top-level field:
   field is set at story creation, so it is available immediately, independent of any
   later on-disk path resolution). Each entry starts as `pr_number: null, stage:
   "write-spec", review_loop_count: 0, test_loop_count: 0`.
+- **During entry-detection resume, before running any stage:** if the checkpoint has no
+  `repos` map yet, or is missing an entry for a repo with a linked PR — the case on every
+  cold resume by a bare story ID, since create-story never runs on that path — initialize
+  the missing entries from the parsed `prs=` tuples: `pr_number` from the tuple's `pr`,
+  `stage` mapped per the Stage vocabulary note above, and `review_loop_count: 0,
+  test_loop_count: 0` (loop counts are not recoverable from GitHub, so a cold resume
+  restarts them at 0). This fills gaps only — it never overwrites an entry the checkpoint
+  already has counts for.
 - **After the user approves the spec in write-spec** (before start-development begins) —
   record the top-level `approval_text` (the user's literal approval message, verbatim)
   and `approval_timestamp` (ISO-8601 time the approval was given). These two fields are
@@ -58,8 +77,8 @@ top-level field:
   to dispatch start-development without them (see full-cycle's "Hard gate — recorded
   approval"). Also update every existing repo entry's `stage` to `"start-development"`
   (still `pr_number: null` — no PR exists yet).
-- **After the start-development subagent returns:** for each PR it resolved, update that
-  repo's entry with the real `pr_number` and advance `stage` to `"review-pr"`.
+- **After the start-development subagent returns:** for each `repo:pr` pair it resolved,
+  update that repo's entry with the real `pr_number` and advance `stage` to `"review-pr"`.
 - **After each review-loop / test-loop iteration:** increment that PR's repo entry's
   `review_loop_count` / `test_loop_count`.
 - **After a given PR's test-pr passes:** advance that repo's entry's `stage` to `"done"`.

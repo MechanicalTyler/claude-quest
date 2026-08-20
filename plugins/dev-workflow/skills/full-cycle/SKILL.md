@@ -135,23 +135,49 @@ Gather the signals (story state, linked PRs, review decision, test labels) by
 (model: resolved from `models.stages.entry-detection` → `models.implementation` → default
 `sonnet`). Do not run this read inline. The dispatch prompt is:
 
-> Fetch story {story-id} via the Shortcut MCP tool. Find every linked PR via the
-> PM adapter's "Finding PRs linked to a story" instructions (fall back to
-> `gh pr list --state all --search "{story_id}"`). For each linked PR, resolve its
-> repo/service name from the PR's GitHub owner/repo (matching `repo-discovery.md`'s
-> naming convention), and read its `reviewDecision` and labels (`tested-in-dev`,
-> `tests-failing`). Return **one line** listing one tuple per linked PR:
+> Fetch story {story-id} via the Shortcut MCP tool and read its workflow state (the row
+> 1-3 signal). Find every linked PR via the PM adapter's "Finding PRs linked to a story"
+> instructions (fall back to `gh pr list --state all --search "{story_id}"`). For each
+> linked PR, resolve its repo/service name from the PR's GitHub owner/repo (matching
+> `repo-discovery.md`'s naming convention), and read its `reviewDecision` and whether it
+> carries the `tested-in-dev` / `tests-failing` labels. Return **one line**:
 >
-> `prs=<repo:pr:stage:review:labels|repo:pr:stage:review:labels|...>` (or `prs=none` when
-> no PR is linked yet). Each tuple's `stage` is that PR's terminal single-word target
-> action from the Resume / Entry Detection table rows 4-8 — `finished` for row 4,
-> `test-pr` for row 5, `review-pr` for row 6, `test-pr` for row 7, `review-pr` for row 8 —
-> never the row's full descriptive text.
+> `story_state=<state or none> prs=<repo:pr:stage:review:tested_in_dev:tests_failing|repo:pr:stage:review:tested_in_dev:tests_failing|...>`
+> (use `prs=none` when no PR is linked yet). `story_state` carries the PM story's workflow
+> state verbatim, or `none` if the story could not be found — this is the only channel
+> that carries rows 1-3 (no story / no spec / ready-for-dev-no-PR), so it MUST always be
+> present even when `prs=none`. Each tuple has exactly six colon-separated fields, in this
+> order, and no field may contain arbitrary GitHub text (this is what keeps the record
+> unforgeable — no field can contain a `:` or `|`):
+> - `repo` — the resolved service/repo name (never raw label text)
+> - `pr` — the PR number (digits only)
+> - `stage` — that PR's terminal single-word target action from the Resume / Entry
+>   Detection table rows 4-8: `finished` for row 4, `test-pr` for row 5, `review-pr` for
+>   row 6, `test-pr` for row 7, `review-pr` for row 8 — never the row's full descriptive
+>   text
+> - `review` — `APPROVED`, `CHANGES_REQUESTED`, `REVIEW_REQUIRED`, or `none` (never raw
+>   text)
+> - `tested_in_dev` — `true` or `false`, whether the PR carries the `tested-in-dev` label
+> - `tests_failing` — `true` or `false`, whether the PR carries the `tests-failing` label
+>
+> Separate multiple tuples with `|`.
 
-Read that line and parse each `repo:pr:stage:review:labels` tuple. Use the Resume / Entry
-Detection table above to map each repo's tuple to that repo's entry stage — each linked PR
-is evaluated independently per repo. Raw PM/GitHub output never enters the main
-orchestrator context.
+Read that line. Parse `story_state` first — it resolves rows 1-3 whenever `prs=none`.
+Then, unless `prs=none`, split on `|` and parse each tuple's six `:`-separated fields.
+**Fail closed:** if any tuple does not have exactly six fields, or `pr`, `tested_in_dev`,
+or `tests_failing` do not match their documented format, the line is unparseable — treat
+this as a hard stop and surface it to the user; never infer `finished` (or any other
+stage) from a malformed tuple. Use the Resume / Entry Detection table above to map
+`story_state` and each repo's tuple to that repo's entry stage — each linked PR is
+evaluated independently per repo. Raw PM/GitHub output never enters the main orchestrator
+context.
+
+**Checkpoint initialization on resume.** Before running any stage, check the story's
+checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`). If it has no `repos` map yet,
+or is missing an entry for a repo with a linked PR (both true on a cold resume by bare
+story ID, which never runs create-story), initialize the missing entries now from the
+parsed `prs=` tuples, per `context-compaction.md`'s resume write point, before proceeding.
+This is the only initialization path when create-story never ran in this session.
 
 When a repo's entry stage is mid-pipeline, run that stage for that repo, then continue
 forward through the remaining stages for that repo in normal order; skip any repo already
@@ -230,11 +256,16 @@ After it returns, **dispatch the Agent tool** with `subagent_type: dev-workflow-
 
 > Find any linked PRs for story `{story_id}` via the PM adapter's "Finding PRs linked to a story"
 > instructions (the subagent attaches the PR to the story on creation), falling back to
-> `gh pr list --state all --search "{story_id}"`. Return **one line**:
+> `gh pr list --state all --search "{story_id}"`. For each linked PR, resolve its
+> repo/service name from the PR's GitHub owner/repo (matching `repo-discovery.md`'s naming
+> convention). Return **one line**:
 >
-> `pr_numbers=<csv or none>`
+> `pr_numbers=<repo:pr,repo:pr,...>` (or `pr_numbers=none` when no PR was found)
 
-Read that one line. Do not rely solely on the subagent's self-reported PR number, and never let raw PM/GitHub JSON enter the main orchestrator context.
+Read that one line and parse each `repo:pr` pair — the repo name is what keys the
+checkpoint's `repos` map entry for that PR. Do not rely solely on the subagent's
+self-reported PR number, and never let raw PM/GitHub JSON enter the main orchestrator
+context.
 
 **State ownership:** start-development owns the "In Development" transition. The orchestrator does not duplicate it.
 
@@ -378,8 +409,9 @@ map, using the stage and key facts at that moment:
 | Moment | Per-repo write | Notes |
 |--------|-----------------|-------|
 | After create-story returns | Initialize one `repos` entry per repo named in the story's "Repos to modify" field | each entry starts `pr_number: null, stage: "write-spec", review_loop_count: 0, test_loop_count: 0` |
+| During entry-detection resume, before running any stage | If the `repos` map is missing, or is missing an entry for a repo with a linked PR, initialize that repo's entry from the parsed `prs=` tuple | `pr_number` from the tuple's `pr`; `stage` mapped from the tuple's `stage` action (`finished`→`"done"`, `test-pr`/`review-pr`→`"review-pr"` — see the stage-vocabulary note in `context-compaction.md`); `review_loop_count: 0, test_loop_count: 0` since loop counts are not recoverable from GitHub on a cold resume. This is the only initialization path when create-story never ran this session; it fills gaps only and never overwrites an already-populated entry |
 | After spec approval gate | Update every existing repo entry's `stage` to `"start-development"` | record top-level `approval_text`/`approval_timestamp`; still `pr_number: null` — no PR exists yet |
-| After start-development subagent returns | For each PR it resolved, update that repo's entry's `pr_number` and advance `stage` to `"review-pr"` | |
+| After start-development subagent returns | For each `repo:pr` pair it resolved, update that repo's entry's `pr_number` and advance `stage` to `"review-pr"` | |
 | After each address-pr-comments + review-pr iteration | Increment that PR's repo entry's `review_loop_count` | |
 | After each address-pr-comments + test-pr iteration | Increment that PR's repo entry's `test_loop_count` | |
 | After test-pr passes | Advance that repo's entry's `stage` to `"done"` | other repos' entries are untouched and continue independently — this repo's final checkpoint |

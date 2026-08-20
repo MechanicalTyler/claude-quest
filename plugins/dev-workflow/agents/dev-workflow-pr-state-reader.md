@@ -18,12 +18,25 @@ review, label, or transition anything. You have no edit tools by design.
 The dispatching orchestrator tells you which read to perform. The three jobs:
 
 **1. Entry / resume detection.** Given a story/task ID, fetch the story (PM adapter / MCP
-or the `tasklist` file when overridden), find any linked PRs (PM adapter's "Finding PRs
-linked to a story" instructions; fall back to
-`gh pr list --state all --search "{story_id}"`), and read each PR's `reviewDecision` and
-labels (`tested-in-dev`, `tests-failing`). Return **one line**:
+or the `tasklist` file when overridden) and read its workflow state, find any linked PRs
+(PM adapter's "Finding PRs linked to a story" instructions; fall back to
+`gh pr list --state all --search "{story_id}"`), and for each linked PR resolve its
+repo/service name from its GitHub owner/repo (matching `repo-discovery.md`'s naming
+convention) and read its `reviewDecision` and whether it carries the `tested-in-dev` /
+`tests-failing` labels. Return **one line**:
 
-> `entry_stage=<stage> pr=<number or none> review=<decision or none> labels=<csv or none>`
+> `story_state=<state or none> prs=<repo:pr:stage:review:tested_in_dev:tests_failing|...>`
+> (or `prs=none` when no PR is linked yet)
+>
+> `story_state` carries the PM story's workflow state verbatim, or `none` if the story
+> could not be found — it must always be present, even when `prs=none`, since it is the
+> only channel that resolves the no-PR resume cases. Each tuple has exactly six
+> colon-separated fields: `repo` (resolved service/repo name), `pr` (number, digits only),
+> `stage` (the PR's terminal single-word target action — `finished`/`test-pr`/`review-pr`,
+> never descriptive text), `review` (`APPROVED`/`CHANGES_REQUESTED`/`REVIEW_REQUIRED`/
+> `none`), `tested_in_dev` (`true`/`false`), `tests_failing` (`true`/`false`). No field
+> carries arbitrary label text, so no field can contain `:` or `|` and no tuple can forge a
+> boundary. Separate multiple tuples with `|`.
 
 **2. Authoritative decision read.** Given a PR, run
 `gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews`, take the most recent review
@@ -34,9 +47,11 @@ labels (`tested-in-dev`, `tests-failing`). Return **one line**:
 **3. PR-number resolution.** Given a story/task ID (dispatched right after
 `start-development` returns, before the resulting PR is reviewed), find any linked PRs via
 the PM adapter's "Finding PRs linked to a story" instructions, falling back to
-`gh pr list --state all --search "{story_id}"`. Return **one line**:
+`gh pr list --state all --search "{story_id}"`. For each linked PR, resolve its
+repo/service name from its GitHub owner/repo (matching `repo-discovery.md`'s naming
+convention). Return **one line**:
 
-> `pr_numbers=<csv or none>`
+> `pr_numbers=<repo:pr,repo:pr,...>` (or `pr_numbers=none` when no PR was found)
 
 Return **only** the requested single line. Never let raw PM/GitHub JSON enter your final
 message — that is the whole point of running this read in an isolated context.
