@@ -237,7 +237,7 @@ The goal: anyone tailing the output can answer "what is it doing right now, and 
 ## File and Command Operations
 
 - **Use Write tool for files** — Never use `cat` or `echo` with redirection to write files
-- **Stay within repository** — Do not `cd` outside the repository directory. The sole exception is `create-story/SKILL.md` Phase 0 step 3 (its Phase 3 deferred re-run included): a temporary, read-only investigative clone made purely to read a named-but-not-locally-found repo, at the scratch location and with the cleanup and validation rules that step documents. No other skill, step, or self-judged "documented, temporary, read-only" excursion qualifies — this is a single named case, not a class.
+- **Stay within repository** — Do not `cd` outside the repository directory. The sole exceptions are `create-story/SKILL.md` Phase 0 step 3 (its Phase 3 deferred re-run included): a temporary, read-only investigative clone made purely to read a named-but-not-locally-found repo, at the scratch location and with the cleanup and validation rules that step documents; and that same file's Contract-Repo Detection subsection, which reuses Phase 0 step 3's procedure at its own separate trigger point to verify a candidate contract-repo name before it is added to `reposToModify`, bounded by that same step's scratch location, cleanup, and validation rules. No other skill, step, or self-judged "documented, temporary, read-only" excursion qualifies — these are named cases, not a class.
 
 ---
 
