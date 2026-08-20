@@ -174,10 +174,15 @@ context.
 
 **Checkpoint initialization on resume.** Before running any stage, check the story's
 checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`). If it has no `repos` map yet,
-or is missing an entry for a repo with a linked PR (both true on a cold resume by bare
-story ID, which never runs create-story), initialize the missing entries now from the
-parsed `prs=` tuples, per `context-compaction.md`'s resume write point, before proceeding.
-This is the only initialization path when create-story never ran in this session.
+or is missing an entry for a repo named in the story's "Repos to modify" field, seed one
+entry per such repo from that field now — `pr_number: null`, `stage` set from
+`story_state` (`"write-spec"` for row 2, `"start-development"` for row 3),
+`review_loop_count: 0, test_loop_count: 0` — per `context-compaction.md`'s resume write
+point. This is what covers a cold resume by bare story ID entering at row 2 or row 3, where
+`prs=none` so there is no tuple to source an entry from. Then, for any repo that does have a
+linked PR, enrich/update its entry from the parsed `prs=` tuples the same way, before
+proceeding. This is the only initialization path when create-story never ran in this
+session — it now covers every resume row (2-8), not only the rows with a linked PR.
 
 When a repo's entry stage is mid-pipeline, run that stage for that repo, then continue
 forward through the remaining stages for that repo in normal order; skip any repo already
@@ -409,7 +414,7 @@ map, using the stage and key facts at that moment:
 | Moment | Per-repo write | Notes |
 |--------|-----------------|-------|
 | After create-story returns | Initialize one `repos` entry per repo named in the story's "Repos to modify" field | each entry starts `pr_number: null, stage: "write-spec", review_loop_count: 0, test_loop_count: 0` |
-| During entry-detection resume, before running any stage | If the `repos` map is missing, or is missing an entry for a repo with a linked PR, initialize that repo's entry from the parsed `prs=` tuple | `pr_number` from the tuple's `pr`; `stage` mapped from the tuple's `stage` action (`finished`→`"done"`, `test-pr`/`review-pr`→`"review-pr"` — see the stage-vocabulary note in `context-compaction.md`); `review_loop_count: 0, test_loop_count: 0` since loop counts are not recoverable from GitHub on a cold resume. This is the only initialization path when create-story never ran this session; it fills gaps only and never overwrites an already-populated entry |
+| During entry-detection resume, before running any stage | If the `repos` map is missing an entry for a repo named in the story's "Repos to modify" field, seed it from that field; then, for any repo that has a linked PR, enrich/update its entry from the parsed `prs=` tuple | Seeded entries (rows 2/3, `prs=none`): `pr_number: null`, `stage` from `story_state` (`"write-spec"` for row 2, `"start-development"` for row 3). Tuple-enriched entries (rows 4-8): `pr_number` from the tuple's `pr`; `stage` mapped from the tuple's `stage` action (`finished`→`"done"`, `test-pr`/`review-pr`→`"review-pr"` — see the stage-vocabulary note in `context-compaction.md`). Both start `review_loop_count: 0, test_loop_count: 0` since loop counts are not recoverable from GitHub on a cold resume. This is the only initialization path when create-story never ran this session; it now covers every resume row (2-8), not only rows with a linked PR; it fills gaps only and never overwrites an already-populated entry |
 | After spec approval gate | Update every existing repo entry's `stage` to `"start-development"` | record top-level `approval_text`/`approval_timestamp`; still `pr_number: null` — no PR exists yet |
 | After start-development subagent returns | For each `repo:pr` pair it resolved, update that repo's entry's `pr_number` and advance `stage` to `"review-pr"` | |
 | After each address-pr-comments + review-pr iteration | Increment that PR's repo entry's `review_loop_count` | |

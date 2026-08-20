@@ -62,14 +62,23 @@ top-level field:
   field is set at story creation, so it is available immediately, independent of any
   later on-disk path resolution). Each entry starts as `pr_number: null, stage:
   "write-spec", review_loop_count: 0, test_loop_count: 0`.
-- **During entry-detection resume, before running any stage:** if the checkpoint has no
-  `repos` map yet, or is missing an entry for a repo with a linked PR — the case on every
-  cold resume by a bare story ID, since create-story never runs on that path — initialize
-  the missing entries from the parsed `prs=` tuples: `pr_number` from the tuple's `pr`,
-  `stage` mapped per the Stage vocabulary note above, and `review_loop_count: 0,
-  test_loop_count: 0` (loop counts are not recoverable from GitHub, so a cold resume
-  restarts them at 0). This fills gaps only — it never overwrites an entry the checkpoint
-  already has counts for.
+- **During entry-detection resume, before running any stage:** initialize or enrich the
+  `repos` map from the entry-detection subagent's result — the case on every cold resume by
+  a bare story ID, since create-story never runs on that path. First, if the checkpoint has
+  no `repos` map yet, or it is missing an entry for a repo named in the story's "Repos to
+  modify" field, seed one entry per such repo from that field (per the note above, this
+  field is available immediately at story creation, independent of `prs=`): `pr_number:
+  null`, `stage` set from `story_state` per the Resume / Entry Detection table —
+  `"write-spec"` for row 2 (no spec / "In Spec" or earlier), `"start-development"` for row 3
+  (spec present / "Ready for Dev", no linked PR) — and `review_loop_count: 0,
+  test_loop_count: 0`. This is what covers rows 2 and 3, where `prs=none` because no PR is
+  linked yet and there is therefore no tuple to source from. Then, whether or not that
+  seeding ran, use the parsed `prs=` tuples to enrich/update the entry for any repo that
+  does have a linked PR: `pr_number` from the tuple's `pr`, `stage` mapped per the Stage
+  vocabulary note above, and `review_loop_count: 0, test_loop_count: 0` if that repo had no
+  prior entry (loop counts are not recoverable from GitHub, so a cold resume restarts them
+  at 0). Both steps fill gaps only — neither overwrites an entry the checkpoint already has
+  counts for.
 - **After the user approves the spec in write-spec** (before start-development begins) —
   record the top-level `approval_text` (the user's literal approval message, verbatim)
   and `approval_timestamp` (ISO-8601 time the approval was given). These two fields are
