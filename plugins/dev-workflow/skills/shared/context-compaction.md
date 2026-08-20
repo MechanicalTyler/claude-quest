@@ -13,40 +13,61 @@ Schema:
 ```json
 {
   "story_id": "sc-1043",
-  "stage": "review-loop",
-  "pr_numbers": [42],
-  "review_loop_count": 1,
-  "test_loop_count": 0,
+  "repos": {
+    "api": {
+      "pr_number": 42,
+      "stage": "review-loop",
+      "review_loop_count": 1,
+      "test_loop_count": 0,
+      "next_action": "re-dispatch review-pr subagent for PR 42"
+    },
+    "web": {
+      "pr_number": 43,
+      "stage": "test-loop",
+      "review_loop_count": 0,
+      "test_loop_count": 1,
+      "next_action": "re-dispatch test-pr subagent for PR 43"
+    }
+  },
   "approval_text": "Approved — proceed with the spec as written.",
   "approval_timestamp": "2026-06-10T16:05:00Z",
-  "next_action": "re-dispatch review-pr subagent for PR 42",
   "updated_at": "2026-06-10T17:30:00Z"
 }
 ```
 
+Each key under `repos` is a service/repo name, matching `repo-discovery.md`'s "service
+name" convention. A single-repo story's `repos` map has exactly one entry and behaves
+identically to the old single-valued fields, with no special-casing required by consuming
+code paths.
+
 ### Write points
 
-full-cycle writes the checkpoint at **every** stage boundary and loop iteration:
+full-cycle writes the checkpoint at **every** stage boundary and loop iteration. Every
+write below updates the correct repo's entry in the `repos` map, except where noted as a
+top-level field:
 
-- After create-story returns a story ID
-- After the user approves the spec in write-spec (before start-development begins) —
-  record `approval_text` (the user's literal approval message, verbatim) and
-  `approval_timestamp` (ISO-8601 time the approval was given). These two fields are the
-  mechanical evidence that the spec-approval gate actually fired; full-cycle refuses to
-  dispatch start-development without them (see full-cycle's "Hard gate — recorded
-  approval").
-- After each stage subagent (start-development, review-pr, test-pr, address-pr-comments) returns
-- After each review-loop iteration (increment `review_loop_count`)
-- After each test-loop iteration (increment `test_loop_count`)
+- **After create-story returns:** initialize one `repos` entry per repo named in the
+  story's "Repos to modify" field (per `repo-discovery.md`'s reconciliation rules — this
+  field is set at story creation, so it is available immediately, independent of any
+  later on-disk path resolution). Each entry starts as `pr_number: null, stage:
+  "write-spec", review_loop_count: 0, test_loop_count: 0`.
+- **After the user approves the spec in write-spec** (before start-development begins) —
+  record the top-level `approval_text` (the user's literal approval message, verbatim)
+  and `approval_timestamp` (ISO-8601 time the approval was given). These two fields are
+  the mechanical evidence that the spec-approval gate actually fired; full-cycle refuses
+  to dispatch start-development without them (see full-cycle's "Hard gate — recorded
+  approval"). Also update every existing repo entry's `stage` to `"start-development"`
+  (still `pr_number: null` — no PR exists yet).
+- **After the start-development subagent returns:** for each PR it resolved, update that
+  repo's entry with the real `pr_number` and advance `stage` to `"review-pr"`.
+- **After each review-loop / test-loop iteration:** increment that PR's repo entry's
+  `review_loop_count` / `test_loop_count`.
+- **After a given PR's test-pr passes:** advance that repo's entry's `stage` to `"done"`.
+  Other repos' entries are untouched and continue independently — this is the terminal
+  state a fully finished repo reaches while a sibling repo can still be mid-loop.
 
 The checkpoint **complements** GitHub/PM state — it stores what GitHub cannot: loop counts and
 the orchestrator's next intended action. GitHub/PM remain authoritative for resume detection.
-
-`stage`, `review_loop_count`, and `test_loop_count` are single-valued even though `pr_numbers`
-is a list. For a multi-repo story whose PRs progress independently, these three fields record
-the **least-advanced PR** (see full-cycle's "Multi-Repo Handling" and its checkpoint-writes
-section) — resume re-enters at that PR's stage, and any more-advanced PR is re-derived from
-GitHub/PM state rather than from this file.
 
 ### Checkpoint write failure
 

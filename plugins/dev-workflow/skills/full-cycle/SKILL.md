@@ -104,7 +104,7 @@ Test Loop.
 
 ## Resume / Entry Detection
 
-The skill is resumable: re-invoking it at any time must enter the pipeline at the correct stage. Determine the entry stage from PM story state, whether a linked PR exists, the PR's review decision, and test-pr's tracking labels. Evaluate top to bottom and enter at the **first** matching stage.
+The skill is resumable: re-invoking it at any time must enter the pipeline at the correct stage. For a multi-repo story, each linked PR is evaluated independently per repo — determine each repo's entry stage from PM story state, whether that repo's PR exists, its review decision, and test-pr's tracking labels. Evaluate top to bottom and enter each repo at the **first** matching stage. The orchestrator resumes each unfinished repo at its own detected stage and skips any repo already at `finished`.
 
 **Process Fidelity applies here (see `standards.md` → "Process Fidelity").** Entry detection selects where the pipeline resumes — it never skips or reorders work: entering at a non-default stage, skipping a stage (including write-spec or its User Approval Gate), or running stages out of the documented order beyond what the table below dictates requires asking the user for explicit permission first, never a silent inference from PR/story state.
 
@@ -115,18 +115,18 @@ The skill is resumable: re-invoking it at any time must enter the pipeline at th
 | 1 | No story yet (no story ID; feature description or empty argument) | **create-story** |
 | 2 | Story exists but no spec is linked, or story state is "In Spec" / earlier | **write-spec** |
 | 3 | Spec present / story "Ready for Dev" and **no** linked PR | **start-development** |
-| 4 | Linked PR carries the `tested-in-dev` label and no `tests-failing` label | **finished** — testing passed; report and stop |
-| 5 | Linked PR carries the `tests-failing` label | **address-pr-comments → test-pr** (test loop) |
-| 6 | Linked PR `reviewDecision` is `CHANGES_REQUESTED` (and no `tests-failing` label) | **address-pr-comments → review-pr** (review loop) |
-| 7 | Linked PR is review-approved with no `tested-in-dev`/`tests-failing` label | **test-pr** |
-| 8 | Linked PR exists but has no review decision yet (`REVIEW_REQUIRED`/null) | **review-pr** |
+| 4 | A repo's linked PR carries the `tested-in-dev` label and no `tests-failing` label | **finished** — testing passed for that repo; report and skip it |
+| 5 | A repo's linked PR carries the `tests-failing` label | **address-pr-comments → test-pr** (test loop) for that repo |
+| 6 | A repo's linked PR `reviewDecision` is `CHANGES_REQUESTED` (and no `tests-failing` label) | **address-pr-comments → review-pr** (review loop) for that repo |
+| 7 | A repo's linked PR is review-approved with no `tested-in-dev`/`tests-failing` label | **test-pr** for that repo |
+| 8 | A repo's linked PR exists but has no review decision yet (`REVIEW_REQUIRED`/null) | **review-pr** for that repo |
 
-How to gather each signal:
+How to gather each signal, evaluated independently per repo:
 
 1. **Story state:** fetch the story via the PM adapter; read its workflow state. Treat it as a coarse, informational signal only — the plugin's built-in stages do **not** set a "Dev Complete" (or equivalent terminal) state, so resume detection must not depend on one. (A particular PM adapter may add such a transition; if present it corroborates the label, but the label is authoritative.)
-2. **Linked PR:** use the PM adapter's "Finding PRs linked to a story" instructions. If none is linked there, fall back to `gh pr list --state all --search "{story_id}"`.
+2. **Linked PR (per repo):** use the PM adapter's "Finding PRs linked to a story" instructions to find every linked PR, then resolve each PR's repo/service name from its GitHub owner/repo, matching `repo-discovery.md`'s naming convention. If none is linked there, fall back to `gh pr list --state all --search "{story_id}"`.
 3. **Review decision:** `gh pr view {PR_NUMBER} --json reviewDecision` for the aggregate, or the latest review's `state` (see Reading the Authoritative Review Decision below).
-4. **Test outcome:** test-pr applies a `tested-in-dev` (passed) or `tests-failing` (failed) label on every run (see "test-pr label requirement" below). These labels — not review recency or `reviewDecision` — are the durable signal that distinguishes the test stage from the review stage. If a review-approved PR carries **neither** label, treat it as **not yet tested** (row 7) and state that assumption to the user.
+4. **Test outcome:** test-pr applies a `tested-in-dev` (passed) or `tests-failing` (failed) label on every run (see "test-pr label requirement" below). These labels — not review recency or `reviewDecision` — are the durable signal that distinguishes the test stage from the review stage. If a review-approved PR carries **neither** label, treat that repo as **not yet tested** (row 7) and state that assumption to the user.
 
 ### Entry detection subagent
 
@@ -135,17 +135,28 @@ Gather the signals (story state, linked PRs, review decision, test labels) by
 (model: resolved from `models.stages.entry-detection` → `models.implementation` → default
 `sonnet`). Do not run this read inline. The dispatch prompt is:
 
-> Fetch story {story-id} via the Shortcut MCP tool. Find any linked PRs via the
+> Fetch story {story-id} via the Shortcut MCP tool. Find every linked PR via the
 > PM adapter's "Finding PRs linked to a story" instructions (fall back to
-> `gh pr list --state all --search "{story_id}"`). If a PR exists, read its
-> `reviewDecision` and labels (`tested-in-dev`, `tests-failing`). Return **one line**:
+> `gh pr list --state all --search "{story_id}"`). For each linked PR, resolve its
+> repo/service name from the PR's GitHub owner/repo (matching `repo-discovery.md`'s
+> naming convention), and read its `reviewDecision` and labels (`tested-in-dev`,
+> `tests-failing`). Return **one line** listing one tuple per linked PR:
 >
-> `entry_stage=<stage> pr=<number or none> review=<decision or none> labels=<csv or none>`
+> `prs=<repo:pr:stage:review:labels|repo:pr:stage:review:labels|...>` (or `prs=none` when
+> no PR is linked yet). Each tuple's `stage` is that PR's terminal single-word target
+> action from the Resume / Entry Detection table rows 4-8 — `finished` for row 4,
+> `test-pr` for row 5, `review-pr` for row 6, `test-pr` for row 7, `review-pr` for row 8 —
+> never the row's full descriptive text.
 
-Read that one line. Use the Resume / Entry Detection table above to map it to an entry
-stage. Raw PM/GitHub output never enters the main orchestrator context.
+Read that line and parse each `repo:pr:stage:review:labels` tuple. Use the Resume / Entry
+Detection table above to map each repo's tuple to that repo's entry stage — each linked PR
+is evaluated independently per repo. Raw PM/GitHub output never enters the main
+orchestrator context.
 
-When the entry stage is mid-pipeline, run that stage, then continue forward through the remaining stages in normal order. State the detected entry stage to the user before proceeding.
+When a repo's entry stage is mid-pipeline, run that stage for that repo, then continue
+forward through the remaining stages for that repo in normal order; skip any repo already
+at `finished`. State each repo's detected entry stage to the user before proceeding — not
+a single story-wide stage.
 
 ### test-pr label requirement
 
@@ -361,20 +372,19 @@ message wording. This section describes when full-cycle calls those procedures.
 ### Checkpoint writes
 
 Write the checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`) at every stage
-boundary and loop iteration, using the stage and key facts at that moment:
+boundary and loop iteration. Each write updates the correct repo's entry in the `repos`
+map, using the stage and key facts at that moment:
 
-| Moment | `stage` value | Notes |
-|--------|---------------|-------|
-| After create-story returns | `"write-spec"` | `story_id` now known |
-| After spec approval gate | `"start-development"` | record `approval_text`/`approval_timestamp` |
-| After start-development subagent returns | `"review-pr"` | record `pr_numbers` |
-| After each address-pr-comments + review-pr iteration | `"review-loop"` | increment `review_loop_count` |
-| After each address-pr-comments + test-pr iteration | `"test-loop"` | increment `test_loop_count` |
-| After test-pr passes | `"done"` | final checkpoint |
+| Moment | Per-repo write | Notes |
+|--------|-----------------|-------|
+| After create-story returns | Initialize one `repos` entry per repo named in the story's "Repos to modify" field | each entry starts `pr_number: null, stage: "write-spec", review_loop_count: 0, test_loop_count: 0` |
+| After spec approval gate | Update every existing repo entry's `stage` to `"start-development"` | record top-level `approval_text`/`approval_timestamp`; still `pr_number: null` — no PR exists yet |
+| After start-development subagent returns | For each PR it resolved, update that repo's entry's `pr_number` and advance `stage` to `"review-pr"` | |
+| After each address-pr-comments + review-pr iteration | Increment that PR's repo entry's `review_loop_count` | |
+| After each address-pr-comments + test-pr iteration | Increment that PR's repo entry's `test_loop_count` | |
+| After test-pr passes | Advance that repo's entry's `stage` to `"done"` | other repos' entries are untouched and continue independently — this repo's final checkpoint |
 
 If a checkpoint write fails, surface the error to the user and continue — do not abort.
-
-**Multi-repo note.** The checkpoint's `stage`, `review_loop_count`, and `test_loop_count` are single-valued, but a multi-repo story's PRs progress independently (see Multi-Repo Handling) and can be in different stages/loops at once. In that case these fields record the **least-advanced PR** — the one furthest from `done` — and the per-PR cycle cap in the Loop Safety Guard applies per PR, not to this single persisted counter. This is safe for resume: re-entering at the least-advanced PR's stage/count is always correct, and any more-advanced PR is immediately detected as already past that point from GitHub/PM state per Resume/Entry Detection.
 
 ### High-context handoff
 
