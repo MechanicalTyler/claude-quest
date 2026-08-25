@@ -369,7 +369,7 @@ Because review-pr and test-pr both submit reviews on the same PR (and as the sam
 
 ## Loop Safety Guard
 
-Neither the review loop nor the test loop may run forever. Track an attempt count per loop, **per PR** — when a story spans multiple repos/PRs (see Multi-Repo Handling), each PR's review loop and each PR's test loop has its own independent 3-cycle cap; one PR hitting the cap does not stop another PR's loop. After **3** fix-and-recheck cycles for a given PR's loop without reaching approval/passing, **stop that PR's loop** and surface the situation to the user with: the PR number, the outstanding review/test feedback, and the cycle count. Do not continue looping that PR. Other PRs' loops continue independently. *[Inference — not specified in the story; included as a correctness safeguard for an automated loop.]*
+Neither the review loop nor the test loop may run forever. Track an attempt count per loop, **per PR** — when a story spans multiple repos/PRs (see Multi-Repo Handling), each PR's review loop and each PR's test loop has its own independent 3-cycle cap; one PR hitting the cap does not stop another PR's loop. After **3** fix-and-recheck cycles for a given PR's loop without reaching approval/passing, **stop that PR's loop** and surface the situation to the user with: the PR number, the outstanding review/test feedback, and the cycle count — and ask whether the user wants to authorize more cycles. Do not continue looping that PR unless the user, in this session, explicitly authorizes additional cycles for this loop (see `shared/standards.md` → Process Fidelity). Other PRs' loops continue independently. *[Inference — not specified in the story; included as a correctness safeguard for an automated loop.]*
 
 ---
 
