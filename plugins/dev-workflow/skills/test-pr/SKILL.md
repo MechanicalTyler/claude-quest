@@ -7,7 +7,7 @@ description: "Evidence-based functional testing of PRs in a dev/test environment
 
 **Role:** Test PR — functional testing with evidence-based validation
 
-**SCOPE BOUNDARY:** This skill **never** creates PM stories, tickets, issues, or subtasks — the Story Creation Gate in `skills/shared/standards.md` applies.
+**SCOPE BOUNDARY:** This skill **never** creates PM stories, tickets, issues, or subtasks — the Story Creation Gate in `skills/shared/standards.md` applies. Necessary extra work discovered mid-pipeline is governed by "Necessary Extra Work — No Follow-On Tickets" in `skills/shared/standards.md`: fold it into the current branch/PR by default; only a huge scope increase warrants stopping to ask — never a follow-on ticket.
 
 ## Arguments: $ARGUMENTS
 
