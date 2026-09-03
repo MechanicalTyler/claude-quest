@@ -261,9 +261,29 @@ Questions are a last resort — only ask when **all** of these are true:
 - Do not surface "implicit requirements" and treat them as work items — if something truly seems missing, flag it as an `[Open Question]` for the user to decide, do not include it in the deliverable
 - "Targeted improvements" to surrounding code are out of scope unless the user specifically requested them
 - Brainstorming should identify risks and ambiguities in the *stated* requirements — not generate new requirements or expand what was asked for
-- If you discover something that arguably "should" be done but wasn't requested: note it briefly to the user at the end. Do not act on it
+- If you discover something that arguably "should" be done but wasn't requested: note it briefly to the user at the end. Do not act on it — unless it is *necessary* work as defined by "Necessary Extra Work — No Follow-On Tickets" below, which that rule carves out of this instruction and folds into the current branch/PR
 
 **The test:** Before including any work item, ask: "Did the user or story explicitly ask for this?" If the answer is no, leave it out.
+
+---
+
+## Necessary Extra Work — No Follow-On Tickets
+
+**Necessary extra work discovered mid-pipeline is folded into the current branch/PR by default — never deferred to a follow-on ticket.**
+
+This rule governs start-development, review-pr, address-pr-comments, and test-pr when they discover work outside the story's stated scope that is *necessary* — required for the current story/PR to be correct, complete, or safe. Examples: a bug in the code path being changed, a gap the change exposes, a fix the change depends on.
+
+- **Necessary vs. speculative** — "Necessary" means the current story/PR is not correct, complete, or safe without the work. That is distinct from Scope Discipline's "arguably should be done" case — a speculative, unrequested nice-to-have — which stays out of scope exactly as Scope Discipline states. Scope Discipline still governs the speculative case.
+- **Default: include** — Fold the necessary work into the current branch/PR as a bonus. Do not defer it, flag it as an open question in place of doing it, or leave it for a ticket that may never be written.
+- **Exception: huge scope increase — stop and ask first** — When any of these signals is present, stop and ask the user before proceeding — never silently include and never silently defer:
+  - The necessary work spans a different repo or service than the current PR
+  - It would need its own design/spec/brainstorming pass before it could be implemented
+  - It touches an unrelated subsystem with no shared code path to the current change
+  - It would roughly double the size or complexity of the current PR
+- **Autonomous/dispatched contexts include anyway** — A run with no ability to ask a user (autonomous mode, a subagent dispatched by full-cycle or epic) has no one to ask, so it defaults to including the necessary work even when a huge-scope-increase signal is present — a deliberate exception to the ask-first branch above, chosen over leaving necessary work undone. The autonomous-mode summary (the flat key/value format in Output Mode Detection above) must name what was included and why, so a human reviewing the PR sees it was pulled in without a live approval.
+- **Never a ticket** — This rule never authorizes creating a story, ticket, issue, or subtask; the Story Creation Gate below still governs creation. The only two outcomes of applying this rule are "include the work in the current branch/PR" or "ask the user first" — a story is never created as a byproduct.
+
+The Story Creation Gate's "Carve-out: fixes that unblock the current PR's own gate" bullet is the CI/gate-specific instance of this rule.
 
 ---
 
@@ -290,7 +310,7 @@ The Story Creation Gate below is a specific instance of this rule; where the two
 - **Permission ask everywhere else** — In any other context — including when `create-story` was auto-triggered by a conversational phrase, or when any other skill believes a story is needed — ask the user for explicit permission FIRST, before any interviewing, drafting, or adapter calls. Only an explicit yes proceeds
 - **Autonomous contexts never create** — An agent with no ability to ask (autonomous mode, dispatched subagent) must NEVER create a story under any circumstances. Stop and report that a story would be needed, naming what it wanted to create
 - **Applies to every creation path** — The gate covers stories, tickets, issues, and subtasks, created via ANY mechanism: adapter instructions, direct MCP tools, CLI commands (`gh issue create`, `jira issue create`), or raw API calls
-- **Carve-out: fixes that unblock the current PR's own gate** — A fix discovered mid-pipeline that exists only to unblock the current PR's own CI/review/test gate lands on that PR's existing branch, never a new story/branch/PR. Friction from the branch-policy default is a signal the fix belongs on the current branch, not a problem to route around
+- **Carve-out: fixes that unblock the current PR's own gate** — A fix discovered mid-pipeline that exists only to unblock the current PR's own CI/review/test gate lands on that PR's existing branch, never a new story/branch/PR. Friction from the branch-policy default is a signal the fix belongs on the current branch, not a problem to route around. This carve-out is the CI/gate-specific instance of the broader "Necessary Extra Work — No Follow-On Tickets" rule above — one principle at two scopes, not competing rules
 
 Reading, updating, commenting on, and labeling existing stories are unaffected — the gate restricts creation only.
 
