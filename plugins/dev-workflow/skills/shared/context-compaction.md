@@ -40,6 +40,12 @@ name" convention. A single-repo story's `repos` map has exactly one entry and be
 identically to the old single-valued fields, with no special-casing required by consuming
 code paths.
 
+**No worktree path is ever stored in the checkpoint.** A stage or subagent that needs a
+repo's worktree resolves it live via `git worktree list --porcelain` (matching the entry
+whose branch equals that repo's feature branch), exactly as `agents/dev-workflow-fixer.md`
+already does — see `skills/shared/standards.md` → "Workspace Isolation". Nothing here
+caches it, so there is no staleness or cross-repo-mixup class of bug to guard against.
+
 **Stage vocabulary.** `stage` reaches exactly four values in practice: `"write-spec"`,
 `"start-development"`, `"review-pr"`, and `"done"`. `stage` advances to `"review-pr"` once
 a PR exists and stays there through *both* the review loop and the test loop that follow
@@ -86,8 +92,10 @@ top-level field:
   to dispatch start-development without them (see full-cycle's "Hard gate — recorded
   approval"). Also update every existing repo entry's `stage` to `"start-development"`
   (still `pr_number: null` — no PR exists yet).
-- **After the start-development subagent returns:** for each `repo:pr` pair it resolved,
-  update that repo's entry with the real `pr_number` and advance `stage` to `"review-pr"`.
+- **After the start-development subagent returns:** for each `repo:pr` pair the subagent
+  resolved, update that repo's entry with the real `pr_number` and advance `stage` to
+  `"review-pr"`. Nothing about the worktree is recorded here — a later reader resolves it
+  live (see "No worktree path is ever stored in the checkpoint" above).
 - **After each review-loop / test-loop iteration:** increment that PR's repo entry's
   `review_loop_count` / `test_loop_count`.
 - **After a given PR's test-pr passes:** advance that repo's entry's `stage` to `"done"`.

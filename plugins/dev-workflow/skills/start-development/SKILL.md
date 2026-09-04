@@ -21,7 +21,7 @@ Read the CLAUDE.md file in this repository before starting.
 
 ## Branch Management
 
-- **ALWAYS** start by checking out a new branch with prefix: `feature/`, `fix/`, or `chore/`
+- **ALWAYS** start by creating a new branch with prefix `feature/`, `fix/`, or `chore/`. On the story-ID path ("Implementation Planning" below), that branch is created inside the isolated worktree required by `skills/shared/standards.md` → "Workspace Isolation" — never checked out in the primary checkout first. The No Story ID path (no PM story, ad hoc interactive work) checks it out directly, as today.
 - Branch names should be descriptive: `feature/slack-monitoring`, `fix/docker-permissions`, `chore/update-dependencies`
 - Check which branch you're on first. If not on `main`, you may already be on the correct branch — check if a PR is already open.
 
@@ -75,6 +75,19 @@ procedure below (including its multi-repo per-repo loop) when no repo path was s
 
 Otherwise, determine which checkout(s) to operate on per `skills/shared/repo-discovery.md` (two-path detection, the "Repos to modify" precedence rules, per-item repo tags, and the single-repo shortcut). Each Path-2 repo is its own checkout in its own sibling folder with its own feature branch.
 
+**The worktree root supersedes the repo root once a worktree exists.** Whichever of the above
+resolved the "repo root" (a supplied `Repo path:`, or this section's own discovery), that value
+is only the starting point — per `skills/shared/standards.md` → "Workspace Isolation", the next
+step in "Implementation Planning" below creates or verifies an isolated worktree for that repo,
+and from that point forward the **worktree root**, not the plain repo root, is "the resolved repo
+root" for every remaining step (implementation, commits, PR creation). Before creating a new
+worktree, always check live for an existing one: run `git -C <repo root> worktree list
+--porcelain` and match the entry whose branch equals this story's feature branch name — per
+`skills/shared/standards.md` → "Workspace Isolation" and mirroring `agents/dev-workflow-fixer.md`'s
+lookup. If found, treat it as authoritative immediately and `cd` there — do not create a second
+worktree. If not found, create one. The multi-repo path below performs this same lookup
+independently per repo, in its own per-repo sub-agent, as described in "Multi-repo path" → Step 3.
+
 ---
 
 ## Implementation Planning (when story ID and spec are loaded)
@@ -99,9 +112,15 @@ Then invoke subagent-driven execution:
 > IMPORTANT OVERRIDE: Proceed automatically with subagents without asking the user for
 > confirmation. Dispatch subagents and proceed.
 >
-> IMPORTANT OVERRIDE: Do NOT invoke `superpowers:using-git-worktrees`. Develop in the
-> current branch within the repo's own checkout folder. Pass this override to any nested
-> `finishing-a-development-branch` invocation.
+> REQUIRED: Set up workspace isolation before implementation starts, per
+> `skills/shared/standards.md` → "Workspace Isolation" — the worktree carries the feature
+> branch (see "Repo Discovery" above and "Branch Management" for why it is never checked
+> out in the primary checkout first). Worktree isolation is required for this task —
+> proceed without asking; if baseline tests fail, report the failure and stop rather than
+> asking whether to proceed. When this reaches a nested `finishing-a-development-branch`
+> invocation, pass it the cleanup instruction that skill needs (preserve the worktree; a
+> human iterates on PR feedback there), not the creation requirement above — that skill
+> only tears down, it never creates a workspace.
 
 ### Multi-repo path (two or more repos named in "Repos to modify")
 
@@ -145,20 +164,37 @@ Process each level as follows:
    - That repo's Claude Instructions spec and the plan from step 1 as the implementation guide.
    - The full Development Standards below (TDD, no placeholder code, etc.).
    - The instruction: **Implement the plan directly — for each task write a failing test, make it pass, refactor, and commit. Do NOT invoke `superpowers:subagent-driven-development`, `superpowers:executing-plans`, or any skill that spawns sub-agents; you are a leaf sub-agent and cannot dispatch further sub-agents.**
-   - The instruction: **Do NOT invoke `superpowers:using-git-worktrees`. Develop in the current branch within this repo's own checkout folder.** Pass this override to any nested `finishing-a-development-branch` invocation.
-   - Per-repo internal code review instructions (see "Internal Code Review" below). The sub-agent implements and self-reviews, then reports back — PR creation happens in Step 4 from the main agent.
+   - Workspace isolation per `skills/shared/standards.md` → "Workspace Isolation": before creating a
+     new workspace, this sub-agent checks live for an existing one for its own repo — `git -C <repo
+     root> worktree list --porcelain`, matching the entry whose branch equals this story's feature
+     branch — and `cd`s there and reuses it if found; otherwise it creates one. Worktree isolation is
+     required for this task — proceed without asking; if baseline tests fail, report the failure and
+     stop rather than asking whether to proceed. When this reaches a nested
+     `finishing-a-development-branch` invocation, pass it the cleanup instruction that skill needs
+     (preserve the worktree for PR-feedback iteration), not the creation requirement above — that
+     skill only tears down.
+   - Per-repo internal code review instructions (see "Internal Code Review" below). The sub-agent
+     implements and self-reviews, then **opens this repo's PR itself, from inside its own worktree,
+     before returning** (see Step 4) — it is the workspace that has the implementation, so PR
+     creation stays there instead of being handed back to the main agent's own, different working
+     directory.
    - The Code Comment Compliance Check instructions: reference `skills/shared/code-comment-check.md` by path in this sub-agent's dispatch prompt (mirroring how `adversarial-review.md` is dispatched by reference) — do not inline the full regex table into every per-repo prompt.
 
 3. **A later level does not start until every sub-agent in the prior level has finished successfully.** If any sub-agent in a level fails, stop, diagnose, fix, and retry that repo before advancing.
 
 #### Step 4 — Open one PR per repo
 
-After each repo's sub-agent completes and passes its internal code review, create a separate PR for that repo. Each PR must:
+Each per-repo sub-agent opens its own PR itself, from inside its own worktree, once it completes and
+passes its internal code review — this keeps `gh pr create` running in the same workspace that has
+the implementation checked out. Every PR must:
 
 - Reference the single shared story using the PM adapter's "Story Reference in PRs" format.
 - Follow all PR Creation Requirements below.
 
-After each PR is created, attach it to the story as an external link via the PM adapter.
+Each sub-agent also attaches its own PR to the story as an external link via the PM adapter before
+returning, then reports the PR number back in its result. Nothing about the worktree path is
+reported or aggregated — a later reader resolves each repo's worktree live, per
+`skills/shared/standards.md` → "Workspace Isolation".
 
 ---
 
@@ -224,7 +260,7 @@ After the subagent-driven implementation completes for a repo, invoke a code rev
 >
 > Address any required changes before proceeding to PR creation.
 
-**Multi-repo note:** this review runs once per repo, inside that repo's sub-agent as part of its self-review, before the sub-agent reports back. The main agent then opens that repo's PR (Step 4). Do not wait for all repos to finish before reviewing each one.
+**Multi-repo note:** this review runs once per repo, inside that repo's sub-agent as part of its self-review, before the sub-agent opens that repo's PR itself and reports back (Step 4) — do not wait for all repos to finish before reviewing each one.
 
 Note (single-repo path only): `superpowers:subagent-driven-development` includes per-task spec
 and quality reviews internally. This step adds a final whole-implementation review before the PR
@@ -345,6 +381,7 @@ Read and follow the adversarial review procedure in `skills/shared/adversarial-r
 - All tests pass
 - Code is pushed to remote branch
 - PR is created with clean, professional description linking the story
+- **Worktree cleanup is manual when this skill runs standalone.** When dispatched by `full-cycle`/`epic` those orchestrators own reclamation (see `full-cycle/SKILL.md`'s Termination section / `epic/SKILL.md`'s `awaiting-merge → done` transition). A human invoking `start-development <story-id>` directly has no such reclamation point — nothing here removes the worktree this run created. Look it up live via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is this story's feature branch), note the path, and once the PR is merged the human should run `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree prune` (or delegate to `superpowers:finishing-a-development-branch`).
 
 ---
 

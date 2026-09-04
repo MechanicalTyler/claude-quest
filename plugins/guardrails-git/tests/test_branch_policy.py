@@ -14,7 +14,7 @@ SPEC.loader.exec_module(hook)
 
 def run_policy(command, current_branch, monkeypatch, capsys):
     """Run the branch policy check. Returns the block decision dict, or None if allowed."""
-    monkeypatch.setattr(hook, "get_current_branch", lambda git_dir=None: current_branch)
+    monkeypatch.setattr(hook, "get_current_branch", lambda cwd=None: current_branch)
     try:
         hook.check_git_branch_policy("Bash", {"command": command})
     except SystemExit:
@@ -25,7 +25,7 @@ def run_policy(command, current_branch, monkeypatch, capsys):
 def mirror_git_frontends(commands):
     # Why: authenticated commands in this workspace route through the gitp and
     # git-as-app.sh wrappers instead of bare git; every policy case must hold
-    # for those spellings too or the whole branch policy is bypassable (sc-1266).
+    # for those spellings too or the whole branch policy is bypassable.
     mirrored = []
     for cmd in commands:
         mirrored.append(cmd)
@@ -128,36 +128,81 @@ def test_checkout_main_blocked(command, monkeypatch, capsys):
     assert "checkout the main branch" in decision["reason"]
 
 
-BLOCKED_WORKTREE = mirror_git_frontends([
+ALLOWED_WORKTREE = mirror_git_frontends([
+    "git worktree add --detach ../wt",
+    "git worktree add --detach ../wt main",
     "git worktree add ../wt",
     "git worktree add ../wt -b feature/new",
-    "git worktree add --detach ../wt",
+    "git worktree add -b feature/new ../wt",
+    "git worktree add -b feature/new ../wt main",
     "git worktree list",
     "git worktree remove ../wt",
     "git worktree prune",
+    "git worktree move ../wt ../wt2",
+    "git worktree lock ../wt",
     "git worktree",
 ])
 
 
-@pytest.mark.parametrize("command", BLOCKED_WORKTREE)
-def test_all_worktree_commands_blocked(command, monkeypatch, capsys):
-    decision = run_policy(command, "feature/existing", monkeypatch, capsys)
-    assert decision is not None, f"expected block: {command}"
-    assert "worktree" in decision["reason"]
+@pytest.mark.parametrize("command", ALLOWED_WORKTREE)
+def test_worktree_commands_always_allowed(command, monkeypatch, capsys):
+    # Why: every 'git worktree' subcommand and flag combination, including
+    # branch-creating 'add' forms, falls through to allowed regardless of
+    # the current branch. A regression here (re-narrowing this exemption to
+    # route worktree creation through the branch-from-main check) strands
+    # every worktree-isolated pipeline run: off main, worktree creation
+    # itself gets blocked with no escape.
+    assert run_policy(command, "feature/existing", monkeypatch, capsys) is None
+    assert run_policy(command, "main", monkeypatch, capsys) is None
+
+
+BLOCKED_WORKTREE_ADD_EXISTING_MAIN = mirror_git_frontends([
+    "git worktree add ../wt main",
+    "git worktree add -f ../wt main",
+])
+
+
+@pytest.mark.parametrize("command", BLOCKED_WORKTREE_ADD_EXISTING_MAIN)
+def test_worktree_add_existing_main_blocked(command, monkeypatch, capsys):
+    # Why: 'git worktree add <path> main' with no -b/-B/--detach materializes
+    # 'main' as a live, checked-out working tree — exactly the state the
+    # checkout-main guard exists to prevent. Must block the same way
+    # 'git checkout main' does, regardless of the current branch.
+    for branch in ("feature/existing", "main"):
+        decision = run_policy(command, branch, monkeypatch, capsys)
+        assert decision is not None, f"expected block: {command} (branch={branch})"
+        assert "checkout the main branch" in decision["reason"]
 
 
 def test_git_dash_c_dir_passed_to_branch_lookup(monkeypatch, capsys):
     seen = {}
 
-    def fake_lookup(git_dir=None):
-        seen["git_dir"] = git_dir
+    def fake_lookup(cwd=None):
+        seen["cwd"] = cwd
         return "feature/existing"
 
     monkeypatch.setattr(hook, "get_current_branch", fake_lookup)
     with pytest.raises(SystemExit):
         hook.check_git_branch_policy("Bash", {"command": "git -C /some/dir branch x"})
     capsys.readouterr()
-    assert seen["git_dir"] == "/some/dir"
+    assert seen["cwd"] == "/some/dir"
+
+
+def test_relative_dash_c_resolved_against_payload_cwd(monkeypatch, capsys):
+    # Why: a relative 'git -C' must resolve against the PreToolUse payload's
+    # cwd, never against the hook process's own OS cwd (which is never
+    # deliberately set to match the caller's shell).
+    seen = {}
+
+    def fake_lookup(cwd=None):
+        seen["cwd"] = cwd
+        return "feature/existing"
+
+    monkeypatch.setattr(hook, "get_current_branch", fake_lookup)
+    with pytest.raises(SystemExit):
+        hook.check_git_branch_policy("Bash", {"command": "git -C ../wt branch x"}, "/repo/sub")
+    capsys.readouterr()
+    assert seen["cwd"] == "/repo/wt"
 
 
 def test_unparseable_command_allowed(monkeypatch, capsys):
@@ -167,9 +212,26 @@ def test_unparseable_command_allowed(monkeypatch, capsys):
 
 def test_non_bash_tool_ignored(monkeypatch, capsys):
     assert run_policy("", "feature/existing", monkeypatch, capsys) is None
-    monkeypatch.setattr(hook, "get_current_branch", lambda git_dir=None: "feature/x")
+    monkeypatch.setattr(hook, "get_current_branch", lambda cwd=None: "feature/x")
     assert hook.check_git_branch_policy("Edit", {"command": "git branch x"}) is None
 
 
-def test_branch_lookup_failure_allows(monkeypatch, capsys):
-    assert run_policy("git branch new-thing", None, monkeypatch, capsys) is None
+def test_branch_lookup_failure_blocks(monkeypatch, capsys):
+    # Why: an unresolvable branch (None from get_current_branch) must be
+    # treated as "could not verify — block", never as "not main, so allow."
+    # A fail-open default on an unresolvable directory/branch is what let a
+    # detached worktree's empty-string branch lookup slip through as "not main."
+    decision = run_policy("git branch new-thing", None, monkeypatch, capsys)
+    assert decision is not None
+    assert decision["decision"] == "block"
+    assert "Could not determine the current branch" in decision["reason"]
+
+
+def test_branch_lookup_empty_string_blocks(monkeypatch, capsys):
+    # Why: the exact detached-worktree failure mode — 'git branch
+    # --show-current' returns '' (empty string, falsy but not None) when
+    # HEAD is detached. '' must be treated identically to None: block.
+    decision = run_policy("git branch new-thing", "", monkeypatch, capsys)
+    assert decision is not None
+    assert decision["decision"] == "block"
+    assert "Could not determine the current branch" in decision["reason"]

@@ -15,7 +15,7 @@ subagent context. You drive the full pipeline for a single task and dispatch eve
 as its own nested subagent — you retain the `Agent` tool for exactly this reason.
 
 The dispatching epic gives you a **task ID**, the **tasklist path**, a **branch name**,
-and the autonomous/no-worktree overrides. Then:
+and the autonomous-mode overrides. Then:
 
 > **Invoke Skill: `dev-workflow:full-cycle`** with that task ID, running **autonomously**,
 > pinned to the `tasklist` PM adapter.
@@ -27,8 +27,10 @@ Honor every override the epic passed verbatim:
   file. Do **not** read `pm_adapter` from config; do **not** contact
   Shortcut/Jira/Linear/GitHub Issues.
 - **Branch name** as given; the PR carries **no** `sc-` ID.
-- **Do NOT invoke `superpowers:using-git-worktrees`** — work in the repo's own checkout;
-  pass this override into any nested stage.
+- **Isolated worktree required, before dispatching any stage:** see
+  `skills/shared/standards.md` → "Workspace Isolation" for the mechanism. Pass the same
+  requirement into every nested dispatch — each nested stage resolves its own worktree
+  live via `git worktree list --porcelain` rather than receiving a stored path.
 - **Never merge.** On dual approval, report the PR's review and test decisions back and
   leave the PR open — the epic marks the task `awaiting-merge`; a human merges later.
 
