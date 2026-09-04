@@ -124,21 +124,25 @@ After loading the Claude Instructions spec:
 > Use the Claude Instructions spec as the feature description.
 
 ### Step 2: Branch
-- Check current branch — if on `main`, create a new branch: `feature/`, `fix/`, or `chore/`
+- Check current branch — if on `main`, the new branch (`feature/`, `fix/`, or `chore/`) is created inside the isolated worktree set up in Step 2.5, not checked out here first
 - If already on a feature branch, check if a PR exists
 
 ### Step 2.5: Subagent-Driven Implementation
 
-With branch created and plan written:
+With the plan written, and before creating the branch:
 
 > Invoke Skill: `superpowers:subagent-driven-development`
 >
 > IMPORTANT OVERRIDE: Proceed automatically with subagents without asking the user for
 > confirmation. Dispatch subagents and proceed.
 >
-> IMPORTANT OVERRIDE: Do NOT invoke `superpowers:using-git-worktrees`. Develop in
-> the current branch. Pass this override to any nested `finishing-a-development-branch`
-> invocation.
+> REQUIRED: Set up workspace isolation before starting, per `skills/shared/standards.md` →
+> "Workspace Isolation" — the worktree carries the feature branch (see Step 2 above).
+> Worktree isolation is required for this task — proceed without asking; if baseline tests
+> fail, report the failure and stop rather than asking whether to proceed. When this
+> reaches a nested `finishing-a-development-branch` invocation, pass it the cleanup
+> instruction that skill needs (preserve the worktree for PR-feedback iteration), not the
+> creation requirement above — that skill only tears down.
 
 ### Step 3: Implement with TDD
 - Write failing tests first based on acceptance criteria
@@ -177,6 +181,8 @@ Read and follow the adversarial review procedure in `skills/shared/adversarial-r
 - `review_context`: the Claude Instructions spec loaded in Step 1
 
 The adversarial agent verifies the implementation satisfies all spec requirements and story acceptance criteria.
+
+**Worktree cleanup is manual when Development Mode runs standalone.** When dispatched by `full-cycle`/`epic`, those orchestrators own reclamation (see `full-cycle/SKILL.md`'s Termination section / `epic/SKILL.md`'s `awaiting-merge → done` transition). A human running `start-debugging <story-id>` directly has no such reclamation point — look up the worktree live via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is this story's feature branch), and once the PR is merged the human should run `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree prune` (or delegate to `superpowers:finishing-a-development-branch`).
 
 ---
 
@@ -222,12 +228,14 @@ Apply structured reception of the code review feedback before implementing:
 
 ### Step 3: Create New Branch
 
-**ALWAYS** create a new `fix/` branch — never reuse an existing rework branch.
-
-```bash
-git checkout -b fix/sc-XXXXX-rework
-# Or more descriptive: fix/sc-XXXXX-address-review-feedback
-```
+**ALWAYS** create a new `fix/` branch — never reuse an existing rework branch. Set up
+workspace isolation first, per `skills/shared/standards.md` → "Workspace Isolation": use
+`superpowers:using-git-worktrees` to create an isolated workspace, then create the branch
+(`fix/<story-id>-rework`, or more descriptively `fix/<story-id>-address-review-feedback`) inside
+it — not in the primary checkout, the way an unqualified `git checkout -b` would here. Work
+from that worktree for every remaining step. Worktree isolation is required for this task —
+proceed without asking; if baseline tests fail, report the failure and stop rather than
+asking whether to proceed.
 
 ### Step 4: Implement with TDD
 
@@ -276,6 +284,8 @@ Read and follow the adversarial review procedure in `skills/shared/adversarial-r
 - `review_context`: the rework checklist from Step 2 and the Claude Instructions spec from Step 1
 
 The adversarial agent verifies each rework item from the checklist was properly addressed.
+
+**Worktree cleanup is manual when Rework Mode runs standalone.** When dispatched by `full-cycle`/`epic`'s review or test fix loop, those orchestrators own reclamation (see `full-cycle/SKILL.md`'s Termination section / `epic/SKILL.md`'s `awaiting-merge → done` transition). A human running `start-debugging <story-id> --rework` directly has no such reclamation point — look up the worktree live via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is this story's feature branch), and once the PR is merged the human should run `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree prune` (or delegate to `superpowers:finishing-a-development-branch`).
 
 ---
 

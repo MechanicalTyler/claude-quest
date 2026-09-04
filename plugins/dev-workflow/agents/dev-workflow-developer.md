@@ -22,8 +22,16 @@ give you a resolved **repo path**. Apply any overrides it passed, then:
 The skill loads its own full instructions — follow them. It branches, implements with
 TDD, may fan out per-repo implementer subagents (you have the `Agent` tool for this),
 and opens the PR(s). Honor every rule the orchestrator passed in its prompt verbatim —
-especially any PM-adapter override, any repo path it supplied, and any "do NOT use git
-worktrees" instruction.
+especially any PM-adapter override and any `Repo path:` it supplied. Before
+implementation begins, set up workspace isolation per `skills/shared/standards.md` →
+"Workspace Isolation" — for each repo, resolve its worktree live rather than trusting any
+passed value: run `git -C <repo root> worktree list --porcelain` and match the entry whose
+branch equals this story/task's feature branch. If found, `cd` there and reuse it. If not
+found, create one via `superpowers:using-git-worktrees`, the same as a first-time run — do
+not assume the lookup always succeeds. For a multi-repo dispatch, each per-repo sub-agent
+you fan out to does this same lookup for its own repo independently. Worktree isolation is
+required for this task — proceed without asking; if baseline tests fail, report the
+failure in your result and stop rather than asking whether to proceed.
 
 You cannot ask the user anything. If the work genuinely cannot proceed without a human
 decision, stop and report that — never invent requirements and never create a PM story

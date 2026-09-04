@@ -15,11 +15,24 @@ isolated subagent context. Your job is to address review/test feedback on one PR
 
 The dispatching orchestrator gives you a **PR number**. Because address-pr-comments
 resolves the PR from the *current branch* and you start detached, **first** land on the
-PR's branch:
+PR's branch. Dev-workflow requires isolated worktrees for implementation/fix work (see
+`skills/shared/standards.md` → "Workspace Isolation"), so the branch may already be
+checked out in a linked worktree — checking it out again in a fresh location fails
+outright (`fatal: '<branch>' is already used by worktree at ...`). Locate it, live —
+never from a passed-in path:
 
-```bash
-gh pr checkout {PR_NUMBER}
-```
+1. Resolve the PR's branch name: `gh pr view {PR_NUMBER} --json headRefName -q
+   .headRefName`. Resolve the target repo's root from wherever you're currently checked
+   out: `git rev-parse --show-toplevel`. Then list worktrees scoped to that repo — `git -C
+   <repo root> worktree list --porcelain`, never a bare `git worktree list --porcelain`
+   from an ambiguous cwd, which is a cross-repo hazard in a multi-repo pipeline run. If an
+   entry's `branch refs/heads/<name>` matches that branch name, `cd` into that entry's
+   `worktree <path>` and work from it.
+2. If that finds no live worktree for the branch, fall back to:
+
+   ```bash
+   gh pr checkout {PR_NUMBER}
+   ```
 
 Then:
 

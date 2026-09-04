@@ -161,13 +161,15 @@ The scheduler decides what runs next. It reads `tasklist.md` as the source of tr
      schedule a second task for a repo that already has one in flight.
    - **Cross-repo concurrency.** Ready tasks in distinct repos run **concurrently**, each as its own
      dispatched subagent.
-   - **No git worktrees.** Each repo's single in-flight task works in that repo's own checkout. Do
-     not invoke `superpowers:using-git-worktrees`; pass that override into every dispatch.
-3. **Bug priority.** When an open bug task exists for a repo, schedule it as the **next** task for
+3. **Isolated worktree required, before dispatching a task.** This is a workspace-isolation
+   requirement, not a parallelism property — under the one-in-flight-task-per-repo rule above it adds
+   no concurrency of its own. See `skills/shared/standards.md` → "Workspace Isolation" for the
+   mechanism; pass that requirement into every dispatch.
+4. **Bug priority.** When an open bug task exists for a repo, schedule it as the **next** task for
    that repo — ahead of any pending feature task — subject to the same one-in-flight-PR-per-repo rule.
-4. For every task selected this round, go to **Phase 7** (drive). Dispatch the concurrent ones in a
+5. For every task selected this round, go to **Phase 7** (drive). Dispatch the concurrent ones in a
    single batch.
-5. When the ready set is empty:
+6. When the ready set is empty:
    - If any task is still **actively** in flight (`in-progress`, `in-review`, `in-test`), wait for it
      to complete (Phase 8) per `standards.md` → "Subagent Wait Discipline" — state which task(s) are
      in flight and how completion will be detected before yielding the turn; do not go silent — then
@@ -212,8 +214,12 @@ The dispatch prompt must contain, explicitly:
 > Shortcut/Jira/Linear/GitHub Issues. This instruction overrides the configured adapter.
 > Branch name: `{epic-slug}-{task_id}`. The PR carries **no** `sc-` ID.
 >
-> **Do NOT invoke `superpowers:using-git-worktrees`.** Work in this repo's own checkout. Pass this
-> override into any nested `finishing-a-development-branch`.
+> **Isolated worktree required before starting** — see `skills/shared/standards.md` →
+> "Workspace Isolation" for the mechanism. When this task's work reaches a nested
+> `finishing-a-development-branch` invocation, pass it the cleanup instruction that skill
+> actually needs: keep the worktree until a human merges this PR (epic never merges — see
+> Phase 8's `awaiting-merge → done` reclamation), not the creation requirement above, which
+> that teardown-only skill has no use for.
 >
 > full-cycle enters at write-spec (the task exists with no spec) and proceeds through development,
 > the review loop, and the test loop autonomously. **Do not merge.** Neither you nor the orchestrator
@@ -255,8 +261,25 @@ When the epic is re-invoked against the slug, it reconciles each `awaiting-merge
 — a **read**, never a merge.
 
 - **PR merged** (a human merged it) → set `Status` to `done` via the adapter; its dependents become
-  schedulable.
-- **PR closed without merging** → set `Status` to `blocked`, record the reason as a comment.
+  schedulable. **Reclaim the worktree now** — one of this pipeline's designated cleanup points (see
+  `skills/shared/standards.md` → "Workspace Isolation"). Resolve the worktree live, the same way
+  `agents/dev-workflow-fixer.md` does: run `git -C <that repo's root> worktree list --porcelain` and
+  match the entry whose `branch refs/heads/<name>` equals the merged PR's branch — never guess a path
+  or reuse one from a sibling repo. If no matching entry is found, skip removal and note it in the
+  end-of-run report rather than guessing. Otherwise remove it per `standards.md`'s "Removal must
+  actually succeed against ordinary gitignored build output" procedure — a plain `git -C <that repo's
+  root> worktree remove <path>` when the worktree is clean, `--force` only when everything untracked
+  is confirmed gitignored, and a skip-and-report otherwise — followed by `git -C <that repo's root>
+  worktree prune`. Scoping every command to that specific repo's root (not a bare `git worktree
+  remove`/`prune` from an ambiguous cwd) is what keeps a multi-repo epic cleanup from ever targeting
+  the wrong repo; removing a sibling repo's still-unmerged worktree is a data-loss bug, not an
+  acceptable fallback.
+- **PR closed without merging** → set `Status` to `blocked`, record the reason as a comment. **Reclaim
+  the worktree now too** — this task's line of work is over either way, merged or not, so there's no
+  reason to leave it around. Same procedure as the "PR merged" cleanup above: resolve the worktree live
+  via `git -C <that repo's root> worktree list --porcelain` matched against the closed PR's branch, then
+  remove it per `standards.md`'s gitignored-build-output procedure, followed by `git -C <that repo's
+  root> worktree prune`.
 - **PR still open** → leave it `awaiting-merge`; report it again at end of run.
 
 ---
@@ -268,7 +291,7 @@ When a task subagent's result contains a `bug-report`:
 1. The **orchestrator** creates a new task via the `tasklist` adapter's **Create story** capability —
    `story_type: bug`, the reported `repo`, the reported description, and `depends_on` including the
    suspected **source task** (so the link to the originating task is recorded).
-2. The bug task is scheduled with **priority** per Phase 6 step 3 — next for its repo, ahead of
+2. The bug task is scheduled with **priority** per Phase 6 step 4 — next for its repo, ahead of
    pending features — subject to one-in-flight-PR-per-repo.
 3. When picked up, it flows through `full-cycle` identically to any other task, **including getting
    its own spec at write-spec time**.
@@ -338,7 +361,12 @@ an extra key such as `awaiting-merge` listing those PR URLs.
 - Every open PR awaiting merge is tracked in `tasklist.md` and reported in the end-of-run report with
   a merge-then-resume instruction.
 - Parallelism held: cross-repo concurrent, same-repo sequential, one in-flight PR per repo (an
-  awaiting-merge PR counts as in flight), no worktrees.
+  awaiting-merge PR counts as in flight).
+- Each task ran inside its own isolated worktree (a workspace-isolation property, not a
+  parallelism one — see "Workspace Isolation" in `skills/shared/standards.md`), and every merged
+  task's worktree was reclaimed at its `awaiting-merge → done` transition (Phase 8) — this is
+  asserted only for tasks that actually reached `done` in this run; an epic still holding
+  `awaiting-merge` tasks has not yet verified their cleanup.
 - The orchestrator only orchestrated — no feature code, spec, review, or test authored in the main
   agent.
 - Bug reports from subagents became orchestrator-created, priority-scheduled bug tasks.

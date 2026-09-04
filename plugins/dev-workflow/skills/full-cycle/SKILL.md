@@ -60,13 +60,7 @@ This is the central design decision for this skill (resolved with the user — s
 
 A dispatched subagent has no tool to ask the user. The implementation/review/test stages (start-development, review-pr, test-pr) run their underlying skill in **autonomous mode** and return a single-line key/value result (see "Autonomous mode" and "Output Mode Detection" in `standards.md`); the orchestrator reads that result only as a hint. address-pr-comments does **not** emit a key/value result — it implements fixes and posts PR replies — so the orchestrator never depends on its return value. For every review/test outcome the orchestrator **re-confirms the authoritative state from GitHub and the PM story** (see Reading the Authoritative Review Decision) rather than trusting any subagent self-report.
 
-**PR-branch checkout for subagent stages that operate on an existing PR.** review-pr and test-pr take a PR number argument, but `dev-workflow:address-pr-comments` resolves the PR from the *current branch* (`gh pr status`) — a freshly dispatched subagent is not checked out on that branch. Therefore every subagent prompt that runs address-pr-comments (or any stage that must act on an existing PR's branch) MUST first check out the PR branch:
-
-```bash
-gh pr checkout {PR_NUMBER}
-```
-
-Pass the explicit PR number in the prompt as well, so the subagent never has to guess or ask.
+**PR-branch checkout for subagent stages that operate on an existing PR.** review-pr and test-pr take a PR number argument, but `dev-workflow:address-pr-comments` resolves the PR from the *current branch* (`gh pr status`) — a freshly dispatched subagent is not checked out on that branch. Because implementation/fix work runs inside an isolated worktree (`skills/shared/standards.md` → "Workspace Isolation"), that branch may already be checked out in a worktree elsewhere — a plain `gh pr checkout {PR_NUMBER}` fails outright when it is. The `dev-workflow-fixer` worker's body handles this: it locates the branch's worktree via `git worktree list --porcelain` and `cd`s there, falling back to `gh pr checkout {PR_NUMBER}` only when no worktree holds the branch. Pass the explicit PR number in the prompt — the worker resolves its own worktree live, so it never has to guess or ask.
 
 **How to dispatch (mandatory — per `standards.md` → "Subagent Dispatch"):**
 
@@ -247,15 +241,20 @@ dispatch prompt below as `{resolved-repo-path}`. For a multi-repo story, do not 
 single path here — omit the `Repo path:` field entirely and let the dispatched subagent's own
 per-repo discovery-and-loop run unmodified.
 
-**Dispatch the Agent tool** with `subagent_type: dev-workflow-developer` (model: resolved from `models.stages.start-development` → `models.implementation` → default `sonnet`). The worker's body already invokes `dev-workflow:start-development` autonomously; your dispatch prompt supplies only the variable inputs:
+**Dispatch the Agent tool** with `subagent_type: dev-workflow-developer` (model: resolved from `models.stages.start-development` → `models.implementation` → default `sonnet`). The worker's body already invokes `dev-workflow:start-development` autonomously; your dispatch prompt supplies only the variable inputs. Worktree ISOLATION is unconditional for this developer dispatch — it always works inside an isolated worktree, never the primary checkout (see `skills/shared/standards.md` → "Workspace Isolation") — it is not an epic-specific instruction, only the PM-adapter override and branch name below are. Worktree CREATION, though, is conditional: per standards.md's live-lookup rule, the dispatched subagent creates a worktree only when `git worktree list --porcelain` finds no existing match for the target branch; if a match exists (e.g. a resumed run), it reuses that one and does not create a second. This does not extend to every stage a full-cycle run dispatches: the fixer stage in the Review Loop below *locates* an existing worktree or falls back to a plain checkout (see "PR-branch checkout for subagent stages" above), it does not create one unconditionally.
 
-> Story/task ID: `{story-id}`. Repo path: `{resolved-repo-path}`. Run autonomously. [For an epic task, also pass the PM-adapter override, branch name, and the "do NOT use git worktrees" override.]
+> Story/task ID: `{story-id}`. Repo path: `{resolved-repo-path}`. Worktree isolation is required for this task — proceed without asking; if baseline tests fail, report the failure in your result and stop rather than asking whether to proceed. Run autonomously. [For an epic task, also pass the PM-adapter override and branch name.]
 
 Single-repo case only: include the `Repo path:` field when the single-repo shortcut applies, as
-resolved above. For a multi-repo story, omit the `Repo path:` field entirely and dispatch the
-template unchanged — do not drop the epic-task bracketed clause in either case.
+resolved above. For a multi-repo story, omit `Repo path:` entirely — there is no single repo to
+name — and let the dispatched subagent's own per-repo discovery-and-loop resolve each repo. Do not
+drop the epic-task bracketed clause in either case.
 
-The subagent branches, implements with TDD, and opens the PR (one PR per repo for a multi-repo story). It returns its autonomous-mode key/value result.
+The subagent branches, implements with TDD, and opens the PR (one PR per repo for a multi-repo
+story). It resolves its own worktree per repo, live, per `skills/shared/standards.md` →
+"Workspace Isolation" — reusing a matching one found via `git worktree list --porcelain` or
+creating a new one — so nothing about the worktree path is passed in the dispatch prompt, recorded
+in the checkpoint, or returned in the subagent's result.
 
 After it returns, **dispatch the Agent tool** with `subagent_type: dev-workflow-pr-state-reader` (model: resolved from `models.stages.pr-number-read` → `models.implementation` → default `sonnet`) to resolve the **PR number(s)** authoritatively — do not resolve this inline. Dispatch prompt:
 
@@ -296,7 +295,7 @@ After it returns, read the PR's latest **review** decision authoritatively from 
 
 While the latest review decision for the PR is **changes requested**:
 
-1. **Dispatch the Agent tool** with `subagent_type: dev-workflow-fixer` (model: resolved from `models.stages.address-pr-comments` → `models.implementation` → default `sonnet`). The worker's body already checks out the PR branch (`gh pr checkout {PR_NUMBER}`) and invokes `dev-workflow:address-pr-comments`; your dispatch prompt supplies only:
+1. **Dispatch the Agent tool** with `subagent_type: dev-workflow-fixer` (model: resolved from `models.stages.address-pr-comments` → `models.implementation` → default `sonnet`). The worker's body already locates and lands on the PR's branch (its own worktree if one holds it, else `gh pr checkout {PR_NUMBER}` — see "PR-branch checkout" above) and invokes `dev-workflow:address-pr-comments`; your dispatch prompt supplies only:
    > PR number: `{PR_NUMBER}`.
 
    It implements the requested changes on the **same branch and PR** and replies to the review.
@@ -327,7 +326,7 @@ After it returns, read the PR's latest **test** decision authoritatively from Gi
 
 While testing **requests changes**:
 
-1. **Dispatch the Agent tool** with `subagent_type: dev-workflow-fixer` (model: resolved from `models.stages.address-pr-comments` → `models.implementation` → default `sonnet`) for the same PR — the worker checks out the branch and invokes `dev-workflow:address-pr-comments`; pass only the PR number `{PR_NUMBER}`.
+1. **Dispatch the Agent tool** with `subagent_type: dev-workflow-fixer` (model: resolved from `models.stages.address-pr-comments` → `models.implementation` → default `sonnet`) for the same PR — the worker locates and lands on the branch (its own worktree if one holds it, else `gh pr checkout`) and invokes `dev-workflow:address-pr-comments`; pass the PR number `{PR_NUMBER}`.
 2. Re-dispatch the tester via the Agent tool (`subagent_type: dev-workflow-tester`, model: resolved from `models.stages.test-pr` → `models.review` → default `opus`) for the same PR.
 3. Re-read the authoritative test decision (the newest review submitted since this re-dispatch).
 
@@ -371,6 +370,8 @@ Because review-pr and test-pr both submit reviews on the same PR (and as the sam
 
 Neither the review loop nor the test loop may run forever. Track an attempt count per loop, **per PR** — when a story spans multiple repos/PRs (see Multi-Repo Handling), each PR's review loop and each PR's test loop has its own independent 3-cycle cap; one PR hitting the cap does not stop another PR's loop. After **3** fix-and-recheck cycles for a given PR's loop without reaching approval/passing, **stop that PR's loop** and surface the situation to the user with: the PR number, the outstanding review/test feedback, and the cycle count — and ask whether the user wants to authorize more cycles (in an autonomous run there is no user to ask: stop and report instead). Do not continue looping that PR unless the user, in this session, explicitly authorizes additional cycles for this loop (see `skills/shared/standards.md` → Process Fidelity). Other PRs' loops continue independently. *[Inference — not specified in the story; included as a correctness safeguard for an automated loop.]*
 
+**Worktree cleanup note.** Stopping a PR's loop here is a non-success termination for that PR — the PR stays open with outstanding feedback, and (like the Termination section below) nothing in a standalone run reconciles it later. Include the same live worktree lookup in the report this stage produces: `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is that PR's feature branch), so the human deciding whether to authorize more cycles or take over manually knows where the work lives — do not remove the worktree here, since the loop may still be resumed and the PR's work is incomplete.
+
 ---
 
 ## Termination
@@ -382,6 +383,15 @@ When testing passes — test-pr has submitted an `APPROVE` review and applied th
 - Final test outcome (review approved + `tested-in-dev`) and current story state
 - Per-loop fix-cycle counts, so an operator can see how many cycles each stage burned
 - Note that the PR is left open for a human to merge
+- **Worktree cleanup is manual for a standalone full-cycle run.** Unlike `epic`, this
+  skill has no later resume point that reconciles a merge, so nothing here removes any
+  worktree the pipeline created. For each repo this run touched, look up its worktree live
+  via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is
+  that repo's feature branch) and list it in the summary (a multi-repo story lists one line
+  per repo — never one shared path for all of them) and note that the human should run
+  `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree
+  prune` for each (or delegate to `superpowers:finishing-a-development-branch`) after
+  merging that repo's PR.
 
 In autonomous mode, emit the summary as the flat key/value result defined in `standards.md` (`service-name`, `pm-key`, `pr-number`, `status`, `message`, plus the highest-signal extra keys such as `test-result`).
 
@@ -416,7 +426,7 @@ map, using the stage and key facts at that moment:
 | After create-story returns | Initialize one `repos` entry per repo named in the story's "Repos to modify" field | each entry starts `pr_number: null, stage: "write-spec", review_loop_count: 0, test_loop_count: 0` |
 | During entry-detection resume, before running any stage | If the `repos` map is missing an entry for a repo named in the story's "Repos to modify" field, seed it from that field; then, for any repo that has a linked PR, enrich/update its entry from the parsed `prs=` tuple | Seeded entries (rows 2/3, `prs=none`): `pr_number: null`, `stage` from `story_state` (`"write-spec"` for row 2, `"start-development"` for row 3). Tuple-enriched entries (rows 4-8): `pr_number` from the tuple's `pr`; `stage` mapped from the tuple's `stage` action (`finished`→`"done"`, `test-pr`/`review-pr`→`"review-pr"` — see the stage-vocabulary note in `context-compaction.md`). Both start `review_loop_count: 0, test_loop_count: 0` since loop counts are not recoverable from GitHub on a cold resume. This is the only initialization path when create-story never ran this session; it now covers every resume row (2-8), not only rows with a linked PR; it fills gaps only and never overwrites an already-populated entry |
 | After spec approval gate | Update every existing repo entry's `stage` to `"start-development"` | record top-level `approval_text`/`approval_timestamp`; still `pr_number: null` — no PR exists yet |
-| After start-development subagent returns | For each `repo:pr` pair it resolved, update that repo's entry's `pr_number` and advance `stage` to `"review-pr"` | |
+| After start-development subagent returns | For each `repo:pr` pair resolved, update that repo's entry's `pr_number` and advance `stage` to `"review-pr"` | Nothing about the worktree is recorded — a later reader resolves it live via `git worktree list --porcelain`, per `context-compaction.md` → "No worktree path is ever stored in the checkpoint" |
 | After each address-pr-comments + review-pr iteration | Increment that PR's repo entry's `review_loop_count` | |
 | After each address-pr-comments + test-pr iteration | Increment that PR's repo entry's `test_loop_count` | |
 | After test-pr passes | Advance that repo's entry's `stage` to `"done"` | other repos' entries are untouched and continue independently — this repo's final checkpoint |
