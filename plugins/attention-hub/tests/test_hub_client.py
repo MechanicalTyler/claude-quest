@@ -561,6 +561,31 @@ def test_stage_non_string_stage_entry_skipped(tmp_path):
     assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:review"
 
 
+def test_stage_own_repo_without_valid_stage_does_not_match(tmp_path):
+    # Why: a checkpoint naming this repo with no valid stage of its own must
+    # not match just because some other repo in the same checkpoint does —
+    # the rendered line would otherwise name an unrelated repo, not this one.
+    client, state_dir = make_stage_client(tmp_path)
+    write_checkpoint(state_dir, "story-1.json",
+                     {"repos": {"my-project": {}, "other-repo": {"stage": "testing"}}})
+    assert client.get_dev_workflow_stage("/home/user/my-project") == ""
+
+
+def test_stage_newer_checkpoint_without_valid_own_stage_falls_through(tmp_path):
+    # Why: a checkpoint whose own-repo entry has no valid stage string must
+    # not shadow an older checkpoint that does — the match predicate and the
+    # render join must agree on what counts as a valid stage.
+    client, state_dir = make_stage_client(tmp_path)
+    newer = write_checkpoint(state_dir, "newer.json",
+                             {"repos": {"my-project": {"stage": 3}}})
+    older = write_checkpoint(state_dir, "older.json",
+                             {"repos": {"my-project": {"stage": "review"}}})
+    now = time.time()
+    os.utime(newer, (now - 10, now - 10))
+    os.utime(older, (now - 100, now - 100))
+    assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:review"
+
+
 def test_stage_worktree_cwd_matches_repo_checkpoint(tmp_path):
     # Why: pipeline sessions run inside <repo>/.worktrees/<branch>, so the cwd
     # basename is never the repo name; the directory containing .worktrees
@@ -657,10 +682,10 @@ def test_stage_scan_is_stat_first_and_short_circuits_on_match(tmp_path, monkeypa
     assert read_calls == ["winner.json"]
 
 
-def test_stage_scan_byte_identical_to_full_scan_on_no_early_exit(tmp_path):
-    # Why: the stat-first sort/short-circuit refactor must not change the
-    # result versus a full scan when the eventual winner isn't the newest
-    # file scanned — mtime ordering alone must still pick the true winner.
+def test_stage_newer_non_matching_checkpoint_does_not_shadow_older_match(tmp_path):
+    # Why: mtime-descending scan order must not stop at the first file it
+    # sees — a newer checkpoint with no match for this repo must be skipped
+    # so an older checkpoint that does match still wins.
     client, state_dir = make_stage_client(tmp_path)
     now = time.time()
     newest_non_matching = write_checkpoint(

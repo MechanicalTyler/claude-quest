@@ -29,7 +29,7 @@ BACKGROUND_SUBAGENT_TTL_SECONDS = 15 * 60
 COMPLETED_RETENTION_SECONDS = 5 * 60
 LABEL_MAX_CHARS = 256
 STAGE_TERMINAL_STAGES = frozenset({"done", "finished"})
-STAGE_MAX_AGE_SECONDS = 24 * 60 * 60  # matches attention_hub.py's DEFAULT_PRUNE_HOURS
+STAGE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60  # checkpoints idle across nights/weekends/review waits are still active
 
 # Container-detection signals (module-level so tests can redirect them).
 CONTAINER_MARKER_FILES = ("/.dockerenv", "/run/.containerenv")
@@ -434,19 +434,12 @@ def clear_all_active_subagents(session_id):
 def get_dev_workflow_stage(cwd):
     """Pipeline stage line for cwd's repo from dev-workflow checkpoint files.
 
-    Scans ~/.claude/dev-workflow/state (resolved from HOME at call time),
-    bounded to files modified within STAGE_MAX_AGE_SECONDS (matching the
-    hub's own session-prune horizon), for the most recently modified
-    checkpoint whose top-level "repos" dict names cwd's basename — or, for a
-    cwd under a `<repo>/.worktrees/` worktree, the repo directory's name —
-    with a non-terminal stage (not in STAGE_TERMINAL_STAGES), then joins
-    every one of that checkpoint's repo entries as "repo:stage": a
-    multi-repo story shows its whole pipeline, not just this session's repo.
-    Candidate files are stat-sorted newest-first before any file is read, so
-    parsing stops at the first match and both the match and no-match paths
-    stay bounded by age rather than by full directory size. Unreadable,
-    unparsable, or schema-mismatched files are skipped without aborting the
-    scan. Returns "" when nothing matches. Never raises.
+    Every call stat()s the full checkpoint directory unconditionally — that
+    sweep's cost scales with directory size, not age. Only the read/parse
+    phase is bounded by STAGE_MAX_AGE_SECONDS, sorted newest-first so it
+    stops at the first match; a stat() is cheap enough not to need an age
+    guard, json.loads() is not. Returns "" when nothing matches. Never
+    raises.
     """
     try:
         if not cwd:
@@ -483,7 +476,8 @@ def get_dev_workflow_stage(cwd):
                     if candidate not in repos:
                         continue
                     entry = repos[candidate]
-                    if isinstance(entry, dict) and entry.get("stage") in STAGE_TERMINAL_STAGES:
+                    stage_value = entry.get("stage") if isinstance(entry, dict) else None
+                    if not isinstance(stage_value, str) or stage_value in STAGE_TERMINAL_STAGES:
                         continue
                     matched = True
                     break
