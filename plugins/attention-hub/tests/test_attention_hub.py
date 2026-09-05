@@ -1020,6 +1020,15 @@ def test_dashboard_renders_active_work_entry():
 
 # --- Dev-workflow stage field ---
 
+def test_dashboard_renders_stage_line():
+    # Why: the stage line only exists if the dashboard JS consumes s.stage;
+    # guards the render block against silent deletion (store tests alone
+    # stay green without it).
+    hub = load_hub()
+    assert 'className = "subtitle stage"' in hub.DASHBOARD_HTML
+    assert "stage.textContent = s.stage" in hub.DASHBOARD_HTML
+
+
 def test_upsert_stores_stage_and_round_trips(tmp_path):
     # Why: the card's stage line only renders if the store accepts, persists,
     # and echoes the field back through list_sessions.

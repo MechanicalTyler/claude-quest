@@ -10,7 +10,7 @@ Many concurrent agent sessions (local, docker, remote servers) make per-machine 
 - **Yellow** — `done` (task complete, awaiting your review)
 - **Green** — `working` (busy)
 
-Each card's title is the session name if one was reported, falling back to the session ID, with the project as the subtitle. Cards sort needs-attention first, show time in state, the latest message snippet, and last-update age, refresh every 3 seconds, and have a per-card dismiss control for crashed/abandoned sessions. Sessions silent for over 24 hours are pruned automatically.
+Each card's title is the session name if one was reported, falling back to the session ID, with the project as the subtitle and — when the session's repo is in a dev-workflow pipeline — a third line showing its stage(s). Cards sort needs-attention first, show time in state, the latest message snippet, and last-update age, refresh every 3 seconds, and have a per-card dismiss control for crashed/abandoned sessions. Sessions silent for over 24 hours are pruned automatically.
 
 ### Expanded card view
 
@@ -104,6 +104,7 @@ Reports (creates or updates) a session's state. Body is a JSON object:
 | `project` | no | Project/repo name shown as the card subtitle |
 | `host` | no | Machine/host name |
 | `message` | no | Short status message shown on the card (truncated to 200 chars) |
+| `stage` | no | Dev-workflow stage line (`repo:stage`, comma-joined); shown as a third card line when non-empty; not sticky — an event omitting it clears the stored value |
 | `timestamp` | no | ISO-8601 timestamp of the event |
 | `session_name` | no | Friendly display name; falls back to `session_id` when omitted |
 | `is_container` | no | Boolean; badges the card when the session runs inside a container |

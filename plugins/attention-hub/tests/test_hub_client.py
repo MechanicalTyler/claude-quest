@@ -2,8 +2,11 @@
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+
+import pytest
 
 
 def load_client():
@@ -14,6 +17,24 @@ def load_client():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+@pytest.fixture(autouse=True)
+def isolated_dev_workflow_state(tmp_path, monkeypatch):
+    """Redirect DEV_WORKFLOW_STATE_DIR on every loaded client to a tmp_path
+    dir so no test ever globs the developer's real ~/.claude checkpoints —
+    the constant binds Path.home() at module exec, which happens inside each
+    test via load_client(), so the redirect wraps load_client itself."""
+    state_dir = tmp_path / "dev-workflow-state-default"
+    original = load_client
+
+    def load_redirected():
+        mod = original()
+        mod.DEV_WORKFLOW_STATE_DIR = state_dir
+        return mod
+
+    monkeypatch.setattr(sys.modules[__name__], "load_client", load_redirected)
+    return state_dir
 
 
 # --- Payload identity fields ---
@@ -442,6 +463,14 @@ def test_build_event_payload_omits_active_work_when_empty():
 
 
 # --- Dev-workflow stage ---
+
+def test_default_state_dir_isolated_from_real_home(isolated_dev_workflow_state):
+    # Why: DEV_WORKFLOW_STATE_DIR binds Path.home() at import, so any payload
+    # test would read the developer's real checkpoints; the autouse fixture
+    # must demonstrably redirect every load_client() to a tmp_path dir.
+    client = load_client()
+    assert client.DEV_WORKFLOW_STATE_DIR == isolated_dev_workflow_state
+
 
 def make_stage_client(monkeypatch, tmp_path):
     client = load_client()
