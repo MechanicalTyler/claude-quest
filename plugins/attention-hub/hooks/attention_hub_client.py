@@ -34,6 +34,9 @@ CONTAINER_MARKER_FILES = ("/.dockerenv", "/run/.containerenv")
 CONTAINER_ENV_VARS = ("container", "KUBERNETES_SERVICE_HOST")
 MOUNTINFO_PATH = "/proc/self/mountinfo"
 
+# Dev-workflow checkpoint location (module-level so tests can redirect it).
+DEV_WORKFLOW_STATE_DIR = Path.home() / ".claude" / "dev-workflow" / "state"
+
 
 def log_hub(message, log_file="attention_hub_client.log"):
     """Write a timestamped log message to ~/.claude/logs/{log_file}. Never raises."""
@@ -429,6 +432,45 @@ def clear_all_active_subagents(session_id):
         return False
 
 
+def get_dev_workflow_stage(cwd):
+    """Pipeline stage line for cwd's repo from dev-workflow checkpoint files.
+
+    Scans DEV_WORKFLOW_STATE_DIR for the most recently modified checkpoint
+    whose top-level "repos" dict names cwd's basename, then joins every one
+    of that checkpoint's repo entries as "repo:stage" — a multi-repo story
+    shows its whole pipeline, not just this session's repo. Unreadable,
+    unparsable, or schema-mismatched files are skipped without aborting the
+    scan. Returns "" when nothing matches. Never raises.
+    """
+    try:
+        if not cwd:
+            return ""
+        project = os.path.basename(os.path.normpath(cwd))
+        winner = None
+        winner_mtime = None
+        for path in DEV_WORKFLOW_STATE_DIR.glob("*.json"):
+            try:
+                checkpoint = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(checkpoint, dict):
+                    continue
+                repos = checkpoint.get("repos")
+                if not isinstance(repos, dict) or project not in repos:
+                    continue
+                mtime = path.stat().st_mtime
+            except Exception:
+                continue
+            if winner_mtime is None or mtime > winner_mtime:
+                winner, winner_mtime = repos, mtime
+        if winner is None:
+            return ""
+        return ", ".join(
+            f"{repo}:{entry['stage']}" for repo, entry in winner.items()
+            if isinstance(entry, dict) and isinstance(entry.get("stage"), str)
+        )
+    except Exception:
+        return ""
+
+
 def build_event_payload(session_id, cwd, state, message=None, session_name=None, active_work=None):
     """Build the state-event payload identifying this session to the hub."""
     snippet = (message or "").strip()
@@ -441,6 +483,7 @@ def build_event_payload(session_id, cwd, state, message=None, session_name=None,
         "host": get_host_label(),
         "state": state,
         "message": snippet,
+        "stage": get_dev_workflow_stage(cwd),
         "is_container": detect_container(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

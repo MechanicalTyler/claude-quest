@@ -1016,3 +1016,49 @@ def test_dashboard_renders_active_work_entry():
     # subagents with label and status, not just the existing history list.
     hub = load_hub()
     assert "buildActiveWorkList" in hub.DASHBOARD_HTML
+
+
+# --- Dev-workflow stage field ---
+
+def test_upsert_stores_stage_and_round_trips(tmp_path):
+    # Why: the card's stage line only renders if the store accepts, persists,
+    # and echoes the field back through list_sessions.
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    store.upsert({**make_event(), "stage": "my-project:review"})
+    assert store.list_sessions()[0]["stage"] == "my-project:review"
+    reloaded = hub.AttentionStore(str(tmp_path / "state.json"))
+    assert reloaded.list_sessions()[0]["stage"] == "my-project:review"
+
+
+def test_upsert_stage_clamped(tmp_path):
+    # Why: stage is client-supplied input rendered on the dashboard; the hub
+    # trusts no client to truncate for it (same rule as project/host).
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    store.upsert({**make_event(), "stage": "s" * 5000})
+    assert len(store.list_sessions()[0]["stage"]) <= hub.FIELD_MAX_CHARS
+
+
+def test_upsert_stage_defaults_empty_and_not_sticky(tmp_path):
+    # Why: unlike session_name, stage must clear the moment an event stops
+    # carrying it — a finished pipeline's stage lingering on the card would lie.
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    store.upsert(make_event())
+    assert store.list_sessions()[0]["stage"] == ""
+    store.upsert({**make_event(), "stage": "my-project:review"})
+    store.upsert(make_event(state="done"))
+    assert store.list_sessions()[0]["stage"] == ""
+
+
+def test_load_defaults_missing_stage(tmp_path):
+    # Why: state files persisted before this field existed have no stage key;
+    # they must load without error and default to "".
+    hub = load_hub()
+    state_file = tmp_path / "state.json"
+    state_file.write_text(json.dumps({"sessions": {
+        "legacy": {"session_id": "legacy", "state": "working"},
+    }}), encoding="utf-8")
+    store = hub.AttentionStore(str(state_file))
+    assert store.list_sessions()[0]["stage"] == ""

@@ -101,6 +101,7 @@ class AttentionStore:
                                or "unknown", FIELD_MAX_CHARS),
                 "state": state,
                 "message": _clamp(event.get("message") or "", MESSAGE_MAX_CHARS),
+                "stage": _clamp(event.get("stage") or "", FIELD_MAX_CHARS),
                 "state_since": existing["state_since"]
                 if existing and existing["state"] == state else now,
                 "last_update": now,
@@ -217,6 +218,8 @@ class AttentionStore:
                                             FIELD_MAX_CHARS)
                     record["message"] = _clamp(record.get("message") or "",
                                                MESSAGE_MAX_CHARS)
+                    record["stage"] = _clamp(record.get("stage") or "",
+                                             FIELD_MAX_CHARS)
                     record["history"] = self._sanitize_history(record)
                     record["active_work"] = self._sanitize_active_work(record.get("active_work"))
                     record["is_container"] = bool(record.get("is_container", False))
@@ -606,6 +609,12 @@ function render(sessions) {
     subtitle.className = "subtitle";
     subtitle.textContent = s.project;
     who.append(title, subtitle);
+    if (typeof s.stage === "string" && s.stage) {
+      const stage = document.createElement("div");
+      stage.className = "subtitle stage";
+      stage.textContent = s.stage;
+      who.append(stage);
+    }
 
     const state = document.createElement("div");
     state.className = "state";
