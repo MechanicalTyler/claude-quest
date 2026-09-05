@@ -2,11 +2,8 @@
 import importlib.util
 import json
 import os
-import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-
-import pytest
 
 
 def load_client():
@@ -17,24 +14,6 @@ def load_client():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-@pytest.fixture(autouse=True)
-def isolated_dev_workflow_state(tmp_path, monkeypatch):
-    """Redirect DEV_WORKFLOW_STATE_DIR on every loaded client to a tmp_path
-    dir so no test ever globs the developer's real ~/.claude checkpoints —
-    the constant binds Path.home() at module exec, which happens inside each
-    test via load_client(), so the redirect wraps load_client itself."""
-    state_dir = tmp_path / "dev-workflow-state-default"
-    original = load_client
-
-    def load_redirected():
-        mod = original()
-        mod.DEV_WORKFLOW_STATE_DIR = state_dir
-        return mod
-
-    monkeypatch.setattr(sys.modules[__name__], "load_client", load_redirected)
-    return state_dir
 
 
 # --- Payload identity fields ---
@@ -463,21 +442,27 @@ def test_build_event_payload_omits_active_work_when_empty():
 
 
 # --- Dev-workflow stage ---
+# The conftest autouse isolated_home fixture redirects HOME to tmp_path, so the
+# default checkpoint dir resolves under tmp_path for every test here.
 
-def test_default_state_dir_isolated_from_real_home(isolated_dev_workflow_state):
-    # Why: DEV_WORKFLOW_STATE_DIR binds Path.home() at import, so any payload
-    # test would read the developer's real checkpoints; the autouse fixture
-    # must demonstrably redirect every load_client() to a tmp_path dir.
+def make_stage_client(tmp_path):
+    state_dir = tmp_path / ".claude" / "dev-workflow" / "state"
+    state_dir.mkdir(parents=True)
+    return load_client(), state_dir
+
+
+def test_state_dir_resolves_home_at_call_time(tmp_path, monkeypatch):
+    # Why: HOME-redirect fixtures are the suite's isolation mechanism; the
+    # lookup must resolve ~ at call time (not module import), or hook-driven
+    # suites would glob the developer's real checkpoints.
     client = load_client()
-    assert client.DEV_WORKFLOW_STATE_DIR == isolated_dev_workflow_state
-
-
-def make_stage_client(monkeypatch, tmp_path):
-    client = load_client()
-    state_dir = tmp_path / "dev-workflow-state"
-    state_dir.mkdir()
-    monkeypatch.setattr(client, "DEV_WORKFLOW_STATE_DIR", state_dir)
-    return client, state_dir
+    other_home = tmp_path / "other-home"
+    state_dir = other_home / ".claude" / "dev-workflow" / "state"
+    state_dir.mkdir(parents=True)
+    write_checkpoint(state_dir, "story-1.json",
+                     {"repos": {"my-project": {"stage": "review"}}})
+    monkeypatch.setenv("HOME", str(other_home))
+    assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:review"
 
 
 def write_checkpoint(state_dir, name, body):
@@ -486,19 +471,19 @@ def write_checkpoint(state_dir, name, body):
     return path
 
 
-def test_stage_single_repo_checkpoint(monkeypatch, tmp_path):
+def test_stage_single_repo_checkpoint(tmp_path):
     # Why: the dashboard's stage line reads "repo:stage" from the checkpoint
     # whose repos dict names this cwd's repo; the basic lookup must work.
-    client, state_dir = make_stage_client(monkeypatch, tmp_path)
+    client, state_dir = make_stage_client(tmp_path)
     write_checkpoint(state_dir, "story-1.json",
                      {"repos": {"my-project": {"stage": "review"}}})
     assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:review"
 
 
-def test_stage_multi_repo_checkpoint_lists_all_repos(monkeypatch, tmp_path):
+def test_stage_multi_repo_checkpoint_lists_all_repos(tmp_path):
     # Why: a multi-repo story's card should show the whole pipeline picture,
     # not just this session's own repo — every entry joins in insertion order.
-    client, state_dir = make_stage_client(monkeypatch, tmp_path)
+    client, state_dir = make_stage_client(tmp_path)
     write_checkpoint(state_dir, "story-1.json",
                      {"repos": {"my-project": {"stage": "review"},
                                 "other-repo": {"stage": "testing"}}})
@@ -506,10 +491,10 @@ def test_stage_multi_repo_checkpoint_lists_all_repos(monkeypatch, tmp_path):
             == "my-project:review, other-repo:testing")
 
 
-def test_stage_no_matching_checkpoint_returns_empty(monkeypatch, tmp_path):
+def test_stage_no_matching_checkpoint_returns_empty(tmp_path):
     # Why: sessions outside any dev-workflow story must get "" (never None,
     # never a raise) so the payload stays valid and the card shows two lines.
-    client, state_dir = make_stage_client(monkeypatch, tmp_path)
+    client, state_dir = make_stage_client(tmp_path)
     write_checkpoint(state_dir, "story-1.json",
                      {"repos": {"unrelated": {"stage": "review"}}})
     assert client.get_dev_workflow_stage("/home/user/my-project") == ""
@@ -517,18 +502,17 @@ def test_stage_no_matching_checkpoint_returns_empty(monkeypatch, tmp_path):
     assert payload["stage"] == ""
 
 
-def test_stage_missing_state_dir_returns_empty(monkeypatch, tmp_path):
+def test_stage_missing_state_dir_returns_empty():
     # Why: hosts that never ran dev-workflow have no state dir at all; the
     # lookup must treat that as "no checkpoints", not an error.
     client = load_client()
-    monkeypatch.setattr(client, "DEV_WORKFLOW_STATE_DIR", tmp_path / "absent")
     assert client.get_dev_workflow_stage("/home/user/my-project") == ""
 
 
-def test_stage_malformed_file_skipped_without_raise(monkeypatch, tmp_path):
+def test_stage_malformed_file_skipped_without_raise(tmp_path):
     # Why: checkpoint files are written by another tool and may be corrupt
     # mid-write; one bad file must not abort the scan or break the hook.
-    client, state_dir = make_stage_client(monkeypatch, tmp_path)
+    client, state_dir = make_stage_client(tmp_path)
     (state_dir / "broken.json").write_text("{not json", encoding="utf-8")
     write_checkpoint(state_dir, "story-1.json",
                      {"repos": {"my-project": {"stage": "development"}}})
@@ -536,10 +520,10 @@ def test_stage_malformed_file_skipped_without_raise(monkeypatch, tmp_path):
             == "my-project:development")
 
 
-def test_stage_most_recent_matching_checkpoint_wins(monkeypatch, tmp_path):
+def test_stage_most_recent_matching_checkpoint_wins(tmp_path):
     # Why: a repo can appear in several stories' checkpoints; the freshest
     # file (mtime) reflects the pipeline actually running now.
-    client, state_dir = make_stage_client(monkeypatch, tmp_path)
+    client, state_dir = make_stage_client(tmp_path)
     old = write_checkpoint(state_dir, "story-old.json",
                            {"repos": {"my-project": {"stage": "spec"}}})
     new = write_checkpoint(state_dir, "story-new.json",
@@ -551,10 +535,10 @@ def test_stage_most_recent_matching_checkpoint_wins(monkeypatch, tmp_path):
     assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:spec"
 
 
-def test_stage_non_dict_repos_skipped(monkeypatch, tmp_path):
+def test_stage_non_dict_repos_skipped(tmp_path):
     # Why: a checkpoint whose repos is a list, missing, or whose body is not
     # an object doesn't match the schema — skip it, don't crash on it.
-    client, state_dir = make_stage_client(monkeypatch, tmp_path)
+    client, state_dir = make_stage_client(tmp_path)
     write_checkpoint(state_dir, "list-repos.json", {"repos": ["my-project"]})
     write_checkpoint(state_dir, "no-repos.json", {"other": 1})
     write_checkpoint(state_dir, "non-dict.json", ["my-project"])
@@ -564,10 +548,10 @@ def test_stage_non_dict_repos_skipped(monkeypatch, tmp_path):
     assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:review"
 
 
-def test_stage_non_string_stage_entry_skipped(monkeypatch, tmp_path):
+def test_stage_non_string_stage_entry_skipped(tmp_path):
     # Why: an entry with a missing or non-string stage can't render as
     # "repo:stage"; drop that entry but keep the rest of the winner's repos.
-    client, state_dir = make_stage_client(monkeypatch, tmp_path)
+    client, state_dir = make_stage_client(tmp_path)
     write_checkpoint(state_dir, "story-1.json",
                      {"repos": {"my-project": {"stage": "review"},
                                 "numeric": {"stage": 3},
@@ -575,29 +559,51 @@ def test_stage_non_string_stage_entry_skipped(monkeypatch, tmp_path):
     assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:review"
 
 
-def test_stage_empty_cwd_returns_empty(monkeypatch, tmp_path):
+def test_stage_worktree_cwd_matches_repo_checkpoint(tmp_path):
+    # Why: pipeline sessions run inside <repo>/.worktrees/<branch>, so the cwd
+    # basename is never the repo name; the directory containing .worktrees
+    # must also be tried or the stage line stays blank for its main audience.
+    client, state_dir = make_stage_client(tmp_path)
+    write_checkpoint(state_dir, "story-1.json",
+                     {"repos": {"my-repo": {"stage": "review"}}})
+    assert (client.get_dev_workflow_stage("/home/user/my-repo/.worktrees/sc-999")
+            == "my-repo:review")
+    assert (client.get_dev_workflow_stage(
+                "/home/user/my-repo/.worktrees/sc-999/plugins/foo")
+            == "my-repo:review")
+
+
+def test_stage_worktree_cwd_without_match_returns_empty(tmp_path):
+    # Why: the worktree fallback widens the candidate list, not the match rule;
+    # a checkpoint naming neither the cwd basename nor the repo stays ignored.
+    client, state_dir = make_stage_client(tmp_path)
+    write_checkpoint(state_dir, "story-1.json",
+                     {"repos": {"unrelated": {"stage": "review"}}})
+    assert client.get_dev_workflow_stage("/home/user/my-repo/.worktrees/sc-999") == ""
+
+
+def test_stage_empty_cwd_returns_empty(tmp_path):
     # Why: hooks can fire with no cwd; there is no repo to match, so the
     # lookup must short-circuit to "" instead of guessing.
-    client, state_dir = make_stage_client(monkeypatch, tmp_path)
+    client, state_dir = make_stage_client(tmp_path)
     write_checkpoint(state_dir, "story-1.json",
                      {"repos": {"my-project": {"stage": "review"}}})
     assert client.get_dev_workflow_stage("") == ""
     assert client.get_dev_workflow_stage(None) == ""
 
 
-def test_payload_always_includes_stage_key(monkeypatch, tmp_path):
+def test_payload_always_includes_stage_key():
     # Why: the store treats stage as non-sticky, so every payload must carry
     # the key — even "" — or a stale stage would linger on the card.
     client = load_client()
-    monkeypatch.setattr(client, "DEV_WORKFLOW_STATE_DIR", tmp_path / "absent")
     payload = client.build_event_payload("s", "/srv/app", "working")
     assert payload["stage"] == ""
 
 
-def test_payload_carries_matching_stage(monkeypatch, tmp_path):
+def test_payload_carries_matching_stage(tmp_path):
     # Why: the stage line is only visible if the payload actually delivers the
     # looked-up value to the hub on ordinary state events.
-    client, state_dir = make_stage_client(monkeypatch, tmp_path)
+    client, state_dir = make_stage_client(tmp_path)
     write_checkpoint(state_dir, "story-1.json",
                      {"repos": {"my-project": {"stage": "development"}}})
     payload = client.build_event_payload("s", "/home/user/my-project", "working")

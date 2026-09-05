@@ -34,9 +34,6 @@ CONTAINER_MARKER_FILES = ("/.dockerenv", "/run/.containerenv")
 CONTAINER_ENV_VARS = ("container", "KUBERNETES_SERVICE_HOST")
 MOUNTINFO_PATH = "/proc/self/mountinfo"
 
-# Dev-workflow checkpoint location (module-level so tests can redirect it).
-DEV_WORKFLOW_STATE_DIR = Path.home() / ".claude" / "dev-workflow" / "state"
-
 
 def log_hub(message, log_file="attention_hub_client.log"):
     """Write a timestamped log message to ~/.claude/logs/{log_file}. Never raises."""
@@ -435,28 +432,39 @@ def clear_all_active_subagents(session_id):
 def get_dev_workflow_stage(cwd):
     """Pipeline stage line for cwd's repo from dev-workflow checkpoint files.
 
-    Scans DEV_WORKFLOW_STATE_DIR for the most recently modified checkpoint
-    whose top-level "repos" dict names cwd's basename, then joins every one
-    of that checkpoint's repo entries as "repo:stage" — a multi-repo story
-    shows its whole pipeline, not just this session's repo. Unreadable,
-    unparsable, or schema-mismatched files are skipped without aborting the
-    scan. Returns "" when nothing matches. Never raises.
+    Scans ~/.claude/dev-workflow/state (resolved from HOME at call time) for
+    the most recently modified checkpoint whose top-level "repos" dict names
+    cwd's basename — or, for a cwd under a `<repo>/.worktrees/` worktree,
+    the repo directory's name — then joins every one of that checkpoint's
+    repo entries as "repo:stage": a multi-repo story shows its whole
+    pipeline, not just this session's repo. Unreadable, unparsable, or
+    schema-mismatched files are skipped without aborting the scan. Returns
+    "" when nothing matches. Never raises.
     """
     try:
         if not cwd:
             return ""
-        project = os.path.basename(os.path.normpath(cwd))
+        path = os.path.normpath(cwd)
+        parts = path.split(os.sep)
+        candidates = [os.path.basename(path)]
+        for i, segment in enumerate(parts[:-1]):
+            if segment == ".worktrees" and i > 0 and parts[i - 1]:
+                if parts[i - 1] not in candidates:
+                    candidates.append(parts[i - 1])
+        state_dir = Path.home() / ".claude" / "dev-workflow" / "state"
         winner = None
         winner_mtime = None
-        for path in DEV_WORKFLOW_STATE_DIR.glob("*.json"):
+        for checkpoint_path in state_dir.glob("*.json"):
             try:
-                checkpoint = json.loads(path.read_text(encoding="utf-8"))
+                checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
                 if not isinstance(checkpoint, dict):
                     continue
                 repos = checkpoint.get("repos")
-                if not isinstance(repos, dict) or project not in repos:
+                if not isinstance(repos, dict):
                     continue
-                mtime = path.stat().st_mtime
+                if not any(candidate in repos for candidate in candidates):
+                    continue
+                mtime = checkpoint_path.stat().st_mtime
             except Exception:
                 continue
             if winner_mtime is None or mtime > winner_mtime:

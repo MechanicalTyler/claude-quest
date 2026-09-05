@@ -54,6 +54,14 @@ def transcript_tool_use_only(tmp_path):
     return str(dest)
 
 
+@pytest.fixture(autouse=True)
+def isolated_home(tmp_path, monkeypatch):
+    """Redirect HOME to tmp_path for every test so nothing — hook logs, marker
+    files, dev-workflow checkpoint reads — ever touches the real ~/.claude."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    return tmp_path
+
+
 @pytest.fixture
 def marker_home(tmp_path, monkeypatch):
     """Redirect HOME to tmp_path so waiting-marker files (and hook logs) never

@@ -1027,6 +1027,8 @@ def test_dashboard_renders_stage_line():
     hub = load_hub()
     assert 'className = "subtitle stage"' in hub.DASHBOARD_HTML
     assert "stage.textContent = s.stage" in hub.DASHBOARD_HTML
+    assert 'typeof s.stage === "string" && s.stage' in hub.DASHBOARD_HTML
+    assert "who.append(stage)" in hub.DASHBOARD_HTML
 
 
 def test_upsert_stores_stage_and_round_trips(tmp_path):
