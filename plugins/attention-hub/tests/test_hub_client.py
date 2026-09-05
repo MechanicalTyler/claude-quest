@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -528,10 +529,11 @@ def test_stage_most_recent_matching_checkpoint_wins(tmp_path):
                            {"repos": {"my-project": {"stage": "spec"}}})
     new = write_checkpoint(state_dir, "story-new.json",
                            {"repos": {"my-project": {"stage": "review"}}})
-    os.utime(old, (1000, 1000))
-    os.utime(new, (2000, 2000))
+    now = time.time()
+    os.utime(old, (now - 300, now - 300))
+    os.utime(new, (now - 200, now - 200))
     assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:review"
-    os.utime(old, (3000, 3000))
+    os.utime(old, (now - 100, now - 100))
     assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:spec"
 
 
@@ -590,6 +592,91 @@ def test_stage_empty_cwd_returns_empty(tmp_path):
                      {"repos": {"my-project": {"stage": "review"}}})
     assert client.get_dev_workflow_stage("") == ""
     assert client.get_dev_workflow_stage(None) == ""
+
+
+def test_stage_terminal_match_skipped_falls_back_to_older_active_checkpoint(tmp_path):
+    # Why: a repo's newest checkpoint can be terminal (story merged/closed)
+    # while an older checkpoint still names it in an active pipeline; the
+    # line should reflect the running pipeline, not the terminal one.
+    client, state_dir = make_stage_client(tmp_path)
+    active = write_checkpoint(state_dir, "story-active.json",
+                              {"repos": {"my-project": {"stage": "review"}}})
+    done = write_checkpoint(state_dir, "story-done.json",
+                            {"repos": {"my-project": {"stage": "done"}}})
+    now = time.time()
+    os.utime(active, (now - 200, now - 200))
+    os.utime(done, (now - 100, now - 100))
+    assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:review"
+
+
+def test_stage_all_terminal_matches_returns_empty(tmp_path):
+    # Why: once every checkpoint naming this repo is terminal, the pipeline
+    # is over and the stage line must go blank rather than show stale state.
+    client, state_dir = make_stage_client(tmp_path)
+    write_checkpoint(state_dir, "story-1.json",
+                     {"repos": {"my-project": {"stage": "done"}}})
+    write_checkpoint(state_dir, "story-2.json",
+                     {"repos": {"my-project": {"stage": "finished"}}})
+    assert client.get_dev_workflow_stage("/home/user/my-project") == ""
+
+
+def test_stage_checkpoint_older_than_max_age_ignored(tmp_path):
+    # Why: an unpruned state dir keeps checkpoints indefinitely; a match must
+    # not resurrect a pipeline that stopped updating long ago.
+    client, state_dir = make_stage_client(tmp_path)
+    stale = write_checkpoint(state_dir, "story-1.json",
+                             {"repos": {"my-project": {"stage": "review"}}})
+    old_time = time.time() - client.STAGE_MAX_AGE_SECONDS - 60
+    os.utime(stale, (old_time, old_time))
+    assert client.get_dev_workflow_stage("/home/user/my-project") == ""
+
+
+def test_stage_scan_is_stat_first_and_short_circuits_on_match(tmp_path, monkeypatch):
+    # Why: the scan must sort by mtime from stat() alone and stop reading
+    # files at the first match, rather than parsing every checkpoint first.
+    client, state_dir = make_stage_client(tmp_path)
+    now = time.time()
+    for i in range(5):
+        path = write_checkpoint(state_dir, f"unrelated-{i}.json",
+                                {"repos": {"other-repo": {"stage": "spec"}}})
+        os.utime(path, (now - 500 + i, now - 500 + i))
+    winner = write_checkpoint(state_dir, "winner.json",
+                              {"repos": {"my-project": {"stage": "review"}}})
+    os.utime(winner, (now - 10, now - 10))
+
+    read_calls = []
+    original_read_text = Path.read_text
+
+    def tracking_read_text(self, *args, **kwargs):
+        read_calls.append(self.name)
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", tracking_read_text)
+    assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:review"
+    # Only the newest (matching) file should have been parsed.
+    assert read_calls == ["winner.json"]
+
+
+def test_stage_scan_byte_identical_to_full_scan_on_no_early_exit(tmp_path):
+    # Why: the stat-first sort/short-circuit refactor must not change the
+    # result versus a full scan when the eventual winner isn't the newest
+    # file scanned — mtime ordering alone must still pick the true winner.
+    client, state_dir = make_stage_client(tmp_path)
+    now = time.time()
+    newest_non_matching = write_checkpoint(
+        state_dir, "newest.json", {"repos": {"other-repo": {"stage": "spec"}}})
+    matching_older = write_checkpoint(
+        state_dir, "older-match.json",
+        {"repos": {"my-project": {"stage": "review"},
+                   "other-repo": {"stage": "testing"}}})
+    even_older_match = write_checkpoint(
+        state_dir, "oldest-match.json",
+        {"repos": {"my-project": {"stage": "spec"}}})
+    os.utime(newest_non_matching, (now - 10, now - 10))
+    os.utime(matching_older, (now - 20, now - 20))
+    os.utime(even_older_match, (now - 30, now - 30))
+    assert (client.get_dev_workflow_stage("/home/user/my-project")
+            == "my-project:review, other-repo:testing")
 
 
 def test_payload_always_includes_stage_key():

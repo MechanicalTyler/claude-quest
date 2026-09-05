@@ -28,6 +28,8 @@ ACTIVE_SUBAGENT_TTL_SECONDS = 2 * 60 * 60
 BACKGROUND_SUBAGENT_TTL_SECONDS = 15 * 60
 COMPLETED_RETENTION_SECONDS = 5 * 60
 LABEL_MAX_CHARS = 256
+STAGE_TERMINAL_STAGES = frozenset({"done", "finished"})
+STAGE_MAX_AGE_SECONDS = 24 * 60 * 60  # matches attention_hub.py's DEFAULT_PRUNE_HOURS
 
 # Container-detection signals (module-level so tests can redirect them).
 CONTAINER_MARKER_FILES = ("/.dockerenv", "/run/.containerenv")
@@ -432,14 +434,19 @@ def clear_all_active_subagents(session_id):
 def get_dev_workflow_stage(cwd):
     """Pipeline stage line for cwd's repo from dev-workflow checkpoint files.
 
-    Scans ~/.claude/dev-workflow/state (resolved from HOME at call time) for
-    the most recently modified checkpoint whose top-level "repos" dict names
-    cwd's basename — or, for a cwd under a `<repo>/.worktrees/` worktree,
-    the repo directory's name — then joins every one of that checkpoint's
-    repo entries as "repo:stage": a multi-repo story shows its whole
-    pipeline, not just this session's repo. Unreadable, unparsable, or
-    schema-mismatched files are skipped without aborting the scan. Returns
-    "" when nothing matches. Never raises.
+    Scans ~/.claude/dev-workflow/state (resolved from HOME at call time),
+    bounded to files modified within STAGE_MAX_AGE_SECONDS (matching the
+    hub's own session-prune horizon), for the most recently modified
+    checkpoint whose top-level "repos" dict names cwd's basename — or, for a
+    cwd under a `<repo>/.worktrees/` worktree, the repo directory's name —
+    with a non-terminal stage (not in STAGE_TERMINAL_STAGES), then joins
+    every one of that checkpoint's repo entries as "repo:stage": a
+    multi-repo story shows its whole pipeline, not just this session's repo.
+    Candidate files are stat-sorted newest-first before any file is read, so
+    parsing stops at the first match and both the match and no-match paths
+    stay bounded by age rather than by full directory size. Unreadable,
+    unparsable, or schema-mismatched files are skipped without aborting the
+    scan. Returns "" when nothing matches. Never raises.
     """
     try:
         if not cwd:
@@ -452,9 +459,18 @@ def get_dev_workflow_stage(cwd):
                 if parts[i - 1] not in candidates:
                     candidates.append(parts[i - 1])
         state_dir = Path.home() / ".claude" / "dev-workflow" / "state"
-        winner = None
-        winner_mtime = None
+        cutoff = time.time() - STAGE_MAX_AGE_SECONDS
+        dated_paths = []
         for checkpoint_path in state_dir.glob("*.json"):
+            try:
+                mtime = checkpoint_path.stat().st_mtime
+            except OSError:
+                continue
+            if mtime < cutoff:
+                continue
+            dated_paths.append((mtime, checkpoint_path))
+        dated_paths.sort(key=lambda item: item[0], reverse=True)
+        for _, checkpoint_path in dated_paths:
             try:
                 checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
                 if not isinstance(checkpoint, dict):
@@ -462,19 +478,24 @@ def get_dev_workflow_stage(cwd):
                 repos = checkpoint.get("repos")
                 if not isinstance(repos, dict):
                     continue
-                if not any(candidate in repos for candidate in candidates):
+                matched = False
+                for candidate in candidates:
+                    if candidate not in repos:
+                        continue
+                    entry = repos[candidate]
+                    if isinstance(entry, dict) and entry.get("stage") in STAGE_TERMINAL_STAGES:
+                        continue
+                    matched = True
+                    break
+                if not matched:
                     continue
-                mtime = checkpoint_path.stat().st_mtime
             except Exception:
                 continue
-            if winner_mtime is None or mtime > winner_mtime:
-                winner, winner_mtime = repos, mtime
-        if winner is None:
-            return ""
-        return ", ".join(
-            f"{repo}:{entry['stage']}" for repo, entry in winner.items()
-            if isinstance(entry, dict) and isinstance(entry.get("stage"), str)
-        )
+            return ", ".join(
+                f"{repo}:{entry['stage']}" for repo, entry in repos.items()
+                if isinstance(entry, dict) and isinstance(entry.get("stage"), str)
+            )
+        return ""
     except Exception:
         return ""
 

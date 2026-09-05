@@ -416,9 +416,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .card.green { border-left-color: #46954a; }
   .row { display: flex; align-items: center; gap: .9rem; padding: .7rem .9rem;
          cursor: pointer; }
-  .who { min-width: 16rem; }
+  .who { min-width: 16rem; max-width: 22rem; }
   .title { font-weight: 600; }
   .subtitle { color: #8b939e; font-size: .85rem; }
+  .stage { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .state { min-width: 10rem; font-size: .9rem; }
   .red .state { color: #e5534b; }
   .yellow .state { color: #d4a72c; }
@@ -613,6 +614,7 @@ function render(sessions) {
       const stage = document.createElement("div");
       stage.className = "subtitle stage";
       stage.textContent = s.stage;
+      stage.title = s.stage;
       who.append(stage);
     }
 
