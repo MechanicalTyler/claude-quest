@@ -54,21 +54,27 @@ def transcript_tool_use_only(tmp_path):
     return str(dest)
 
 
-@pytest.fixture
-def marker_home(tmp_path, monkeypatch):
-    """Redirect HOME to tmp_path so waiting-marker files (and hook logs) never
-    touch the real ~/.claude. Returns the marker directory path."""
+@pytest.fixture(autouse=True)
+def isolated_home(tmp_path, monkeypatch):
+    """Redirect HOME to tmp_path for every test so nothing — hook logs, marker
+    files, dev-workflow checkpoint reads — ever touches the real ~/.claude."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    return tmp_path / ".claude" / "attention-hub" / "waiting-markers"
+    return tmp_path
 
 
 @pytest.fixture
-def active_subagent_home(tmp_path, monkeypatch):
-    """Redirect HOME to tmp_path so active-subagent marker files (and hook
-    logs) never touch the real ~/.claude. Returns the active-subagents
-    directory path (parent of each session's own marker subdirectory)."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    return tmp_path / ".claude" / "attention-hub" / "active-subagents"
+def marker_home(isolated_home):
+    """HOME is already redirected by isolated_home. Returns the marker
+    directory path."""
+    return isolated_home / ".claude" / "attention-hub" / "waiting-markers"
+
+
+@pytest.fixture
+def active_subagent_home(isolated_home):
+    """HOME is already redirected by isolated_home. Returns the
+    active-subagents directory path (parent of each session's own marker
+    subdirectory)."""
+    return isolated_home / ".claude" / "attention-hub" / "active-subagents"
 
 
 @pytest.fixture

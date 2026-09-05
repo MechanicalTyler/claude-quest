@@ -1,6 +1,7 @@
 # tests/test_attention_hub.py
 import importlib.util
 import json
+import re
 import socket
 import threading
 import urllib.request
@@ -17,6 +18,16 @@ def load_hub():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def css_rule_body(html, selector):
+    """The declaration body of a single top-level CSS rule, e.g. '.who'.
+
+    Tolerant of the rule being reformatted onto one or several lines, so a
+    style edit that keeps the same declarations doesn't also require a test
+    edit. Returns None if the selector has no rule."""
+    match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", html)
+    return match.group(1) if match else None
 
 
 def make_event(session_id="sess-1", state="working", project="proj", host="mac",
@@ -1016,3 +1027,120 @@ def test_dashboard_renders_active_work_entry():
     # subagents with label and status, not just the existing history list.
     hub = load_hub()
     assert "buildActiveWorkList" in hub.DASHBOARD_HTML
+
+
+# --- Dev-workflow stage field ---
+
+def test_dashboard_renders_stage_line():
+    # Why: the stage line only exists if the dashboard JS consumes s.stage;
+    # guards the render block against silent deletion (store tests alone
+    # stay green without it).
+    hub = load_hub()
+    assert "stage.textContent = s.stage" in hub.DASHBOARD_HTML
+
+
+def test_dashboard_stage_element_is_appended_to_who():
+    # Why: guards against a fix that builds the stage element correctly but
+    # never attaches it to the DOM, which stays invisible while every other
+    # stage test (textContent, title, CSS) keeps passing.
+    hub = load_hub()
+    assert "who.append(title, subtitle);" in hub.DASHBOARD_HTML
+    assert "who.append(stage);" in hub.DASHBOARD_HTML
+
+
+def test_dashboard_stage_has_tooltip():
+    # Why: .stage is ellipsis-truncated, so the full value must stay
+    # reachable via the title tooltip or long stage lines lose information.
+    hub = load_hub()
+    assert "stage.title = s.stage" in hub.DASHBOARD_HTML
+
+
+def test_dashboard_who_has_fixed_flex_basis_not_shrinkable():
+    # Why: round-1/round-2 layout regression — .who without a fixed,
+    # non-growing, non-shrinking flex basis lets the flex algorithm zero out
+    # .snippet's width instead of capping .who's. flex: 0 0 <rem> plus
+    # min-width: 0 is what actually holds the cap (max-width alone does not,
+    # since it leaves .who's basis at max-content).
+    hub = load_hub()
+    body = css_rule_body(hub.DASHBOARD_HTML, ".who")
+    assert body is not None
+    assert re.search(r"flex:\s*0\s+0\s+\d", body)
+    assert "min-width: 0" in body
+
+
+def test_dashboard_stage_has_ellipsis_overflow():
+    # Why: a long multi-repo stage value must truncate with an ellipsis
+    # rather than overflow the row or force it to wrap.
+    hub = load_hub()
+    body = css_rule_body(hub.DASHBOARD_HTML, ".stage")
+    assert body is not None
+    assert "overflow: hidden" in body
+    assert "text-overflow: ellipsis" in body
+    assert "white-space: nowrap" in body
+
+
+def test_dashboard_title_has_ellipsis_overflow():
+    # Why: constraining .who's width (the layout fix) also constrains its
+    # children — .title must ellipsize instead of wrapping onto a second
+    # line, a defect the round-1 fix introduced by only guarding .stage.
+    hub = load_hub()
+    body = css_rule_body(hub.DASHBOARD_HTML, ".title")
+    assert body is not None
+    assert "overflow: hidden" in body
+    assert "text-overflow: ellipsis" in body
+    assert "white-space: nowrap" in body
+
+
+def test_dashboard_subtitle_has_ellipsis_overflow():
+    # Why: same defect as .title — the host/session subtitle line must
+    # ellipsize instead of wrapping once .who's width is constrained.
+    hub = load_hub()
+    body = css_rule_body(hub.DASHBOARD_HTML, ".subtitle")
+    assert body is not None
+    assert "overflow: hidden" in body
+    assert "text-overflow: ellipsis" in body
+    assert "white-space: nowrap" in body
+
+
+def test_upsert_stores_stage_and_round_trips(tmp_path):
+    # Why: the card's stage line only renders if the store accepts, persists,
+    # and echoes the field back through list_sessions.
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    store.upsert({**make_event(), "stage": "my-project:review"})
+    assert store.list_sessions()[0]["stage"] == "my-project:review"
+    reloaded = hub.AttentionStore(str(tmp_path / "state.json"))
+    assert reloaded.list_sessions()[0]["stage"] == "my-project:review"
+
+
+def test_upsert_stage_clamped(tmp_path):
+    # Why: stage is client-supplied input rendered on the dashboard; the hub
+    # trusts no client to truncate for it (same rule as project/host).
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    store.upsert({**make_event(), "stage": "s" * 5000})
+    assert len(store.list_sessions()[0]["stage"]) <= hub.FIELD_MAX_CHARS
+
+
+def test_upsert_stage_defaults_empty_and_not_sticky(tmp_path):
+    # Why: unlike session_name, stage must clear the moment an event stops
+    # carrying it — a finished pipeline's stage lingering on the card would lie.
+    hub = load_hub()
+    store = hub.AttentionStore(str(tmp_path / "state.json"))
+    store.upsert(make_event())
+    assert store.list_sessions()[0]["stage"] == ""
+    store.upsert({**make_event(), "stage": "my-project:review"})
+    store.upsert(make_event(state="done"))
+    assert store.list_sessions()[0]["stage"] == ""
+
+
+def test_load_defaults_missing_stage(tmp_path):
+    # Why: state files persisted before this field existed have no stage key;
+    # they must load without error and default to "".
+    hub = load_hub()
+    state_file = tmp_path / "state.json"
+    state_file.write_text(json.dumps({"sessions": {
+        "legacy": {"session_id": "legacy", "state": "working"},
+    }}), encoding="utf-8")
+    store = hub.AttentionStore(str(state_file))
+    assert store.list_sessions()[0]["stage"] == ""

@@ -10,7 +10,7 @@ Many concurrent agent sessions (local, docker, remote servers) make per-machine 
 - **Yellow** — `done` (task complete, awaiting your review)
 - **Green** — `working` (busy)
 
-Each card's title is the session name if one was reported, falling back to the session ID, with the project as the subtitle. Cards sort needs-attention first, show time in state, the latest message snippet, and last-update age, refresh every 3 seconds, and have a per-card dismiss control for crashed/abandoned sessions. Sessions silent for over 24 hours are pruned automatically.
+Each card's title is the session name if one was reported, falling back to the session ID, with the project as the subtitle and — when a recent dev-workflow checkpoint has the session's own repo at a non-terminal stage (checkpoints older than about a week are ignored) — a third line showing that checkpoint's stage(s). Cards sort needs-attention first, show time in state, the latest message snippet, and last-update age, refresh every 3 seconds, and have a per-card dismiss control for crashed/abandoned sessions. Sessions silent for over 24 hours are pruned automatically.
 
 ### Expanded card view
 
@@ -104,6 +104,7 @@ Reports (creates or updates) a session's state. Body is a JSON object:
 | `project` | no | Project/repo name shown as the card subtitle |
 | `host` | no | Machine/host name |
 | `message` | no | Short status message shown on the card (truncated to 200 chars) |
+| `stage` | no | Dev-workflow stage line (`repo:stage`, comma-joined); shown as a third card line when non-empty; not sticky — an event omitting it clears the stored value |
 | `timestamp` | no | ISO-8601 timestamp of the event |
 | `session_name` | no | Friendly display name; falls back to `session_id` when omitted |
 | `is_container` | no | Boolean; badges the card when the session runs inside a container |
@@ -125,7 +126,7 @@ Returns `{"sessions": [...]}` — every tracked session with computed `state_sec
 
 ## Security
 
-The hub has **no authentication or TLS** and is intended for a trusted private network only (localhost, LAN, VPN/tailnet). Dashboard rows expose project names and message snippets. If remote machines do not need direct access, bind to localhost (`--bind 127.0.0.1`) or a VPN interface.
+The hub has **no authentication or TLS** and is intended for a trusted private network only (localhost, LAN, VPN/tailnet). Dashboard rows expose project names and message snippets. The stage line discloses the dev-workflow story most recently active for this repo, which may not be the story this session is working on — including, for a multi-repo story, the names and pipeline stages of its other repos. If remote machines do not need direct access, bind to localhost (`--bind 127.0.0.1`) or a VPN interface.
 
 ## Requirements
 

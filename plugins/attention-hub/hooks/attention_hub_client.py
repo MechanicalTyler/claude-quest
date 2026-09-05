@@ -28,6 +28,8 @@ ACTIVE_SUBAGENT_TTL_SECONDS = 2 * 60 * 60
 BACKGROUND_SUBAGENT_TTL_SECONDS = 15 * 60
 COMPLETED_RETENTION_SECONDS = 5 * 60
 LABEL_MAX_CHARS = 256
+STAGE_TERMINAL_STAGES = frozenset({"done", "finished"})
+STAGE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60  # checkpoints idle across nights/weekends/review waits are still active
 
 # Container-detection signals (module-level so tests can redirect them).
 CONTAINER_MARKER_FILES = ("/.dockerenv", "/run/.containerenv")
@@ -429,6 +431,69 @@ def clear_all_active_subagents(session_id):
         return False
 
 
+def get_dev_workflow_stage(cwd):
+    """Pipeline stage line for cwd's repo from dev-workflow checkpoint files.
+
+    Every call stat()s the full checkpoint directory unconditionally — that
+    sweep's cost scales with directory size, not age. Only the read/parse
+    phase is bounded by STAGE_MAX_AGE_SECONDS, sorted newest-first so it
+    stops at the first match; a stat() is cheap enough not to need an age
+    guard, json.loads() is not. Returns "" when nothing matches. Never
+    raises.
+    """
+    try:
+        if not cwd:
+            return ""
+        path = os.path.normpath(cwd)
+        parts = path.split(os.sep)
+        candidates = [os.path.basename(path)]
+        for i, segment in enumerate(parts[:-1]):
+            if segment == ".worktrees" and i > 0 and parts[i - 1]:
+                if parts[i - 1] not in candidates:
+                    candidates.append(parts[i - 1])
+        state_dir = Path.home() / ".claude" / "dev-workflow" / "state"
+        cutoff = time.time() - STAGE_MAX_AGE_SECONDS
+        dated_paths = []
+        for checkpoint_path in state_dir.glob("*.json"):
+            try:
+                mtime = checkpoint_path.stat().st_mtime
+            except OSError:
+                continue
+            if mtime < cutoff:
+                continue
+            dated_paths.append((mtime, checkpoint_path))
+        dated_paths.sort(key=lambda item: item[0], reverse=True)
+        for _, checkpoint_path in dated_paths:
+            try:
+                checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+                if not isinstance(checkpoint, dict):
+                    continue
+                repos = checkpoint.get("repos")
+                if not isinstance(repos, dict):
+                    continue
+                matched = False
+                for candidate in candidates:
+                    if candidate not in repos:
+                        continue
+                    entry = repos[candidate]
+                    stage_value = entry.get("stage") if isinstance(entry, dict) else None
+                    if not isinstance(stage_value, str) or stage_value in STAGE_TERMINAL_STAGES:
+                        continue
+                    matched = True
+                    break
+                if not matched:
+                    continue
+            except Exception:
+                continue
+            return ", ".join(
+                f"{repo}:{entry['stage']}" for repo, entry in repos.items()
+                if isinstance(entry, dict) and isinstance(entry.get("stage"), str)
+            )
+        return ""
+    except Exception:
+        return ""
+
+
 def build_event_payload(session_id, cwd, state, message=None, session_name=None, active_work=None):
     """Build the state-event payload identifying this session to the hub."""
     snippet = (message or "").strip()
@@ -441,6 +506,7 @@ def build_event_payload(session_id, cwd, state, message=None, session_name=None,
         "host": get_host_label(),
         "state": state,
         "message": snippet,
+        "stage": get_dev_workflow_stage(cwd),
         "is_container": detect_container(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

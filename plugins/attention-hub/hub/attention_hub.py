@@ -101,6 +101,7 @@ class AttentionStore:
                                or "unknown", FIELD_MAX_CHARS),
                 "state": state,
                 "message": _clamp(event.get("message") or "", MESSAGE_MAX_CHARS),
+                "stage": _clamp(event.get("stage") or "", FIELD_MAX_CHARS),
                 "state_since": existing["state_since"]
                 if existing and existing["state"] == state else now,
                 "last_update": now,
@@ -217,6 +218,8 @@ class AttentionStore:
                                             FIELD_MAX_CHARS)
                     record["message"] = _clamp(record.get("message") or "",
                                                MESSAGE_MAX_CHARS)
+                    record["stage"] = _clamp(record.get("stage") or "",
+                                             FIELD_MAX_CHARS)
                     record["history"] = self._sanitize_history(record)
                     record["active_work"] = self._sanitize_active_work(record.get("active_work"))
                     record["is_container"] = bool(record.get("is_container", False))
@@ -413,9 +416,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .card.green { border-left-color: #46954a; }
   .row { display: flex; align-items: center; gap: .9rem; padding: .7rem .9rem;
          cursor: pointer; }
-  .who { min-width: 16rem; }
-  .title { font-weight: 600; }
-  .subtitle { color: #8b939e; font-size: .85rem; }
+  .who { flex: 0 0 16rem; min-width: 0; }
+  .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subtitle { color: #8b939e; font-size: .85rem; overflow: hidden; text-overflow: ellipsis;
+              white-space: nowrap; }
+  .stage { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .state { min-width: 10rem; font-size: .9rem; }
   .red .state { color: #e5534b; }
   .yellow .state { color: #d4a72c; }
@@ -606,6 +611,13 @@ function render(sessions) {
     subtitle.className = "subtitle";
     subtitle.textContent = s.project;
     who.append(title, subtitle);
+    if (typeof s.stage === "string" && s.stage) {
+      const stage = document.createElement("div");
+      stage.className = "subtitle stage";
+      stage.textContent = s.stage;
+      stage.title = s.stage;
+      who.append(stage);
+    }
 
     const state = document.createElement("div");
     state.className = "state";
