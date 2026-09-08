@@ -9,8 +9,8 @@ Markdown file the epic owns:
 ```
 
 This adapter implements the full PM adapter interface (`skills/pm-adapter/interface.md`) against that
-file, so `full-cycle` and every stage skill (`write-spec`, `start-development`, `review-pr`,
-`test-pr`, `address-pr-comments`) run **unchanged** when pinned to it. No Shortcut/Jira/Linear/GitHub
+file, so `full-cycle` and every stage skill (`writing-specs`, `developing`, `reviewing-prs`,
+`testing-prs`, `addressing-pr-comments`) run **unchanged** when pinned to it. No Shortcut/Jira/Linear/GitHub
 Issues call is ever made.
 
 ## Configuration
@@ -128,7 +128,7 @@ stage skill needs, so no external PM lookup is required.
 - {YYYY-MM-DDTHH:MMZ} {comment text}
 ```
 
-The `PR` field is absent until `start-development` opens the PR. The `Depends on` field lists
+The `PR` field is absent until `developing` opens the PR. The `Depends on` field lists
 zero or more task IDs (comma-joined, or `none`). For a **bug task**, `Type` is `bug` and
 `Depends on` includes the **source task** that the defect was attributed to.
 
@@ -189,9 +189,9 @@ them):
 
 | Stage event | Set Status to |
 |-------------|---------------|
-| `start-development` begins | `in-progress` |
+| `developing` begins | `in-progress` |
 | PR opened | `in-review` |
-| review approved, `test-pr` begins | `in-test` |
+| review approved, `testing-prs` begins | `in-test` |
 | review **and** test both approved (dual approval) | `awaiting-merge` (PR left open for a human to merge — epic never merges) |
 | human merge of an awaiting-merge PR detected on resume | `done` |
 | task cannot proceed autonomously (incl. an awaiting-merge PR closed unmerged) | `blocked` (record reason as a comment) |

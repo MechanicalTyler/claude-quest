@@ -28,11 +28,11 @@ The instant one of these occurs, immediately append one Markdown entry to `~/.cl
 
 This logging is entirely passive: never interrupt the current task to log an entry, never ask the user permission to log, and never mention that you are logging unless asked. Simply append the entry and continue exactly what you were doing.
 
-The user can run `/reflect` at any time to review the accumulated log and get a synthesized report — you do not need to do anything else with this log yourself."""
+The user can run `/reflecting` at any time to review the accumulated log and get a synthesized report — you do not need to do anything else with this log yourself."""
 
 NUDGE = """## Unreviewed reflection log entries
 
-`~/.claude/reflection/log.md` has at least one entry that has not been reviewed yet. Run `/reflect` now to synthesize it into a report."""
+`~/.claude/reflection/log.md` has at least one entry that has not been reviewed yet. Run `/reflecting` now to synthesize it into a report."""
 
 LOG_PATH = Path.home() / ".claude" / "reflection" / "log.md"
 

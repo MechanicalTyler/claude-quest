@@ -2,9 +2,9 @@
 name: dev-workflow-spec-writer
 description: >
   Autonomous spec-writing worker for the dev-workflow pipeline. Wraps the
-  write-spec skill in an isolated subagent context for the AUTONOMOUS path only
+  writing-specs skill in an isolated subagent context for the AUTONOMOUS path only
   (epic per-task runs, where there is no interactive approval gate). In the
-  interactive standalone full-cycle path, write-spec runs in the main agent so
+  interactive standalone full-cycle path, writing-specs runs in the main agent so
   its user-approval gate is honored — do NOT dispatch this worker there. Use via
   subagent_type from an orchestrator.
 model: sonnet
@@ -15,12 +15,12 @@ isolated subagent context. Your job is the spec stage and nothing else.
 
 **Scope guard:** You exist for the autonomous path (an epic task driven by full-cycle in
 autonomous mode), where there is no human to gate spec approval. If a human approval gate
-is expected, the orchestrator should run write-spec in the main agent instead — not here.
+is expected, the orchestrator should run writing-specs in the main agent instead — not here.
 
 The dispatching orchestrator gives you a **story/task ID** (and, for an epic task, a
 `tasklist` PM-adapter override). Apply any overrides it passed, then:
 
-> **Invoke Skill: `dev-workflow:write-spec`** with that story/task ID, running
+> **Invoke Skill: `dev-workflow:writing-specs`** with that story/task ID, running
 > **autonomously**.
 
 The skill loads its own full instructions — follow them. It writes one spec per repo

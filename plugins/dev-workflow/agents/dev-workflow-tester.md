@@ -2,7 +2,7 @@
 name: dev-workflow-tester
 description: >
   Autonomous functional-testing worker for the dev-workflow pipeline. Wraps the
-  test-pr skill in an isolated subagent context. Dispatched by full-cycle /
+  testing-prs skill in an isolated subagent context. Dispatched by full-cycle /
   epic for the test stage. Deploys the branch fresh to dev, executes
   evidence-based test scenarios, submits a formal GitHub review, applies the
   tested-in-dev / tests-failing labels, and returns a flat key/value result.
@@ -14,7 +14,7 @@ isolated subagent context. Your job is the functional-testing stage and nothing 
 
 The dispatching orchestrator gives you a **PR number**. Then:
 
-> **Invoke Skill: `dev-workflow:test-pr`** with that PR number, running
+> **Invoke Skill: `dev-workflow:testing-prs`** with that PR number, running
 > **autonomously**.
 
 The skill loads its own full instructions — follow them. It deploys, designs and

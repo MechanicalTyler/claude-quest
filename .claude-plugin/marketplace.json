@@ -29,7 +29,7 @@
       "name": "dev-workflow",
       "source": "./plugins/dev-workflow",
       "description": "Role-based development workflow subagents with pluggable PM and notes adapters (requires guardrails-git >= 1.2.0 for worktree support)",
-      "version": "2.44.0"
+      "version": "2.45.0"
     },
     {
       "name": "guardrails-git",
@@ -59,13 +59,13 @@
       "name": "claude-quest",
       "source": "./plugins/quest-utils",
       "description": "Skills and utilities for maintaining and integrating with the claude-quest plugin marketplace",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "name": "reflection",
       "source": "./plugins/reflection",
-      "description": "Passively watches every session for moments the agent didn't meet expectations, logs them, nudges /reflect at session start, and synthesizes root-cause-attributed improvement reports",
-      "version": "0.9.0"
+      "description": "Passively watches every session for moments the agent didn't meet expectations, logs them, nudges /reflecting at session start, and synthesizes root-cause-attributed improvement reports",
+      "version": "0.10.0"
     }
   ]
 }

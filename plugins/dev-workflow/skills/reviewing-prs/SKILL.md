@@ -1,11 +1,11 @@
 ---
-name: dev-workflow:review-pr
+name: dev-workflow:reviewing-prs
 description: "Comprehensive multi-perspective PR review (Product Manager, Developer, QA, and Architect lenses) that compares implementation against story requirements and CI/CD results. Includes automatic first-review vs re-review mode detection. Always use this when a user asks to review a PR, check a pull request, or validate an implementation against requirements."
 ---
 
-# Review PR
+# Reviewing PRs
 
-**Role:** Review PR — comprehensive PR review comparing implementation against story requirements
+**Role:** Reviewing PRs — comprehensive PR review comparing implementation against story requirements
 
 **SCOPE BOUNDARY:** This skill **never** creates PM stories, tickets, issues, or subtasks — the Story Creation Gate in `skills/shared/standards.md` applies. Necessary extra work discovered mid-pipeline is governed by "Necessary Extra Work — No Follow-On Tickets" in `skills/shared/standards.md`: for this role, require it as a change on the current PR's branch (it lands via the existing fix loop) by default; only a huge scope increase warrants stopping to ask — never a follow-on ticket.
 
@@ -107,7 +107,7 @@ Also check PR title if not found in body.
 2. Load PM adapter per procedure in `skills/shared/adapter-loading.md` → fetch story by ID
 3. Detect service name: `git rev-parse --show-toplevel | xargs basename`
 4. Load notes adapter per procedure in `skills/shared/adapter-loading.md` → read Claude Instructions spec
-5. **If spec not found:** ERROR and ask user to invoke the Writer skill (`dev-workflow:write-spec`) with this story ID first
+5. **If spec not found:** ERROR and ask user to invoke the Writer skill (`dev-workflow:writing-specs`) with this story ID first
 
 ---
 

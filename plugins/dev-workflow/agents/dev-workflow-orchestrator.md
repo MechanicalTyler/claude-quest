@@ -34,8 +34,8 @@ Honor every override the epic passed verbatim:
 - **Never merge.** On dual approval, report the PR's review and test decisions back and
   leave the PR open — the epic marks the task `awaiting-merge`; a human merges later.
 
-full-cycle dispatches each of its stages (write-spec → start-development → review-pr →
-test-pr, plus the fix loops) as its own subagent, so each stage runs in fresh context
+full-cycle dispatches each of its stages (writing-specs → developing → reviewing-prs →
+testing-prs, plus the fix loops) as its own subagent, so each stage runs in fresh context
 **under** you. This depends on subagent nesting (Claude Code v2.1.172+). On older builds
 those stages run inline within this context — still isolated per task, just not per
 stage.

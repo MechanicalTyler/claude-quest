@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**dev-workflow** is a Claude plugin that provides action-based development workflow orchestration with pluggable PM and notes adapters. It enables specialized workflows (Start Development, Story to Spec, Review PR, Test PR, Start Debugging, Create Story, Full Cycle) through structured, quality-gated stages.
+**dev-workflow** is a Claude plugin that provides action-based development workflow orchestration with pluggable PM and notes adapters. It enables specialized workflows (Developing, Writing Specs, Reviewing PRs, Testing PRs, Debugging, Creating Stories, Full Cycle) through structured, quality-gated stages.
 
 **Dependency:** Requires the `superpowers` plugin to be installed — it provides core methodology skills (TDD, debugging, brainstorming, subagent orchestration, verification). Also requires `guardrails-git` >= 1.2.0 — every autonomous implement/fix stage now works inside an isolated git worktree (see `skills/shared/standards.md` → "Workspace Isolation"), and older `guardrails-git` versions hard-block `git worktree` commands outright.
 
@@ -16,13 +16,13 @@ Skills are invoked directly by name:
 
 | Command | Skill | Purpose |
 |---------|-------|---------|
-| `/start start-development [story-id]` | `dev-workflow:start-development` | Feature implementation with TDD |
-| `/start write-spec story-id` | `dev-workflow:write-spec` | Story → Claude Instructions spec |
-| `/start review-pr PR-number` | `dev-workflow:review-pr` | Multi-perspective PR review |
-| `/start test-pr PR-number` | `dev-workflow:test-pr` | Functional testing with evidence |
-| `/start start-debugging` | `dev-workflow:start-debugging` | Bug investigation |
-| `/start start-debugging story-id --rework` | `dev-workflow:start-debugging` (rework mode) | Address review feedback |
-| `/start create-story` | `dev-workflow:create-story` | Interview user → draft → submit story |
+| `/start developing [story-id]` | `dev-workflow:developing` | Feature implementation with TDD |
+| `/start writing-specs story-id` | `dev-workflow:writing-specs` | Story → Claude Instructions spec |
+| `/start reviewing-prs PR-number` | `dev-workflow:reviewing-prs` | Multi-perspective PR review |
+| `/start testing-prs PR-number` | `dev-workflow:testing-prs` | Functional testing with evidence |
+| `/start debugging` | `dev-workflow:debugging` | Bug investigation |
+| `/start debugging story-id --rework` | `dev-workflow:debugging` (rework mode) | Address review feedback |
+| `/start creating-stories` | `dev-workflow:creating-stories` | Interview user → draft → submit story |
 | `/start full-cycle [story-id\|description]` | `dev-workflow:full-cycle` | End-to-end lifecycle orchestrator looping review/test until pass |
 | `/start epic [summary\|epic-slug]` | `dev-workflow:epic` | Decompose a large initiative into a self-managed tasklist, then autonomously drive each task to a review- and test-approved open PR, pausing for a human to merge |
 
@@ -48,8 +48,8 @@ Skills invoke superpowers throughout their workflows:
 
 ## Key Design Decisions
 
-- **review-pr skill has two modes:** First Review (exhaustive 4-perspective analysis) vs. Re-Review (verify previous `CHANGES_REQUESTED` items were addressed, new findings only if they meet the Critical Exception Threshold)
-- **start-debugging skill is a unified 3-mode skill:** Debug mode (no args), Development mode (story-id), Rework mode (story-id + `--rework`)
+- **reviewing-prs skill has two modes:** First Review (exhaustive 4-perspective analysis) vs. Re-Review (verify previous `CHANGES_REQUESTED` items were addressed, new findings only if they meet the Critical Exception Threshold)
+- **debugging skill is a unified 3-mode skill:** Debug mode (no args), Development mode (story-id), Rework mode (story-id + `--rework`)
 - **epic skill is an orchestrator-only initiative driver:** deep discovery → one up-front consensus gate → self-managed `tasklist.md` (Mermaid graph + embedded per-task description/status) at `~/.claude/dev-workflow/epics/[epic-slug]/` → autonomous scheduler (cross-repo concurrent, same-repo sequential, one in-flight PR per repo) driving each task through `full-cycle` pinned to the `tasklist` adapter, each task isolated in its own git worktree (a workspace-isolation property, not a parallelism one — see `skills/shared/standards.md` → "Workspace Isolation"; reclaimed at the task's `awaiting-merge → done` transition). On reviewer+tester dual approval it does **not** merge — it marks the task `awaiting-merge`, tracks the open PR, and pauses that line of work for a human to merge; a later resume detects the human merge and advances the task to done (unblocking dependents). Epic PRs carry **no** `sc-` ID (documented exception). Bug intake: a subagent *reports* a defect from a prior task; the *orchestrator* appends a priority-scheduled `bug` task. Resumable from `tasklist.md`.
 - **tasklist PM adapter is file-backed, not config-selected:** the `epic` orchestrator pins it per dispatch (supplying the tasklist path + task ID in the subagent prompt) rather than mutating global `config.json`. It implements the full pm-adapter interface against `tasklist.md` so `full-cycle` and the stage skills run unchanged.
 - **Stage isolation via dedicated subagent types:** the orchestrators (`full-cycle`, `epic`) run every non-interactive stage in a fresh, isolated context by **dispatching the Agent tool** with a stage-specific `subagent_type` from `agents/` — never by invoking the `Skill` tool themselves (a `Skill` call loads into the *current* context, which is what made stages run in one agent). Each worker's body invokes the matching `dev-workflow:{stage}` skill autonomously, so stage logic/resumability/loops are unchanged; the `model` parameter on the dispatch overrides the worker's frontmatter default, preserving config-driven model resolution. See `skills/shared/standards.md` → "Subagent Dispatch". Workers that fan out (developer/reviewer/tester/orchestrator) keep the `Agent` tool; `fixer` and `pr-state-reader` are tool-restricted.
@@ -61,25 +61,25 @@ Skills invoke superpowers throughout their workflows:
 
 ```
 skills/
-  start-development/   # Full development workflow (TDD, subagents, PR)
-  write-spec/          # Story → Claude Instructions spec transformation
+  developing/   # Full development workflow (TDD, subagents, PR)
+  writing-specs/          # Story → Claude Instructions spec transformation
     spec-template.html # Standalone HTML document shell for generated specs
-  review-pr/           # Multi-perspective PR review with mode detection
-  test-pr/             # Evidence-based functional testing
-  start-debugging/     # Debug/dev/rework unified skill
-  create-story/        # Interactive interview → PM story creation
+  reviewing-prs/           # Multi-perspective PR review with mode detection
+  testing-prs/             # Evidence-based functional testing
+  debugging/     # Debug/dev/rework unified skill
+  creating-stories/        # Interactive interview → PM story creation
   full-cycle/          # End-to-end lifecycle orchestrator (sequences all stages)
   epic/                # Initiative orchestrator: discovery → consensus → self-managed tasklist → autonomous per-task full-cycle drive
-  address-pr-comments/ # Address review feedback in current session
+  addressing-pr-comments/ # Address review feedback in current session
   pm-adapter/          # PM tool adapters + interface spec (includes file-backed tasklist adapter)
   notes-adapter/       # Notes storage adapters + interface spec
   shared/              # Shared protocol docs (standards, adapter-loading, context-compaction, ...)
 agents/                # Dedicated subagent types dispatched by the orchestrators (one per pipeline role)
-  dev-workflow-spec-writer.md      # write-spec (autonomous path only)
-  dev-workflow-developer.md        # start-development
-  dev-workflow-reviewer.md         # review-pr
-  dev-workflow-tester.md           # test-pr
-  dev-workflow-fixer.md            # address-pr-comments (review/test fix loops; tool-restricted)
+  dev-workflow-spec-writer.md      # writing-specs (autonomous path only)
+  dev-workflow-developer.md        # developing
+  dev-workflow-reviewer.md         # reviewing-prs
+  dev-workflow-tester.md           # testing-prs
+  dev-workflow-fixer.md            # addressing-pr-comments (review/test fix loops; tool-restricted)
   dev-workflow-pr-state-reader.md  # entry/resume detection + PR-number resolution + authoritative decision read (read-only)
   dev-workflow-orchestrator.md     # full-cycle, dispatched per-task by epic (retains Agent tool to nest)
 hooks/
@@ -100,7 +100,7 @@ Epic state (not committed): `~/.claude/dev-workflow/epics/[epic-slug]/`
 
 ## Working on This Codebase
 
-Content is mostly Markdown skill definitions, plus a small number of static assets (e.g., `skills/write-spec/spec-template.html`) — there is no compiled code, no tests to run, and no build step. Changes are made by editing `.md` files (and the occasional asset file) in `skills/` and `commands/`.
+Content is mostly Markdown skill definitions, plus a small number of static assets (e.g., `skills/writing-specs/spec-template.html`) — there is no compiled code, no tests to run, and no build step. Changes are made by editing `.md` files (and the occasional asset file) in `skills/` and `commands/`.
 
 When modifying a skill:
 - Update the version in `.claude-plugin/plugin.json` if changing behavior, **and** bump the matching entry's `version` in the repo-root `.claude-plugin/marketplace.json` to the same value — the two drift independently and only the second one is what marketplace consumers actually see

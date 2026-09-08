@@ -16,17 +16,17 @@ Schema:
   "repos": {
     "api": {
       "pr_number": 42,
-      "stage": "review-pr",
+      "stage": "reviewing-prs",
       "review_loop_count": 1,
       "test_loop_count": 0,
-      "next_action": "re-dispatch review-pr subagent for PR 42"
+      "next_action": "re-dispatch reviewing-prs subagent for PR 42"
     },
     "web": {
       "pr_number": 43,
-      "stage": "review-pr",
+      "stage": "reviewing-prs",
       "review_loop_count": 0,
       "test_loop_count": 1,
-      "next_action": "re-dispatch test-pr subagent for PR 43"
+      "next_action": "re-dispatch testing-prs subagent for PR 43"
     }
   },
   "approval_text": "Approved — proceed with the spec as written.",
@@ -46,16 +46,26 @@ whose branch equals that repo's feature branch), exactly as `agents/dev-workflow
 already does — see `skills/shared/standards.md` → "Workspace Isolation". Nothing here
 caches it, so there is no staleness or cross-repo-mixup class of bug to guard against.
 
-**Stage vocabulary.** `stage` reaches exactly four values in practice: `"write-spec"`,
-`"start-development"`, `"review-pr"`, and `"done"`. `stage` advances to `"review-pr"` once
+**Stage vocabulary.** `stage` reaches exactly four values in practice: `"writing-specs"`,
+`"developing"`, `"reviewing-prs"`, and `"done"`. `stage` advances to `"reviewing-prs"` once
 a PR exists and stays there through *both* the review loop and the test loop that follow
 it — `review_loop_count` and `test_loop_count` are what distinguish which loop a repo is
-currently in while `stage` reads `"review-pr"`. `stage` advances to its terminal `"done"`
-only when that repo's test-pr passes. This is a distinct, smaller vocabulary from the
-entry-detection `prs=` tuple's `stage` field (`finished` / `test-pr` / `review-pr`, see
+currently in while `stage` reads `"reviewing-prs"`. `stage` advances to its terminal `"done"`
+only when that repo's testing-prs passes. This is a distinct, smaller vocabulary from the
+entry-detection `prs=` tuple's `stage` field (`finished` / `testing-prs` / `reviewing-prs`, see
 `full-cycle/SKILL.md`'s Resume / Entry Detection); when initializing a checkpoint entry
 from a parsed tuple, map the tuple's `stage` to the checkpoint's: `finished` → `"done"`,
-`test-pr` or `review-pr` → `"review-pr"`.
+`testing-prs` or `reviewing-prs` → `"reviewing-prs"`.
+
+**Legacy stage values (pre-rename checkpoints).** A checkpoint written before the
+dev-workflow skill rename (sc-1623) may still hold the old stage vocabulary:
+`"write-spec"`, `"start-development"`, or `"review-pr"`. `stage` is a persisted, on-disk
+identifier, not a skill name — it does not get a hard cutover. Whenever a checkpoint's
+`stage` field is read (at "Checkpoint initialization on resume" in `full-cycle/SKILL.md`
+and anywhere else a checkpoint entry's `stage` is consulted), treat these as aliases and
+translate on read: `"write-spec"` → `"writing-specs"`, `"start-development"` →
+`"developing"`, `"review-pr"` → `"reviewing-prs"`. Never write a legacy value back —
+the next checkpoint write for that entry always uses the current vocabulary.
 
 ### Write points
 
@@ -63,19 +73,19 @@ full-cycle writes the checkpoint at **every** stage boundary and loop iteration.
 write below updates the correct repo's entry in the `repos` map, except where noted as a
 top-level field:
 
-- **After create-story returns:** initialize one `repos` entry per repo named in the
+- **After creating-stories returns:** initialize one `repos` entry per repo named in the
   story's "Repos to modify" field (per `repo-discovery.md`'s reconciliation rules — this
   field is set at story creation, so it is available immediately, independent of any
   later on-disk path resolution). Each entry starts as `pr_number: null, stage:
-  "write-spec", review_loop_count: 0, test_loop_count: 0`.
+  "writing-specs", review_loop_count: 0, test_loop_count: 0`.
 - **During entry-detection resume, before running any stage:** initialize or enrich the
   `repos` map from the entry-detection subagent's result — the case on every cold resume by
-  a bare story ID, since create-story never runs on that path. First, if the checkpoint has
+  a bare story ID, since creating-stories never runs on that path. First, if the checkpoint has
   no `repos` map yet, or it is missing an entry for a repo named in the story's "Repos to
   modify" field, seed one entry per such repo from that field (per the note above, this
   field is available immediately at story creation, independent of `prs=`): `pr_number:
   null`, `stage` set from `story_state` per the Resume / Entry Detection table —
-  `"write-spec"` for row 2 (no spec / "In Spec" or earlier), `"start-development"` for row 3
+  `"writing-specs"` for row 2 (no spec / "In Spec" or earlier), `"developing"` for row 3
   (spec present / "Ready for Dev", no linked PR) — and `review_loop_count: 0,
   test_loop_count: 0`. This is what covers rows 2 and 3, where `prs=none` because no PR is
   linked yet and there is therefore no tuple to source from. Then, whether or not that
@@ -85,20 +95,20 @@ top-level field:
   prior entry (loop counts are not recoverable from GitHub, so a cold resume restarts them
   at 0). Both steps fill gaps only — neither overwrites an entry the checkpoint already has
   counts for.
-- **After the user approves the spec in write-spec** (before start-development begins) —
+- **After the user approves the spec in writing-specs** (before developing begins) —
   record the top-level `approval_text` (the user's literal approval message, verbatim)
   and `approval_timestamp` (ISO-8601 time the approval was given). These two fields are
   the mechanical evidence that the spec-approval gate actually fired; full-cycle refuses
-  to dispatch start-development without them (see full-cycle's "Hard gate — recorded
-  approval"). Also update every existing repo entry's `stage` to `"start-development"`
+  to dispatch developing without them (see full-cycle's "Hard gate — recorded
+  approval"). Also update every existing repo entry's `stage` to `"developing"`
   (still `pr_number: null` — no PR exists yet).
-- **After the start-development subagent returns:** for each `repo:pr` pair the subagent
+- **After the developing subagent returns:** for each `repo:pr` pair the subagent
   resolved, update that repo's entry with the real `pr_number` and advance `stage` to
-  `"review-pr"`. Nothing about the worktree is recorded here — a later reader resolves it
+  `"reviewing-prs"`. Nothing about the worktree is recorded here — a later reader resolves it
   live (see "No worktree path is ever stored in the checkpoint" above).
 - **After each review-loop / test-loop iteration:** increment that PR's repo entry's
   `review_loop_count` / `test_loop_count`.
-- **After a given PR's test-pr passes:** advance that repo's entry's `stage` to `"done"`.
+- **After a given PR's testing-prs passes:** advance that repo's entry's `stage` to `"done"`.
   Other repos' entries are untouched and continue independently — this is the terminal
   state a fully finished repo reaches while a sibling repo can still be mid-loop.
 

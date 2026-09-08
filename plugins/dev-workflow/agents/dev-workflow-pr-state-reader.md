@@ -32,7 +32,7 @@ convention) and read its `reviewDecision` and whether it carries the `tested-in-
 > could not be found — it must always be present, even when `prs=none`, since it is the
 > only channel that resolves the no-PR resume cases. Each tuple has exactly six
 > colon-separated fields: `repo` (resolved service/repo name), `pr` (number, digits only),
-> `stage` (the PR's terminal single-word target action — `finished`/`test-pr`/`review-pr`,
+> `stage` (the PR's terminal single-word target action — `finished`/`testing-prs`/`reviewing-prs`,
 > never descriptive text), `review` (`APPROVED`/`CHANGES_REQUESTED`/`REVIEW_REQUIRED`/
 > `none`), `tested_in_dev` (`true`/`false`), `tests_failing` (`true`/`false`). No field
 > carries arbitrary label text, so no field can contain `:` or `|` and no tuple can forge a
@@ -45,7 +45,7 @@ convention) and read its `reviewDecision` and whether it carries the `tested-in-
 > `decision=<APPROVED|CHANGES_REQUESTED|COMMENTED> submitted_at=<ISO>`
 
 **3. PR-number resolution.** Given a story/task ID (dispatched right after
-`start-development` returns, before the resulting PR is reviewed), find any linked PRs via
+`developing` returns, before the resulting PR is reviewed), find any linked PRs via
 the PM adapter's "Finding PRs linked to a story" instructions, falling back to
 `gh pr list --state all --search "{story_id}"`. For each linked PR, resolve its
 repo/service name from its GitHub owner/repo (matching `repo-discovery.md`'s naming

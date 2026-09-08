@@ -1,21 +1,21 @@
 ---
 name: dev-workflow:full-cycle
-description: "Drives the entire dev-workflow lifecycle end to end in order — create-story → write-spec → start-development → review-pr → test-pr — looping back through review and testing until both pass. Use when a user wants to run the whole development pipeline for a feature, take a story 'all the way through', or says 'full cycle', 'end to end', 'run the whole workflow', or '/start full-cycle'. Resumable: re-invoke at any point and it detects current story/PR state and enters at the correct stage."
+description: "Drives the entire dev-workflow lifecycle end to end in order — creating-stories → writing-specs → developing → reviewing-prs → testing-prs — looping back through review and testing until both pass. Use when a user wants to run the whole development pipeline for a feature, take a story 'all the way through', or says 'full cycle', 'end to end', 'run the whole workflow', or '/start full-cycle'. Resumable: re-invoke at any point and it detects current story/PR state and enters at the correct stage."
 ---
 
 # Full Cycle
 
 **Role:** Orchestrator — drive the entire dev-workflow lifecycle from idea to tested PR, in order, looping the stages that must repeat.
 
-**SCOPE BOUNDARY:** This skill **sequences** the existing dev-workflow skills — it does not reimplement any stage. It never writes feature code, specs, or PRs directly; each stage's own skill does that. The orchestrator's only direct actions are: talking to the user during the interactive stages, dispatching subagents for the non-interactive stages, reading PM/GitHub state to decide what runs next, and producing the end-of-run summary. This restriction holds even when the user directly asks for a mid-session fix — such a fix must always be routed through a `dev-workflow-fixer` Agent-tool dispatch, never handled with a direct `Edit`/`Bash`/`git` call in the orchestrator's own context. And whenever any new commit lands on an open PR outside the formal Review Loop / Test Loop — including one made by a mid-session `dev-workflow-fixer` dispatch — a fresh `dev-workflow-reviewer` and `dev-workflow-tester` dispatch against the new HEAD (per the Stage — review-pr and Stage — test-pr procedures below) is mandatory before the PR is reported done; if that fresh pass itself comes back changes-requested, it continues into the existing Review Loop / Test Loop machinery — including the Loop Safety Guard's cycle cap — rather than looping ad-hoc outside it (added after whoof-calc PR #165 / sc-130, where a fixer-authored commit landed on an already-approved-and-tested PR with no re-verification before the pipeline reported it done). It **never merges the PR** — a human does that.
+**SCOPE BOUNDARY:** This skill **sequences** the existing dev-workflow skills — it does not reimplement any stage. It never writes feature code, specs, or PRs directly; each stage's own skill does that. The orchestrator's only direct actions are: talking to the user during the interactive stages, dispatching subagents for the non-interactive stages, reading PM/GitHub state to decide what runs next, and producing the end-of-run summary. This restriction holds even when the user directly asks for a mid-session fix — such a fix must always be routed through a `dev-workflow-fixer` Agent-tool dispatch, never handled with a direct `Edit`/`Bash`/`git` call in the orchestrator's own context. And whenever any new commit lands on an open PR outside the formal Review Loop / Test Loop — including one made by a mid-session `dev-workflow-fixer` dispatch — a fresh `dev-workflow-reviewer` and `dev-workflow-tester` dispatch against the new HEAD (per the Stage — reviewing-prs and Stage — testing-prs procedures below) is mandatory before the PR is reported done; if that fresh pass itself comes back changes-requested, it continues into the existing Review Loop / Test Loop machinery — including the Loop Safety Guard's cycle cap — rather than looping ad-hoc outside it (added after whoof-calc PR #165 / sc-130, where a fixer-authored commit landed on an already-approved-and-tested PR with no re-verification before the pipeline reported it done). It **never merges the PR** — a human does that.
 
 ## Arguments: $ARGUMENTS
 
 The skill accepts one of:
 
 - **A PM story ID** (e.g., `sc-1043` or `1043`) — resume an existing story; detect its current state and enter the pipeline at the correct stage.
-- **A free-form feature description** — begin a brand-new cycle at create-story.
-- **No argument** — begin a brand-new cycle at create-story (create-story will prompt for the description).
+- **A free-form feature description** — begin a brand-new cycle at creating-stories.
+- **No argument** — begin a brand-new cycle at creating-stories (creating-stories will prompt for the description).
 
 Read `skills/shared/standards.md` — these mandatory rules govern this entire session.
 
@@ -40,8 +40,8 @@ Read the CLAUDE.md file in this repository before starting.
 Parse `$ARGUMENTS`:
 
 - Matches a story ID pattern (`sc-NNNNN` or bare `NNNNN`) → treat as a **story ID**; go to Resume / Entry Detection.
-- Non-empty and not a story ID → treat as a **feature description**; there is no story yet, so the entry stage is create-story (carry the description into that stage).
-- Empty → no story yet; the entry stage is create-story.
+- Non-empty and not a story ID → treat as a **feature description**; there is no story yet, so the entry stage is creating-stories (carry the description into that stage).
+- Empty → no story yet; the entry stage is creating-stories.
 
 ---
 
@@ -51,16 +51,16 @@ This is the central design decision for this skill (resolved with the user — s
 
 | Stage | Where it runs | Why |
 |-------|---------------|-----|
-| create-story | **Main orchestrator** (interactive) | Interviews the user; needs to ask questions. |
-| write-spec | **Main orchestrator** (interactive) | Must gate development on the user's explicit spec approval. |
-| start-development | **Subagent** | Non-interactive heavy implementation. |
-| review-pr | **Subagent** | Non-interactive review. |
-| test-pr | **Subagent** | Non-interactive functional testing. |
-| address-pr-comments (loop-back) | **Subagent** | Non-interactive fix work on the same PR. |
+| creating-stories | **Main orchestrator** (interactive) | Interviews the user; needs to ask questions. |
+| writing-specs | **Main orchestrator** (interactive) | Must gate development on the user's explicit spec approval. |
+| developing | **Subagent** | Non-interactive heavy implementation. |
+| reviewing-prs | **Subagent** | Non-interactive review. |
+| testing-prs | **Subagent** | Non-interactive functional testing. |
+| addressing-pr-comments (loop-back) | **Subagent** | Non-interactive fix work on the same PR. |
 
-A dispatched subagent has no tool to ask the user. The implementation/review/test stages (start-development, review-pr, test-pr) run their underlying skill in **autonomous mode** and return a single-line key/value result (see "Autonomous mode" and "Output Mode Detection" in `standards.md`); the orchestrator reads that result only as a hint. address-pr-comments does **not** emit a key/value result — it implements fixes and posts PR replies — so the orchestrator never depends on its return value. For every review/test outcome the orchestrator **re-confirms the authoritative state from GitHub and the PM story** (see Reading the Authoritative Review Decision) rather than trusting any subagent self-report.
+A dispatched subagent has no tool to ask the user. The implementation/review/test stages (developing, reviewing-prs, testing-prs) run their underlying skill in **autonomous mode** and return a single-line key/value result (see "Autonomous mode" and "Output Mode Detection" in `standards.md`); the orchestrator reads that result only as a hint. addressing-pr-comments does **not** emit a key/value result — it implements fixes and posts PR replies — so the orchestrator never depends on its return value. For every review/test outcome the orchestrator **re-confirms the authoritative state from GitHub and the PM story** (see Reading the Authoritative Review Decision) rather than trusting any subagent self-report.
 
-**PR-branch checkout for subagent stages that operate on an existing PR.** review-pr and test-pr take a PR number argument, but `dev-workflow:address-pr-comments` resolves the PR from the *current branch* (`gh pr status`) — a freshly dispatched subagent is not checked out on that branch. Because implementation/fix work runs inside an isolated worktree (`skills/shared/standards.md` → "Workspace Isolation"), that branch may already be checked out in a worktree elsewhere — a plain `gh pr checkout {PR_NUMBER}` fails outright when it is. The `dev-workflow-fixer` worker's body handles this: it locates the branch's worktree via `git worktree list --porcelain` and `cd`s there, falling back to `gh pr checkout {PR_NUMBER}` only when no worktree holds the branch. Pass the explicit PR number in the prompt — the worker resolves its own worktree live, so it never has to guess or ask.
+**PR-branch checkout for subagent stages that operate on an existing PR.** reviewing-prs and testing-prs take a PR number argument, but `dev-workflow:addressing-pr-comments` resolves the PR from the *current branch* (`gh pr status`) — a freshly dispatched subagent is not checked out on that branch. Because implementation/fix work runs inside an isolated worktree (`skills/shared/standards.md` → "Workspace Isolation"), that branch may already be checked out in a worktree elsewhere — a plain `gh pr checkout {PR_NUMBER}` fails outright when it is. The `dev-workflow-fixer` worker's body handles this: it locates the branch's worktree via `git worktree list --porcelain` and `cd`s there, falling back to `gh pr checkout {PR_NUMBER}` only when no worktree holds the branch. Pass the explicit PR number in the prompt — the worker resolves its own worktree live, so it never has to guess or ask.
 
 **How to dispatch (mandatory — per `standards.md` → "Subagent Dispatch"):**
 
@@ -84,43 +84,43 @@ Test Loop.
 | Stage / dispatch | `subagent_type` | `stages` key | Task type | Default model |
 |-----------------|-----------------|--------------|-----------|---------------|
 | entry-detection | `dev-workflow-pr-state-reader` | `entry-detection` | `implementation` | `sonnet` |
-| write-spec (autonomous path only) | `dev-workflow-spec-writer` | `write-spec` | `implementation` | `sonnet` |
-| start-development | `dev-workflow-developer` | `start-development` | `implementation` | `sonnet` |
+| writing-specs (autonomous path only) | `dev-workflow-spec-writer` | `writing-specs` | `implementation` | `sonnet` |
+| developing | `dev-workflow-developer` | `developing` | `implementation` | `sonnet` |
 | pr-number-read | `dev-workflow-pr-state-reader` | `pr-number-read` | `implementation` | `sonnet` |
-| review-pr | `dev-workflow-reviewer` | `review-pr` | `review` | `opus` |
-| address-pr-comments (fix loop) | `dev-workflow-fixer` | `address-pr-comments` | `implementation` | `sonnet` |
-| test-pr | `dev-workflow-tester` | `test-pr` | `review` | `opus` |
+| reviewing-prs | `dev-workflow-reviewer` | `reviewing-prs` | `review` | `opus` |
+| addressing-pr-comments (fix loop) | `dev-workflow-fixer` | `addressing-pr-comments` | `implementation` | `sonnet` |
+| testing-prs | `dev-workflow-tester` | `testing-prs` | `review` | `opus` |
 | decision-read | `dev-workflow-pr-state-reader` | `decision-read` | `implementation` | `sonnet` |
 
-**Output mode (per `standards.md` → "Output Mode Detection").** Determine the mode at startup. The orchestrator is **interactive by nature** when it must run create-story or write-spec, because those stages require user input (the spec-approval gate especially). If the skill is running non-interactively (no way to ask the user) AND the detected entry stage is create-story or write-spec, STOP and surface that the pipeline needs an interactive session to define/approve the spec. When resuming at start-development or later, no further interaction is required and the run may complete autonomously, emitting the flat key/value summary at Termination.
+**Output mode (per `standards.md` → "Output Mode Detection").** Determine the mode at startup. The orchestrator is **interactive by nature** when it must run creating-stories or writing-specs, because those stages require user input (the spec-approval gate especially). If the skill is running non-interactively (no way to ask the user) AND the detected entry stage is creating-stories or writing-specs, STOP and surface that the pipeline needs an interactive session to define/approve the spec. When resuming at developing or later, no further interaction is required and the run may complete autonomously, emitting the flat key/value summary at Termination.
 
 ---
 
 ## Resume / Entry Detection
 
-The skill is resumable: re-invoking it at any time must enter the pipeline at the correct stage. For a multi-repo story, each linked PR is evaluated independently per repo — determine each repo's entry stage from PM story state, whether that repo's PR exists, its review decision, and test-pr's tracking labels. Evaluate top to bottom and enter each repo at the **first** matching stage. The orchestrator resumes each unfinished repo at its own detected stage and skips any repo already at `finished`.
+The skill is resumable: re-invoking it at any time must enter the pipeline at the correct stage. For a multi-repo story, each linked PR is evaluated independently per repo — determine each repo's entry stage from PM story state, whether that repo's PR exists, its review decision, and testing-prs's tracking labels. Evaluate top to bottom and enter each repo at the **first** matching stage. The orchestrator resumes each unfinished repo at its own detected stage and skips any repo already at `finished`.
 
-**Process Fidelity applies here (see `standards.md` → "Process Fidelity").** Entry detection selects where the pipeline resumes — it never skips or reorders work: entering at a non-default stage, skipping a stage (including write-spec or its User Approval Gate), or running stages out of the documented order beyond what the table below dictates requires asking the user for explicit permission first, never a silent inference from PR/story state.
+**Process Fidelity applies here (see `standards.md` → "Process Fidelity").** Entry detection selects where the pipeline resumes — it never skips or reorders work: entering at a non-default stage, skipping a stage (including writing-specs or its User Approval Gate), or running stages out of the documented order beyond what the table below dictates requires asking the user for explicit permission first, never a silent inference from PR/story state.
 
-**Why the row order matters:** when test-pr fails it submits a `REQUEST_CHANGES` review, which drives the PR's aggregate `reviewDecision` to `CHANGES_REQUESTED` — the *same* value review-pr produces when review fails. The PR review decision alone therefore cannot tell a failed review from a failed test. The `tests-failing` / `tested-in-dev` labels (set by test-pr — see the test-pr label requirement) are the disambiguator, so the label rows are evaluated **before** the generic `reviewDecision == CHANGES_REQUESTED` row.
+**Why the row order matters:** when testing-prs fails it submits a `REQUEST_CHANGES` review, which drives the PR's aggregate `reviewDecision` to `CHANGES_REQUESTED` — the *same* value reviewing-prs produces when review fails. The PR review decision alone therefore cannot tell a failed review from a failed test. The `tests-failing` / `tested-in-dev` labels (set by testing-prs — see the testing-prs label requirement) are the disambiguator, so the label rows are evaluated **before** the generic `reviewDecision == CHANGES_REQUESTED` row.
 
 | # | Observed state | Entry stage |
 |---|----------------|-------------|
-| 1 | No story yet (no story ID; feature description or empty argument) | **create-story** |
-| 2 | Story exists but no spec is linked, or story state is "In Spec" / earlier | **write-spec** |
-| 3 | Spec present / story "Ready for Dev" and **no** linked PR | **start-development** |
+| 1 | No story yet (no story ID; feature description or empty argument) | **creating-stories** |
+| 2 | Story exists but no spec is linked, or story state is "In Spec" / earlier | **writing-specs** |
+| 3 | Spec present / story "Ready for Dev" and **no** linked PR | **developing** |
 | 4 | A repo's linked PR carries the `tested-in-dev` label and no `tests-failing` label | **finished** — testing passed for that repo; report and skip it |
-| 5 | A repo's linked PR carries the `tests-failing` label | **address-pr-comments → test-pr** (test loop) for that repo |
-| 6 | A repo's linked PR `reviewDecision` is `CHANGES_REQUESTED` (and no `tests-failing` label) | **address-pr-comments → review-pr** (review loop) for that repo |
-| 7 | A repo's linked PR is review-approved with no `tested-in-dev`/`tests-failing` label | **test-pr** for that repo |
-| 8 | A repo's linked PR exists but has no review decision yet (`REVIEW_REQUIRED`/null) | **review-pr** for that repo |
+| 5 | A repo's linked PR carries the `tests-failing` label | **addressing-pr-comments → testing-prs** (test loop) for that repo |
+| 6 | A repo's linked PR `reviewDecision` is `CHANGES_REQUESTED` (and no `tests-failing` label) | **addressing-pr-comments → reviewing-prs** (review loop) for that repo |
+| 7 | A repo's linked PR is review-approved with no `tested-in-dev`/`tests-failing` label | **testing-prs** for that repo |
+| 8 | A repo's linked PR exists but has no review decision yet (`REVIEW_REQUIRED`/null) | **reviewing-prs** for that repo |
 
 How to gather each signal, evaluated independently per repo:
 
 1. **Story state:** fetch the story via the PM adapter; read its workflow state. Treat it as a coarse, informational signal only — the plugin's built-in stages do **not** set a "Dev Complete" (or equivalent terminal) state, so resume detection must not depend on one. (A particular PM adapter may add such a transition; if present it corroborates the label, but the label is authoritative.)
 2. **Linked PR (per repo):** use the PM adapter's "Finding PRs linked to a story" instructions to find every linked PR, then resolve each PR's repo/service name from its GitHub owner/repo, matching `repo-discovery.md`'s naming convention. If none is linked there, fall back to `gh pr list --state all --search "{story_id}"`.
 3. **Review decision:** `gh pr view {PR_NUMBER} --json reviewDecision` for the aggregate, or the latest review's `state` (see Reading the Authoritative Review Decision below).
-4. **Test outcome:** test-pr applies a `tested-in-dev` (passed) or `tests-failing` (failed) label on every run (see "test-pr label requirement" below). These labels — not review recency or `reviewDecision` — are the durable signal that distinguishes the test stage from the review stage. If a review-approved PR carries **neither** label, treat that repo as **not yet tested** (row 7) and state that assumption to the user.
+4. **Test outcome:** testing-prs applies a `tested-in-dev` (passed) or `tests-failing` (failed) label on every run (see "testing-prs label requirement" below). These labels — not review recency or `reviewDecision` — are the durable signal that distinguishes the test stage from the review stage. If a review-approved PR carries **neither** label, treat that repo as **not yet tested** (row 7) and state that assumption to the user.
 
 ### Entry detection subagent
 
@@ -146,8 +146,8 @@ Gather the signals (story state, linked PRs, review decision, test labels) by
 > - `repo` — the resolved service/repo name (never raw label text)
 > - `pr` — the PR number (digits only)
 > - `stage` — that PR's terminal single-word target action from the Resume / Entry
->   Detection table rows 4-8: `finished` for row 4, `test-pr` for row 5, `review-pr` for
->   row 6, `test-pr` for row 7, `review-pr` for row 8 — never the row's full descriptive
+>   Detection table rows 4-8: `finished` for row 4, `testing-prs` for row 5, `reviewing-prs` for
+>   row 6, `testing-prs` for row 7, `reviewing-prs` for row 8 — never the row's full descriptive
 >   text
 > - `review` — `APPROVED`, `CHANGES_REQUESTED`, `REVIEW_REQUIRED`, or `none` (never raw
 >   text)
@@ -167,15 +167,17 @@ evaluated independently per repo. Raw PM/GitHub output never enters the main orc
 context.
 
 **Checkpoint initialization on resume.** Before running any stage, check the story's
-checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`). If it has no `repos` map yet,
+checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`). If an existing entry's `stage`
+holds a pre-rename legacy value, translate it per `context-compaction.md`'s "Legacy stage
+values" note before using it. If it has no `repos` map yet,
 or is missing an entry for a repo named in the story's "Repos to modify" field, seed one
 entry per such repo from that field now — `pr_number: null`, `stage` set from
-`story_state` (`"write-spec"` for row 2, `"start-development"` for row 3),
+`story_state` (`"writing-specs"` for row 2, `"developing"` for row 3),
 `review_loop_count: 0, test_loop_count: 0` — per `context-compaction.md`'s resume write
 point. This is what covers a cold resume by bare story ID entering at row 2 or row 3, where
 `prs=none` so there is no tuple to source an entry from. Then, for any repo that does have a
 linked PR, enrich/update its entry from the parsed `prs=` tuples the same way, before
-proceeding. This is the only initialization path when create-story never ran in this
+proceeding. This is the only initialization path when creating-stories never ran in this
 session — it now covers every resume row (2-8), not only the rows with a linked PR.
 
 When a repo's entry stage is mid-pipeline, run that stage for that repo, then continue
@@ -183,56 +185,56 @@ forward through the remaining stages for that repo in normal order; skip any rep
 at `finished`. State each repo's detected entry stage to the user before proceeding — not
 a single story-wide stage.
 
-### test-pr label requirement
+### testing-prs label requirement
 
-This skill depends on test-pr labeling its outcome. test-pr is updated in this change to **always** add `tested-in-dev` on a passing run and `tests-failing` on a failing run (previously optional). If you run full-cycle against a build of test-pr that omits the labels, cold resume cannot distinguish "approved, not yet tested" from "approved and passed" — in that case it defaults to row 7 (re-test) and announces the re-test, which is safe but may repeat a passing test.
+This skill depends on testing-prs labeling its outcome. testing-prs is updated in this change to **always** add `tested-in-dev` on a passing run and `tests-failing` on a failing run (previously optional). If you run full-cycle against a build of testing-prs that omits the labels, cold resume cannot distinguish "approved, not yet tested" from "approved and passed" — in that case it defaults to row 7 (re-test) and announces the re-test, which is safe but may repeat a passing test.
 
 ---
 
-## Stage — create-story (interactive, main orchestrator)
+## Stage — creating-stories (interactive, main orchestrator)
 
 Run only when there is no story yet.
 
-This stage satisfies the Story Creation Gate in `skills/shared/standards.md` only because the user explicitly invoked full-cycle. If full-cycle itself was auto-triggered, create-story's invocation-provenance pre-gate must still fire its permission ask.
+This stage satisfies the Story Creation Gate in `skills/shared/standards.md` only because the user explicitly invoked full-cycle. If full-cycle itself was auto-triggered, creating-stories's invocation-provenance pre-gate must still fire its permission ask.
 
-> Invoke Skill: `dev-workflow:create-story`
+> Invoke Skill: `dev-workflow:creating-stories`
 >
 > Pass the feature description from `$ARGUMENTS` if one was provided.
 
-Drive the interview to completion in the main agent so it can ask the user questions. Capture the resulting **story ID** and carry it forward. Proceed to write-spec.
+Drive the interview to completion in the main agent so it can ask the user questions. Capture the resulting **story ID** and carry it forward. Proceed to writing-specs.
 
 ---
 
-## Stage — write-spec (interactive, main orchestrator)
+## Stage — writing-specs (interactive, main orchestrator)
 
-> Invoke Skill: `dev-workflow:write-spec`
+> Invoke Skill: `dev-workflow:writing-specs`
 >
 > Pass the story ID as the argument.
 
-write-spec already writes one spec per repo named in the story (satisfying the "once per repo" requirement) and has its own User Approval Gate. Run it in the main agent so that gate is interactive.
+writing-specs already writes one spec per repo named in the story (satisfying the "once per repo" requirement) and has its own User Approval Gate. Run it in the main agent so that gate is interactive.
 
-**Autonomous path (e.g. an epic task):** when running autonomously there is no human to satisfy the approval gate, so do **not** run write-spec in this orchestrator's context. Instead **dispatch the Agent tool** with `subagent_type: dev-workflow-spec-writer` (model: resolved from `models.stages.write-spec` → `models.implementation` → default `sonnet`), passing the story/task ID and any PM-adapter override. The worker produces the spec(s) and proceeds — there is no interactive gate to honor in this mode.
+**Autonomous path (e.g. an epic task):** when running autonomously there is no human to satisfy the approval gate, so do **not** run writing-specs in this orchestrator's context. Instead **dispatch the Agent tool** with `subagent_type: dev-workflow-spec-writer` (model: resolved from `models.stages.writing-specs` → `models.implementation` → default `sonnet`), passing the story/task ID and any PM-adapter override. The worker produces the spec(s) and proceeds — there is no interactive gate to honor in this mode.
 
-**Mandatory confirmation gate (interactive path only):** Do NOT advance to start-development until the user has explicitly approved the spec(s) through write-spec's approval gate. If the user requests changes, let write-spec revise and re-present until approved. Only on explicit approval do you proceed.
+**Mandatory confirmation gate (interactive path only):** Do NOT advance to developing until the user has explicitly approved the spec(s) through writing-specs's approval gate. If the user requests changes, let writing-specs revise and re-present until approved. Only on explicit approval do you proceed.
 
 **Hard gate — recorded approval (interactive path only):** when the user approves, write
 the checkpoint immediately with `approval_text` (the user's literal approval message,
 verbatim) and `approval_timestamp` (ISO-8601) per `skills/shared/context-compaction.md`.
-Then, immediately before dispatching the start-development subagent, read
+Then, immediately before dispatching the developing subagent, read
 `~/.claude/dev-workflow/state/{story-id}.json` back and verify both fields are present and
-non-empty. If either is missing or empty, do NOT dispatch start-development — stop,
+non-empty. If either is missing or empty, do NOT dispatch developing — stop,
 re-request explicit approval from the user, record it in the checkpoint, and re-run this
 check. Prose approval that was never recorded does not satisfy the gate. This check fires
-only at this write-spec → start-development boundary — no other stage or resume path reads
+only at this writing-specs → developing boundary — no other stage or resume path reads
 these fields.
 
-Once this gate is satisfied, no further user confirmation is required or expected through start-development, review-pr, test-pr, or the fix loops — proceeding through those stages is documented pipeline behavior, not a Process Fidelity deviation.
+Once this gate is satisfied, no further user confirmation is required or expected through developing, reviewing-prs, testing-prs, or the fix loops — proceeding through those stages is documented pipeline behavior, not a Process Fidelity deviation.
 
-**State ownership:** write-spec owns the "Ready for Dev" transition and the `claude-written` label. The orchestrator does not duplicate them.
+**State ownership:** writing-specs owns the "Ready for Dev" transition and the `claude-written` label. The orchestrator does not duplicate them.
 
 ---
 
-## Stage — start-development (subagent)
+## Stage — developing (subagent)
 
 Before dispatching, resolve the target repo's path per `shared/repo-discovery.md`'s two-path
 detection. If that procedure's single-repo shortcut applies (inside one git repo, or the
@@ -241,7 +243,7 @@ dispatch prompt below as `{resolved-repo-path}`. For a multi-repo story, do not 
 single path here — omit the `Repo path:` field entirely and let the dispatched subagent's own
 per-repo discovery-and-loop run unmodified.
 
-**Dispatch the Agent tool** with `subagent_type: dev-workflow-developer` (model: resolved from `models.stages.start-development` → `models.implementation` → default `sonnet`). The worker's body already invokes `dev-workflow:start-development` autonomously; your dispatch prompt supplies only the variable inputs. Worktree ISOLATION is unconditional for this developer dispatch — it always works inside an isolated worktree, never the primary checkout (see `skills/shared/standards.md` → "Workspace Isolation") — it is not an epic-specific instruction, only the PM-adapter override and branch name below are. Worktree CREATION, though, is conditional: per standards.md's live-lookup rule, the dispatched subagent creates a worktree only when `git worktree list --porcelain` finds no existing match for the target branch; if a match exists (e.g. a resumed run), it reuses that one and does not create a second. This does not extend to every stage a full-cycle run dispatches: the fixer stage in the Review Loop below *locates* an existing worktree or falls back to a plain checkout (see "PR-branch checkout for subagent stages" above), it does not create one unconditionally.
+**Dispatch the Agent tool** with `subagent_type: dev-workflow-developer` (model: resolved from `models.stages.developing` → `models.implementation` → default `sonnet`). The worker's body already invokes `dev-workflow:developing` autonomously; your dispatch prompt supplies only the variable inputs. Worktree ISOLATION is unconditional for this developer dispatch — it always works inside an isolated worktree, never the primary checkout (see `skills/shared/standards.md` → "Workspace Isolation") — it is not an epic-specific instruction, only the PM-adapter override and branch name below are. Worktree CREATION, though, is conditional: per standards.md's live-lookup rule, the dispatched subagent creates a worktree only when `git worktree list --porcelain` finds no existing match for the target branch; if a match exists (e.g. a resumed run), it reuses that one and does not create a second. This does not extend to every stage a full-cycle run dispatches: the fixer stage in the Review Loop below *locates* an existing worktree or falls back to a plain checkout (see "PR-branch checkout for subagent stages" above), it does not create one unconditionally.
 
 > Story/task ID: `{story-id}`. Repo path: `{resolved-repo-path}`. Worktree isolation is required for this task — proceed without asking; if baseline tests fail, report the failure in your result and stop rather than asking whether to proceed. Run autonomously. [For an epic task, also pass the PM-adapter override and branch name.]
 
@@ -271,17 +273,17 @@ checkpoint's `repos` map entry for that PR. Do not rely solely on the subagent's
 self-reported PR number, and never let raw PM/GitHub JSON enter the main orchestrator
 context.
 
-**State ownership:** start-development owns the "In Development" transition. The orchestrator does not duplicate it.
+**State ownership:** developing owns the "In Development" transition. The orchestrator does not duplicate it.
 
-Then proceed to review-pr for each resulting PR.
+Then proceed to reviewing-prs for each resulting PR.
 
 ---
 
-## Stage — review-pr (subagent)
+## Stage — reviewing-prs (subagent)
 
-For each PR produced by start-development:
+For each PR produced by developing:
 
-**Dispatch the Agent tool** with `subagent_type: dev-workflow-reviewer` (model: resolved from `models.stages.review-pr` → `models.review` → default `opus`). The worker's body already invokes `dev-workflow:review-pr` autonomously and already carries the fresh-dev-build-CI mandate; your dispatch prompt supplies only:
+**Dispatch the Agent tool** with `subagent_type: dev-workflow-reviewer` (model: resolved from `models.stages.reviewing-prs` → `models.review` → default `opus`). The worker's body already invokes `dev-workflow:reviewing-prs` autonomously and already carries the fresh-dev-build-CI mandate; your dispatch prompt supplies only:
 
 > PR number: `{PR_NUMBER}`. Run autonomously.
 >
@@ -295,22 +297,22 @@ After it returns, read the PR's latest **review** decision authoritatively from 
 
 While the latest review decision for the PR is **changes requested**:
 
-1. **Dispatch the Agent tool** with `subagent_type: dev-workflow-fixer` (model: resolved from `models.stages.address-pr-comments` → `models.implementation` → default `sonnet`). The worker's body already locates and lands on the PR's branch (its own worktree if one holds it, else `gh pr checkout {PR_NUMBER}` — see "PR-branch checkout" above) and invokes `dev-workflow:address-pr-comments`; your dispatch prompt supplies only:
+1. **Dispatch the Agent tool** with `subagent_type: dev-workflow-fixer` (model: resolved from `models.stages.addressing-pr-comments` → `models.implementation` → default `sonnet`). The worker's body already locates and lands on the PR's branch (its own worktree if one holds it, else `gh pr checkout {PR_NUMBER}` — see "PR-branch checkout" above) and invokes `dev-workflow:addressing-pr-comments`; your dispatch prompt supplies only:
    > PR number: `{PR_NUMBER}`.
 
    It implements the requested changes on the **same branch and PR** and replies to the review.
-2. Re-dispatch the reviewer via the Agent tool (`subagent_type: dev-workflow-reviewer`, model: resolved from `models.stages.review-pr` → `models.review` → default `opus`) for the same PR.
+2. Re-dispatch the reviewer via the Agent tool (`subagent_type: dev-workflow-reviewer`, model: resolved from `models.stages.reviewing-prs` → `models.review` → default `opus`) for the same PR.
 3. Re-read the authoritative review decision (the newest review submitted since this re-dispatch).
 
-Repeat until the review decision is **approved**, subject to the Loop Safety Guard below. Then proceed to test-pr.
+Repeat until the review decision is **approved**, subject to the Loop Safety Guard below. Then proceed to testing-prs.
 
 ---
 
-## Stage — test-pr (subagent)
+## Stage — testing-prs (subagent)
 
 Once the PR is review-approved:
 
-**Dispatch the Agent tool** with `subagent_type: dev-workflow-tester` (model: resolved from `models.stages.test-pr` → `models.review` → default `opus`). The worker's body already invokes `dev-workflow:test-pr` autonomously and already carries the fresh-dev-deploy mandate; your dispatch prompt supplies only:
+**Dispatch the Agent tool** with `subagent_type: dev-workflow-tester` (model: resolved from `models.stages.testing-prs` → `models.review` → default `opus`). The worker's body already invokes `dev-workflow:testing-prs` autonomously and already carries the fresh-dev-deploy mandate; your dispatch prompt supplies only:
 
 > PR number: `{PR_NUMBER}`. Run autonomously.
 >
@@ -318,7 +320,7 @@ Once the PR is review-approved:
 
 After it returns, read the PR's latest **test** decision authoritatively from GitHub.
 
-**State ownership:** test-pr owns its outcome labels — it submits the `APPROVE`/`REQUEST_CHANGES` review and applies `tested-in-dev` (pass) or `tests-failing` (fail). The orchestrator only reads these; it never labels or transitions the PR/story itself.
+**State ownership:** testing-prs owns its outcome labels — it submits the `APPROVE`/`REQUEST_CHANGES` review and applies `tested-in-dev` (pass) or `tests-failing` (fail). The orchestrator only reads these; it never labels or transitions the PR/story itself.
 
 ---
 
@@ -326,8 +328,8 @@ After it returns, read the PR's latest **test** decision authoritatively from Gi
 
 While testing **requests changes**:
 
-1. **Dispatch the Agent tool** with `subagent_type: dev-workflow-fixer` (model: resolved from `models.stages.address-pr-comments` → `models.implementation` → default `sonnet`) for the same PR — the worker locates and lands on the branch (its own worktree if one holds it, else `gh pr checkout`) and invokes `dev-workflow:address-pr-comments`; pass the PR number `{PR_NUMBER}`.
-2. Re-dispatch the tester via the Agent tool (`subagent_type: dev-workflow-tester`, model: resolved from `models.stages.test-pr` → `models.review` → default `opus`) for the same PR.
+1. **Dispatch the Agent tool** with `subagent_type: dev-workflow-fixer` (model: resolved from `models.stages.addressing-pr-comments` → `models.implementation` → default `sonnet`) for the same PR — the worker locates and lands on the branch (its own worktree if one holds it, else `gh pr checkout`) and invokes `dev-workflow:addressing-pr-comments`; pass the PR number `{PR_NUMBER}`.
+2. Re-dispatch the tester via the Agent tool (`subagent_type: dev-workflow-tester`, model: resolved from `models.stages.testing-prs` → `models.review` → default `opus`) for the same PR.
 3. Re-read the authoritative test decision (the newest review submitted since this re-dispatch).
 
 Repeat until testing **passes**, subject to the Loop Safety Guard below.
@@ -336,7 +338,7 @@ Repeat until testing **passes**, subject to the Loop Safety Guard below.
 
 ## Reading the Authoritative Review Decision
 
-Both review-pr and test-pr submit a **formal GitHub review** with an event of `APPROVE` or `REQUEST_CHANGES`. Read the latest decision from GitHub rather than trusting a subagent's self-report:
+Both reviewing-prs and testing-prs submit a **formal GitHub review** with an event of `APPROVE` or `REQUEST_CHANGES`. Read the latest decision from GitHub rather than trusting a subagent's self-report:
 
 ```bash
 gh api repos/{owner}/{repo}/pulls/{PR_NUMBER}/reviews
@@ -357,10 +359,10 @@ Read that one line. Never let the raw `gh api` JSON enter the main orchestrator 
 
 `gh pr view {PR_NUMBER} --json reviewDecision` is an acceptable convenience equivalent for the PR-level aggregate decision.
 
-Because review-pr and test-pr both submit reviews on the same PR (and as the same bot author), recency alone cannot tell their decisions apart on a PR that has both. Disambiguate by context, not author:
+Because reviewing-prs and testing-prs both submit reviews on the same PR (and as the same bot author), recency alone cannot tell their decisions apart on a PR that has both. Disambiguate by context, not author:
 
 - **Immediately after re-dispatching a specific stage**, read the newest review created since that dispatch — that one belongs to the stage you just ran. Recency is reliable here because you control the ordering.
-- **For cold resume detection** (you did not just run a stage), do NOT infer the test outcome from review recency or from `reviewDecision` (a failed test and a failed review both produce `CHANGES_REQUESTED`). Use the durable signals instead: the `tested-in-dev` / `tests-failing` labels record test-pr's last outcome, and `reviewDecision` reflects the review stage only after the labels have been consulted. See Resume / Entry Detection.
+- **For cold resume detection** (you did not just run a stage), do NOT infer the test outcome from review recency or from `reviewDecision` (a failed test and a failed review both produce `CHANGES_REQUESTED`). Use the durable signals instead: the `tested-in-dev` / `tests-failing` labels record testing-prs's last outcome, and `reviewDecision` reflects the review stage only after the labels have been consulted. See Resume / Entry Detection.
 
 **Reporting Discipline — forwarded claims are unverified.** Whenever a dispatch prompt to one subagent includes a root-cause or diagnostic claim reported by an earlier subagent in the same run, the prompt text must explicitly label that claim as unverified/self-reported — e.g., "the developer subagent reported the root cause as X — this has not been independently confirmed" — never restate it as established fact. A forwarded claim framed as fact anchors the receiving subagent (reviewer or tester) away from independent investigation; each stage must reach its own conclusion from the artifacts, not inherit the reporter's.
 
@@ -376,7 +378,7 @@ Neither the review loop nor the test loop may run forever. Track an attempt coun
 
 ## Termination
 
-When testing passes — test-pr has submitted an `APPROVE` review and applied the `tested-in-dev` label — stop. **Leave the PR open** — do not merge. Produce a short end-of-run summary:
+When testing passes — testing-prs has submitted an `APPROVE` review and applied the `tested-in-dev` label — stop. **Leave the PR open** — do not merge. Produce a short end-of-run summary:
 
 - Story ID and title
 - PR number(s) and URL(s)
@@ -401,9 +403,9 @@ In autonomous mode, emit the summary as the flat key/value result defined in `st
 
 The orchestrator only sequences stages; it must **never** fire a PM state transition owned by an individual skill:
 
-- write-spec owns **"Ready for Dev"** (and the `claude-written` label)
-- start-development owns **"In Development"**
-- test-pr owns its **review submission and `tested-in-dev`/`tests-failing` labels**
+- writing-specs owns **"Ready for Dev"** (and the `claude-written` label)
+- developing owns **"In Development"**
+- testing-prs owns its **review submission and `tested-in-dev`/`tests-failing` labels**
 
 The orchestrator never duplicates these transitions or labels. Its job between stages is to read state, not to write it.
 
@@ -423,13 +425,13 @@ map, using the stage and key facts at that moment:
 
 | Moment | Per-repo write | Notes |
 |--------|-----------------|-------|
-| After create-story returns | Initialize one `repos` entry per repo named in the story's "Repos to modify" field | each entry starts `pr_number: null, stage: "write-spec", review_loop_count: 0, test_loop_count: 0` |
-| During entry-detection resume, before running any stage | If the `repos` map is missing an entry for a repo named in the story's "Repos to modify" field, seed it from that field; then, for any repo that has a linked PR, enrich/update its entry from the parsed `prs=` tuple | Seeded entries (rows 2/3, `prs=none`): `pr_number: null`, `stage` from `story_state` (`"write-spec"` for row 2, `"start-development"` for row 3). Tuple-enriched entries (rows 4-8): `pr_number` from the tuple's `pr`; `stage` mapped from the tuple's `stage` action (`finished`→`"done"`, `test-pr`/`review-pr`→`"review-pr"` — see the stage-vocabulary note in `context-compaction.md`). Both start `review_loop_count: 0, test_loop_count: 0` since loop counts are not recoverable from GitHub on a cold resume. This is the only initialization path when create-story never ran this session; it now covers every resume row (2-8), not only rows with a linked PR; it fills gaps only and never overwrites an already-populated entry |
-| After spec approval gate | Update every existing repo entry's `stage` to `"start-development"` | record top-level `approval_text`/`approval_timestamp`; still `pr_number: null` — no PR exists yet |
-| After start-development subagent returns | For each `repo:pr` pair resolved, update that repo's entry's `pr_number` and advance `stage` to `"review-pr"` | Nothing about the worktree is recorded — a later reader resolves it live via `git worktree list --porcelain`, per `context-compaction.md` → "No worktree path is ever stored in the checkpoint" |
-| After each address-pr-comments + review-pr iteration | Increment that PR's repo entry's `review_loop_count` | |
-| After each address-pr-comments + test-pr iteration | Increment that PR's repo entry's `test_loop_count` | |
-| After test-pr passes | Advance that repo's entry's `stage` to `"done"` | other repos' entries are untouched and continue independently — this repo's final checkpoint |
+| After creating-stories returns | Initialize one `repos` entry per repo named in the story's "Repos to modify" field | each entry starts `pr_number: null, stage: "writing-specs", review_loop_count: 0, test_loop_count: 0` |
+| During entry-detection resume, before running any stage | If the `repos` map is missing an entry for a repo named in the story's "Repos to modify" field, seed it from that field; then, for any repo that has a linked PR, enrich/update its entry from the parsed `prs=` tuple | Seeded entries (rows 2/3, `prs=none`): `pr_number: null`, `stage` from `story_state` (`"writing-specs"` for row 2, `"developing"` for row 3). Tuple-enriched entries (rows 4-8): `pr_number` from the tuple's `pr`; `stage` mapped from the tuple's `stage` action (`finished`→`"done"`, `testing-prs`/`reviewing-prs`→`"reviewing-prs"` — see the stage-vocabulary note in `context-compaction.md`). Both start `review_loop_count: 0, test_loop_count: 0` since loop counts are not recoverable from GitHub on a cold resume. This is the only initialization path when creating-stories never ran this session; it now covers every resume row (2-8), not only rows with a linked PR; it fills gaps only and never overwrites an already-populated entry |
+| After spec approval gate | Update every existing repo entry's `stage` to `"developing"` | record top-level `approval_text`/`approval_timestamp`; still `pr_number: null` — no PR exists yet |
+| After developing subagent returns | For each `repo:pr` pair resolved, update that repo's entry's `pr_number` and advance `stage` to `"reviewing-prs"` | Nothing about the worktree is recorded — a later reader resolves it live via `git worktree list --porcelain`, per `context-compaction.md` → "No worktree path is ever stored in the checkpoint" |
+| After each addressing-pr-comments + reviewing-prs iteration | Increment that PR's repo entry's `review_loop_count` | |
+| After each addressing-pr-comments + testing-prs iteration | Increment that PR's repo entry's `test_loop_count` | |
+| After testing-prs passes | Advance that repo's entry's `stage` to `"done"` | other repos' entries are untouched and continue independently — this repo's final checkpoint |
 
 If a checkpoint write fails, surface the error to the user and continue — do not abort.
 
@@ -452,20 +454,20 @@ the next stage boundary after receiving it, not mid-stage.
 
 For a story spanning multiple repos, defer to the existing skills' built-in multi-repo behavior — do not reimplement it:
 
-- write-spec already writes one spec per repo named in the story.
-- start-development already opens one PR per repo.
+- writing-specs already writes one spec per repo named in the story.
+- developing already opens one PR per repo.
 
 The orchestrator then runs the review → test cycle (including the loops) **for each resulting PR** independently. A later stage for one PR does not block a different PR. *[Inference — the sc-1043 target (`claude-plugin-dev-workflow`) is a single repo; this generalizes the single-repo flow without changing it.]*
 
-**Batch concurrent dispatches within the review → test cycle.** When a round of this cycle's per-PR Agent-tool dispatches spans multiple distinct repos, issue the concurrent ones as multiple `Agent` tool calls within a single message — mirroring `epic/SKILL.md` Phase 6's "dispatch the concurrent ones in a single batch" rule — rather than dispatching one repo at a time. **This is batching, not backgrounding:** every dispatch in the batch is still blocked on within the same turn per the "sequential — you cannot proceed until it returns" rule above — the turn does not proceed until all of the batch's results are in hand, and none of them is fired into the background to be picked up on a later wake event. Before blocking on the batch, name what was launched — each subagent's role and target PR/repo — per `shared/standards.md`'s "Subagent Wait Discipline" → "State what's in flight before you stop." This applies only to the review → test cycle's repeated per-PR dispatches; it does not extend to start-development, which is always a single Agent-tool dispatch per story — that stage's own per-repo looping happens entirely inside the dispatched `dev-workflow-developer` subagent.
+**Batch concurrent dispatches within the review → test cycle.** When a round of this cycle's per-PR Agent-tool dispatches spans multiple distinct repos, issue the concurrent ones as multiple `Agent` tool calls within a single message — mirroring `epic/SKILL.md` Phase 6's "dispatch the concurrent ones in a single batch" rule — rather than dispatching one repo at a time. **This is batching, not backgrounding:** every dispatch in the batch is still blocked on within the same turn per the "sequential — you cannot proceed until it returns" rule above — the turn does not proceed until all of the batch's results are in hand, and none of them is fired into the background to be picked up on a later wake event. Before blocking on the batch, name what was launched — each subagent's role and target PR/repo — per `shared/standards.md`'s "Subagent Wait Discipline" → "State what's in flight before you stop." This applies only to the review → test cycle's repeated per-PR dispatches; it does not extend to developing, which is always a single Agent-tool dispatch per story — that stage's own per-repo looping happens entirely inside the dispatched `dev-workflow-developer` subagent.
 
 ---
 
 ## Completion Criteria
 
 - The pipeline advanced through every required stage in order, entering at the correct stage on resume.
-- write-spec's user-approval gate was honored before development began.
-- Each non-interactive stage ran as an **Agent-tool dispatch** to its dedicated `subagent_type` (a fresh, isolated context per stage) on the resolved model — never via an inline `Skill` call. In the interactive path, create-story and write-spec ran in the main agent for their gates; in the autonomous path, write-spec ran as the `dev-workflow-spec-writer` worker.
+- writing-specs's user-approval gate was honored before development began.
+- Each non-interactive stage ran as an **Agent-tool dispatch** to its dedicated `subagent_type` (a fresh, isolated context per stage) on the resolved model — never via an inline `Skill` call. In the interactive path, creating-stories and writing-specs ran in the main agent for their gates; in the autonomous path, writing-specs ran as the `dev-workflow-spec-writer` worker.
 - The review loop and test loop each ran until approval/passing or until the Loop Safety Guard stopped them.
 - Testing passed (review approved + `tested-in-dev` label) and the PR is left open (not merged).
 - A clear end-of-run summary was produced.

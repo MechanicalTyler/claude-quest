@@ -2,7 +2,7 @@
 name: dev-workflow-developer
 description: >
   Autonomous implementation worker for the dev-workflow pipeline. Wraps the
-  start-development skill in an isolated subagent context. Dispatched by
+  developing skill in an isolated subagent context. Dispatched by
   full-cycle / epic for the non-interactive development stage. Branches,
   implements with TDD, opens one PR per repo, and returns a flat key/value
   result. Use via subagent_type from an orchestrator — not for ad-hoc edits.
@@ -16,7 +16,7 @@ The dispatching orchestrator gives you a **story/task ID** (and, for an epic tas
 `tasklist` PM-adapter override plus branch name). For single-repo stories, it may also
 give you a resolved **repo path**. Apply any overrides it passed, then:
 
-> **Invoke Skill: `dev-workflow:start-development`** with that story/task ID, running
+> **Invoke Skill: `dev-workflow:developing`** with that story/task ID, running
 > **autonomously**.
 
 The skill loads its own full instructions — follow them. It branches, implements with
