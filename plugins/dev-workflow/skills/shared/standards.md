@@ -79,11 +79,11 @@ a worker, not a prose instruction the model can skim past). Map each stage to it
 
 | Stage / dispatch | `subagent_type` | Default model |
 |------------------|-----------------|---------------|
-| write-spec (autonomous path only) | `dev-workflow-spec-writer` | `sonnet` |
-| start-development | `dev-workflow-developer` | `sonnet` |
-| review-pr | `dev-workflow-reviewer` | `opus` |
-| test-pr | `dev-workflow-tester` | `opus` |
-| address-pr-comments (fix loops) | `dev-workflow-fixer` | `sonnet` |
+| writing-specs (autonomous path only) | `dev-workflow-spec-writer` | `sonnet` |
+| developing | `dev-workflow-developer` | `sonnet` |
+| reviewing-prs | `dev-workflow-reviewer` | `opus` |
+| testing-prs | `dev-workflow-tester` | `opus` |
+| addressing-pr-comments (fix loops) | `dev-workflow-fixer` | `sonnet` |
 | entry/resume detection + decision read + PR-number read | `dev-workflow-pr-state-reader` | `sonnet` |
 | full-cycle driven per-task by `epic` | `dev-workflow-orchestrator` | inherit |
 
@@ -93,7 +93,7 @@ resolved model on every dispatch. Each worker's body invokes the matching
 `dev-workflow:{stage}` skill autonomously, so the stage logic, resumability, and loop
 behavior are unchanged; only the dispatch boundary is made explicit.
 
-Interactive stages (create-story, write-spec in the standalone full-cycle path) still run
+Interactive stages (creating-stories, writing-specs in the standalone full-cycle path) still run
 in the **main agent** so their user-facing gates work — do not dispatch a worker for those.
 
 ---
@@ -106,7 +106,7 @@ explicit statement of what happens next, produces a session that looks and behav
 fully idle. It may eventually be woken by a completion notification, or it may not — a
 subagent can die without ever emitting one, and a silent orchestrator has no way to tell
 the difference between "still working" and "stuck forever." This section is mandatory for
-every dispatch made by `full-cycle`, `epic`, `review-pr`'s perspective fan-out, and any
+every dispatch made by `full-cycle`, `epic`, `reviewing-prs`'s perspective fan-out, and any
 other skill in this plugin that dispatches subagents.
 
 **Default: dispatch to block, not to background.** The overwhelming majority of dispatches
@@ -122,7 +122,7 @@ need to do is read this subagent's result, you must not end the turn before you 
 
 **Background dispatch is reserved for genuine concurrency.** Only use a backgrounded,
 fire-and-forget dispatch when multiple independent subagents are meant to run at the same
-time (`epic`'s per-repo scheduling round in Phase 7, `review-pr`'s six parallel perspective
+time (`epic`'s per-repo scheduling round in Phase 7, `reviewing-prs`'s six parallel perspective
 reviewers). Even then:
 
 - **State what's in flight before you stop.** The turn that dispatches the batch must
@@ -237,13 +237,13 @@ The goal: anyone tailing the output can answer "what is it doing right now, and 
 ## File and Command Operations
 
 - **Use Write tool for files** — Never use `cat` or `echo` with redirection to write files
-- **Stay within repository** — Do not `cd` outside the repository directory. The sole exceptions are `create-story/SKILL.md` Phase 0 step 3 (its Phase 3 deferred re-run included): a temporary, read-only investigative clone made purely to read a named-but-not-locally-found repo, at the scratch location and with the cleanup and validation rules that step documents; that same file's Contract-Repo Detection subsection, which reuses Phase 0 step 3's procedure at its own separate trigger point to verify a candidate contract-repo name before it is added to `reposToModify`, bounded by that same step's scratch location, cleanup, and validation rules; and a dev-workflow stage's isolated git worktree, created via `superpowers:using-git-worktrees` at the `.worktrees/` placement convention (see "Workspace Isolation" below) for implementation/fix work on the current story or task's branch, bounded by that section's placement and cleanup rules. No other skill, step, or self-judged "documented, temporary, read-only" excursion qualifies — these are named cases, not a class.
+- **Stay within repository** — Do not `cd` outside the repository directory. The sole exceptions are `creating-stories/SKILL.md` Phase 0 step 3 (its Phase 3 deferred re-run included): a temporary, read-only investigative clone made purely to read a named-but-not-locally-found repo, at the scratch location and with the cleanup and validation rules that step documents; that same file's Contract-Repo Detection subsection, which reuses Phase 0 step 3's procedure at its own separate trigger point to verify a candidate contract-repo name before it is added to `reposToModify`, bounded by that same step's scratch location, cleanup, and validation rules; and a dev-workflow stage's isolated git worktree, created via `superpowers:using-git-worktrees` at the `.worktrees/` placement convention (see "Workspace Isolation" below) for implementation/fix work on the current story or task's branch, bounded by that section's placement and cleanup rules. No other skill, step, or self-judged "documented, temporary, read-only" excursion qualifies — these are named cases, not a class.
 
 ---
 
 ## Workspace Isolation
 
-**Every dev-workflow stage that implements or fixes code against a PM story or task works inside an isolated git worktree, not the primary checkout.** For the stages that create a worktree from scratch — `agents/dev-workflow-developer.md` (wrapping start-development's story-ID path) and `start-debugging`'s Development-mode and Rework-mode paths — this is unconditional, not something that applies only when some trigger fires; the requirement is stated at each of those call sites (`start-development/SKILL.md`, `start-debugging/SKILL.md`, and the developer agent wrapper), referencing this section for the mechanism. `agents/dev-workflow-fixer.md` (wrapping address-pr-comments) is different: `address-pr-comments/SKILL.md` itself has no worktree mechanism of its own, so `dev-workflow-fixer.md` *locates* isolation rather than setting it up unconditionally — it looks for an existing worktree matching the PR's branch (`git worktree list --porcelain`) and works there if found, otherwise falls back to a plain `gh pr checkout {PR_NUMBER}` in the primary checkout (same fallback `full-cycle/SKILL.md` → "PR-branch checkout for subagent stages" already documents). This covers both the autonomous pipeline (full-cycle/epic dispatching these stages) and a human directly invoking them with a story ID. It does not cover start-development's No Story ID path (ad hoc interactive work with no PM story), which is unaffected.
+**Every dev-workflow stage that implements or fixes code against a PM story or task works inside an isolated git worktree, not the primary checkout.** For the stages that create a worktree from scratch — `agents/dev-workflow-developer.md` (wrapping developing's story-ID path) and `debugging`'s Development-mode and Rework-mode paths — this is unconditional, not something that applies only when some trigger fires; the requirement is stated at each of those call sites (`developing/SKILL.md`, `debugging/SKILL.md`, and the developer agent wrapper), referencing this section for the mechanism. `agents/dev-workflow-fixer.md` (wrapping addressing-pr-comments) is different: `addressing-pr-comments/SKILL.md` itself has no worktree mechanism of its own, so `dev-workflow-fixer.md` *locates* isolation rather than setting it up unconditionally — it looks for an existing worktree matching the PR's branch (`git worktree list --porcelain`) and works there if found, otherwise falls back to a plain `gh pr checkout {PR_NUMBER}` in the primary checkout (same fallback `full-cycle/SKILL.md` → "PR-branch checkout for subagent stages" already documents). This covers both the autonomous pipeline (full-cycle/epic dispatching these stages) and a human directly invoking them with a story ID. It does not cover developing's No Story ID path (ad hoc interactive work with no PM story), which is unaffected.
 
 - **Mechanism — defer to the skill, don't hardcode the fallback.** Use `superpowers:using-git-worktrees` to create the workspace or verify an existing one — do not write `git worktree add -b` into a call site as *the* mechanism; let `using-git-worktrees` decide. That skill's native-isolation preference (the Agent tool's `isolation: "worktree"` parameter, `ExitWorktree`) applies when the stage currently executing is about to dispatch a *further nested* subagent that needs its own workspace — it does not isolate the executing agent's own workspace. Every call site in this section is isolating its own execution, so state plainly that Step 1b's manual `git worktree add` fallback is what actually runs there.
 - **Placement.** Worktrees live at the `.worktrees/` convention `using-git-worktrees` uses by default, gitignored per that skill's own setup step.
@@ -285,11 +285,11 @@ Questions are a last resort — only ask when **all** of these are true:
 
 **Necessary extra work discovered mid-pipeline is folded into the current branch/PR by default — never deferred to a follow-on ticket.**
 
-This rule governs start-development, review-pr, address-pr-comments, and test-pr when they discover work outside the story's stated scope that is *necessary* — required for the current story/PR to be correct, complete, or safe. Examples: a bug in the code path being changed, a gap the change exposes, a fix the change depends on.
+This rule governs developing, reviewing-prs, addressing-pr-comments, and testing-prs when they discover work outside the story's stated scope that is *necessary* — required for the current story/PR to be correct, complete, or safe. Examples: a bug in the code path being changed, a gap the change exposes, a fix the change depends on.
 
 - **Necessary vs. speculative** — "Necessary" means the current story/PR is not correct, complete, or safe without the work. That is distinct from Scope Discipline's "arguably should be done" case — a speculative, unrequested nice-to-have — which stays out of scope exactly as Scope Discipline states. Scope Discipline still governs the speculative case.
 - **Default: include** — Fold the necessary work into the current branch/PR as a bonus. Do not defer it, flag it as an open question in place of doing it, or leave it for a ticket that may never be written.
-- **Role mechanics** — start-development and address-pr-comments include the work directly in their commits. review-pr and test-pr do not commit code: for them, "include" means requiring the work as a change on the current PR — a Required Change in their review/test report — so it lands on the same branch through the existing fix loop, never as a follow-on ticket.
+- **Role mechanics** — developing and addressing-pr-comments include the work directly in their commits. reviewing-prs and testing-prs do not commit code: for them, "include" means requiring the work as a change on the current PR — a Required Change in their review/test report — so it lands on the same branch through the existing fix loop, never as a follow-on ticket.
 - **Exception: huge scope increase — stop and ask first** — When any of these signals is present, stop and ask the user before proceeding — never silently include and never silently defer:
   - The necessary work spans a different repo or service than the current PR
   - It would need its own design/spec/brainstorming pass before it could be implemented
@@ -319,10 +319,10 @@ The Story Creation Gate below is a specific instance of this rule; where the two
 
 ## Story Creation Gate
 
-**A PM story, ticket, issue, or subtask may ONLY be created when the user explicitly invoked `create-story` or `full-cycle`.**
+**A PM story, ticket, issue, or subtask may ONLY be created when the user explicitly invoked `creating-stories` or `full-cycle`.**
 
-- **Explicit invocation only** — Story creation is permitted only when the user explicitly invoked the `create-story` skill (slash command or a direct, unambiguous request to create a story/ticket) or explicitly invoked `full-cycle` (whose pipeline legitimately begins at create-story)
-- **Permission ask everywhere else** — In any other context — including when `create-story` was auto-triggered by a conversational phrase, or when any other skill believes a story is needed — ask the user for explicit permission FIRST, before any interviewing, drafting, or adapter calls. Only an explicit yes proceeds
+- **Explicit invocation only** — Story creation is permitted only when the user explicitly invoked the `creating-stories` skill (slash command or a direct, unambiguous request to create a story/ticket) or explicitly invoked `full-cycle` (whose pipeline legitimately begins at creating-stories)
+- **Permission ask everywhere else** — In any other context — including when `creating-stories` was auto-triggered by a conversational phrase, or when any other skill believes a story is needed — ask the user for explicit permission FIRST, before any interviewing, drafting, or adapter calls. Only an explicit yes proceeds
 - **Autonomous contexts never create** — An agent with no ability to ask (autonomous mode, dispatched subagent) must NEVER create a story under any circumstances. Stop and report that a story would be needed, naming what it wanted to create
 - **Applies to every creation path** — The gate covers stories, tickets, issues, and subtasks, created via ANY mechanism: adapter instructions, direct MCP tools, CLI commands (`gh issue create`, `jira issue create`), or raw API calls
 - **Carve-out: fixes that unblock the current PR's own gate** — A fix discovered mid-pipeline that exists only to unblock the current PR's own CI/review/test gate lands on that PR's existing branch, never a new story/branch/PR. Friction from the branch-policy default is a signal the fix belongs on the current branch, not a problem to route around. This carve-out is the CI/gate-specific instance of the broader "Necessary Extra Work — No Follow-On Tickets" rule above — one principle at two scopes, not competing rules

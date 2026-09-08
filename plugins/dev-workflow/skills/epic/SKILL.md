@@ -85,7 +85,7 @@ cross-task scheduler.
 2. Read `~/.claude/dev-workflow/config.json`; note the `models` section for subagent dispatch.
 3. The PM adapter for this skill is **always `tasklist`** (read `skills/pm-adapter/tasklist.md`) — do
    **not** use the configured `pm_adapter`, and do **not** rewrite `config.json`. The notes adapter
-   is the configured one (used by `write-spec` inside each task's `full-cycle`).
+   is the configured one (used by `writing-specs` inside each task's `full-cycle`).
 4. If `$ARGUMENTS` is an existing epic slug → go to **Phase 6** (resume).
 
 ---
@@ -105,7 +105,7 @@ Goal: understand the initiative well enough to propose a complete, correctly-ord
    `repo-discovery.md`'s procedure, reads source files, or greps the codebase directly, regardless of
    how small the read looks. The subagent returns a summary of repo purposes/structure; only that
    summary enters the orchestrator's context.
-3. **Propose a decomposition** into small tasks. For each proposed task, mirror `create-story`'s
+3. **Propose a decomposition** into small tasks. For each proposed task, mirror `creating-stories`'s
    field structure: `title`, `description`, `acceptanceCriteria`, `testingInstructions`, `repo`
    (exactly one per task), `story_type`, and `depends_on` (task IDs). A dependency exists when one
    task consumes an artifact another task produces (endpoint, contract, package, schema, file).
@@ -221,7 +221,7 @@ The dispatch prompt must contain, explicitly:
 > Phase 8's `awaiting-merge → done` reclamation), not the creation requirement above, which
 > that teardown-only skill has no use for.
 >
-> full-cycle enters at write-spec (the task exists with no spec) and proceeds through development,
+> full-cycle enters at writing-specs (the task exists with no spec) and proceeds through development,
 > the review loop, and the test loop autonomously. **Do not merge.** Neither you nor the orchestrator
 > merges this PR — a human merges it later. Report the PR's final review and test decisions back; on
 > dual approval the orchestrator marks the task `awaiting-merge` and leaves the PR open.
@@ -294,7 +294,7 @@ When a task subagent's result contains a `bug-report`:
 2. The bug task is scheduled with **priority** per Phase 6 step 4 — next for its repo, ahead of
    pending features — subject to one-in-flight-PR-per-repo.
 3. When picked up, it flows through `full-cycle` identically to any other task, **including getting
-   its own spec at write-spec time**.
+   its own spec at writing-specs time**.
 
 The orchestrator creates the bug task; the subagent only reported it. This preserves "subagents do
 work, they don't create tasks" and keeps creation inside the orchestrator's consensus authority.

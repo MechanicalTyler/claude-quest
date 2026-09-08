@@ -1,5 +1,5 @@
 ---
-name: dev-workflow:test-pr
+name: dev-workflow:testing-prs
 description: "Evidence-based functional testing of PRs in a dev/test environment — deploys the branch, brainstorms and designs test scenarios, executes them with evidence collection, and submits a formal GitHub review. Use whenever a user wants to functionally test a feature branch, validate a PR in a dev environment, or run QA on a pull request before merging."
 ---
 

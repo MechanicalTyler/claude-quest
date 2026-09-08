@@ -1,6 +1,6 @@
 ---
-name: reflection:reflect
-description: "Use when the user wants to review what went wrong in recent sessions, asks why the agent keeps getting corrected on the same thing, or says '/reflect', 'review how this session went,' or 'what problems came up.'"
+name: reflection:reflecting
+description: "Use when the user wants to review what went wrong in recent sessions, asks why the agent keeps getting corrected on the same thing, or says '/reflecting', 'review how this session went,' or 'what problems came up.'"
 ---
 
 # Reflect
@@ -34,7 +34,7 @@ Read `~/.claude/reflection/log.md`.
 
   A `reported` entry may carry up to two optional trailing fields after its status segment (added with sc-1311): `| story: sc-XXXX` (a follow-on story has been filed for the finding) or `| declined: {ISO-8601 timestamp}` (the user explicitly declined tracking it). Neither field changes the meaning of the `status:` value itself. A `reported` entry with neither field is a normal terminal state, not a pending decision: it is either a non-root-caused finding (nothing fixable to file) or a legacy entry written before these fields existed.
 
-  > Why `status` exists: without it, a group already covered by a report is re-synthesized as new on every run — in the sc-1242 follow-up session, `/reflect` re-derived the identical root-cause write-up for the same two log entries across two consecutive runs, even after the finding had already been filed as sc-1254. Status makes "already tracked" structural instead of ad-hoc prose.
+  > Why `status` exists: without it, a group already covered by a report is re-synthesized as new on every run — in the sc-1242 follow-up session, `/reflecting` re-derived the identical root-cause write-up for the same two log entries across two consecutive runs, even after the finding had already been filed as sc-1254. Status makes "already tracked" structural instead of ad-hoc prose.
 
 ## Phase 2: Catch-up scan
 
@@ -87,7 +87,7 @@ Immediately after the report file is written, tell the user the file path, then 
   - **Bundle by repo.** Determine each root-caused finding's repo from its attributed root cause (the repo containing the named skill file, or the repo owning the named `CLAUDE.md`). Group all root-caused findings sharing the same repo into a single bundle — even across different context groups — so exactly one ticket is drafted per repo, never one ticket per finding.
   - **Always preview the full draft ticket text before asking.** For each repo bundle, compose and display the complete draft ticket — title, description, and acceptance criteria covering every finding in the bundle — before asking the remediation question. Never ask with only a one-line summary.
   - **Ask the remediation question once per bundle, not once per finding** — this remediation question is mandatory for every bundle, not conditional on any mode (added after the sc-1242 story-creation flow, where a root-caused finding only became a tracked story after the user had to ask twice): ask whether the user wants to (a) file the bundle as one follow-on story or task covering every finding in it, or (b) explicitly decline tracking it.
-    - **Self-filing (optional, runtime-detected):** before asking, probe whether an installed skill matches a story-creation naming pattern (e.g. any skill named `*:create-story`, or a configured PM adapter reachable through that pattern). If one is found, offer it as a filing option alongside (a) and (b): on acceptance, invoke that skill directly with the previewed bundled ticket text and capture the single resulting story ID. This is a soft, runtime-detected integration only — reflect never hard-imports, requires, or otherwise depends on any specific plugin, and remains fully standalone when none is installed.
+    - **Self-filing (optional, runtime-detected):** before asking, probe whether an installed skill matches a story-creation naming pattern (e.g. any skill named `*:creating-stories`, or a configured PM adapter reachable through that pattern). If one is found, offer it as a filing option alongside (a) and (b): on acceptance, invoke that skill directly with the previewed bundled ticket text and capture the single resulting story ID. This is a soft, runtime-detected integration only — reflecting never hard-imports, requires, or otherwise depends on any specific plugin, and remains fully standalone when none is installed.
     - **No story-creation-capable skill detected:** fall back to today's flow unchanged — the offer names no specific plugin or skill; ask whether the user wants to file the bundle themselves using whatever tool they have available, and report back the resulting ID.
   - Once answered, write every entry in the bundle's status and remediation outcome together in the same log edit, appended as trailing fields on each entry — the single resulting story ID (or single decline) is recorded against **every** finding in the bundle:
     - Answer (a): `status: reported (report: {path}, at: {time}) | story: sc-XXXX` — using the one story ID for the whole bundle, whether self-filed or reported back by the user
@@ -99,4 +99,4 @@ Groups skipped as already-tracked are left untouched — their entries are alrea
 
 Acting on an offer is a separate, explicit follow-up outside this skill's own scope: this skill does not implement the underlying fix itself, and outside of the optional self-filing path above, it never creates a story, task, or any other artifact on its own initiative — an affirmative answer with no story-creation-capable skill detected means the user proceeds with their own tooling and reports the resulting ID back for the log. Self-filing is the one narrow, runtime-detected exception: it only ever invokes an already-installed skill the user chose to install, and only after the user has explicitly accepted the bundled-ticket offer.
 
-**Accepted edge case:** if the session ends before the user answers the remediation question for a bundle, every finding in that bundle remains at its pre-Phase-4 status (not `reported`) and the bundle is fully re-derived, re-grouped, and re-bundled on the next `/reflect` run.
+**Accepted edge case:** if the session ends before the user answers the remediation question for a bundle, every finding in that bundle remains at its pre-Phase-4 status (not `reported`) and the bundle is fully re-derived, re-grouped, and re-bundled on the next `/reflecting` run.

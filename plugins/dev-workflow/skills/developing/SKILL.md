@@ -1,5 +1,5 @@
 ---
-name: dev-workflow:start-development
+name: dev-workflow:developing
 description: "Full-stack development workflow with story context loading, TDD, automated planning, subagent execution, and PR creation. Use this skill whenever implementing features, fixing bugs, or any hands-on coding task. Always use this when a user says 'implement', 'build', 'code up', 'add feature', 'start dev', or provides a story ID to work from. Works with or without a PM story."
 ---
 
@@ -62,8 +62,8 @@ If you have a story ID:
 3. Load notes adapter per procedure in `skills/shared/adapter-loading.md`
 4. Read the **"Repos to modify"** field from the story (a comma-joined list of repo/service names), then load the Claude Instructions spec(s) via the notes adapter:
    - **Single repo (or field absent):** follow today's single-repo flow unchanged — load one spec and continue as before.
-   - **Multiple repos:** load the spec for EACH named repo. If any spec is missing, STOP and ask the user to run `dev-workflow:write-spec` for the story first.
-5. **If a required spec is not found:** STOP and ask user to invoke the Writer skill (`dev-workflow:write-spec`) with this story ID first. Never create a story, ticket, or issue to fill the gap
+   - **Multiple repos:** load the spec for EACH named repo. If any spec is missing, STOP and ask the user to run `dev-workflow:writing-specs` for the story first.
+5. **If a required spec is not found:** STOP and ask user to invoke the Writer skill (`dev-workflow:writing-specs`) with this story ID first. Never create a story, ticket, or issue to fill the gap
 6. Use spec(s) as the primary implementation guide
 
 ### Repo Discovery
@@ -126,7 +126,7 @@ Then invoke subagent-driven execution:
 
 Move the story to **"In Development" exactly once** — at the start of the entire run, before any per-repo work begins. Do NOT repeat this transition per repo.
 
-**State ownership:** start-development owns the "In Development" transition; write-spec owns "Ready for Dev". Each skill fires only its own transition — never the other's.
+**State ownership:** developing owns the "In Development" transition; writing-specs owns "Ready for Dev". Each skill fires only its own transition — never the other's.
 
 #### Step 1 — Infer the cross-repo dependency graph
 
@@ -277,7 +277,7 @@ Before declaring work complete, run the steps below in order.
 
 Read and follow `skills/shared/code-comment-check.md` in full — the base-ref resolution, diff
 commands, comment-marker table, regex patterns, blocking policy, and multi-repo execution scope
-all live there (shared with `address-pr-comments/SKILL.md`, which runs the identical check).
+all live there (shared with `addressing-pr-comments/SKILL.md`, which runs the identical check).
 
 ### Terraform Plan Check (if applicable)
 
@@ -314,7 +314,7 @@ Look for any workflow whose name contains "terraform" (case-insensitive).
 - **CI terraform run found and passed:** No additional action needed — CI has already validated the plan. Continue to the verification skill below.
 - **CI terraform run found and failed:** The CI terraform plan failed. Do not declare work complete — fix the plan failure and re-run CI before proceeding.
 - **CI terraform workflow is still `in_progress`:** Wait for it to complete. Re-run the `gh run list` command every 2 minutes until the run reaches a terminal conclusion (success, failure, or cancelled). Cap the wait at 30 minutes total. If the run has not completed after 30 minutes, note a warning and continue to the verification skill below.
-- **No CI terraform run found:** Run `terraform plan` directly. Use the same directory detection as review-pr Phase 3: check for `tf/` first, then `terraform/`, then fall back to the directory of the changed `.tf` files. For example, if `tf/` exists:
+- **No CI terraform run found:** Run `terraform plan` directly. Use the same directory detection as reviewing-prs Phase 3: check for `tf/` first, then `terraform/`, then fall back to the directory of the changed `.tf` files. For example, if `tf/` exists:
 
   ```bash
   terraform -chdir=tf/ plan
@@ -381,7 +381,7 @@ Read and follow the adversarial review procedure in `skills/shared/adversarial-r
 - All tests pass
 - Code is pushed to remote branch
 - PR is created with clean, professional description linking the story
-- **Worktree cleanup is manual when this skill runs standalone.** When dispatched by `full-cycle`/`epic` those orchestrators own reclamation (see `full-cycle/SKILL.md`'s Termination section / `epic/SKILL.md`'s `awaiting-merge → done` transition). A human invoking `start-development <story-id>` directly has no such reclamation point — nothing here removes the worktree this run created. Look it up live via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is this story's feature branch), note the path, and once the PR is merged the human should run `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree prune` (or delegate to `superpowers:finishing-a-development-branch`).
+- **Worktree cleanup is manual when this skill runs standalone.** When dispatched by `full-cycle`/`epic` those orchestrators own reclamation (see `full-cycle/SKILL.md`'s Termination section / `epic/SKILL.md`'s `awaiting-merge → done` transition). A human invoking `developing <story-id>` directly has no such reclamation point — nothing here removes the worktree this run created. Look it up live via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is this story's feature branch), note the path, and once the PR is merged the human should run `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree prune` (or delegate to `superpowers:finishing-a-development-branch`).
 
 ---
 

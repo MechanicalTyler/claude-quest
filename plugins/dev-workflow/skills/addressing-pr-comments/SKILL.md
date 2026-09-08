@@ -1,5 +1,5 @@
 ---
-name: dev-workflow:address-pr-comments
+name: dev-workflow:addressing-pr-comments
 description: "Address PR review feedback in the current session — reads new comments, file-level inline comments, and review decisions since the last commit, then implements the required changes and replies to the PR with a summary of fixes. Use when a user asks to address PR comments, respond to review feedback, fix review notes, or iterate on a PR."
 ---
 
@@ -89,11 +89,11 @@ Address each item from the checklist:
 
 Read and follow `skills/shared/code-comment-check.md` in full — the base-ref resolution, diff
 commands, comment-marker table, regex patterns, and blocking policy all live there (shared with
-`start-development/SKILL.md`, which runs the identical check). The offending citation must be
+`developing/SKILL.md`, which runs the identical check). The offending citation must be
 rephrased or removed per the "Code Comments" rule in `skills/shared/standards.md` (see the Step 4
 carve-out above).
 
-This check runs once, from the current repo root, as part of Step 5 — `address-pr-comments` has no
+This check runs once, from the current repo root, as part of Step 5 — `addressing-pr-comments` has no
 multi-repo path, no repo discovery, and no per-repo sub-agent dispatch, so only the "Single-repo
 path" bullet of that file's "Execution scope" section applies here.
 
@@ -114,7 +114,7 @@ After unit/integration tests pass, verify the fixes work in a running environmen
 
 Check `~/.claude/dev-workflow/config.json` for `deploy_command`.
 
-- **If `deploy_command` is configured:** Deploy the branch to dev — follow the same deployment procedure as `dev-workflow:test-pr` Phase 3 (GitHub Actions, shell command, or other pattern).
+- **If `deploy_command` is configured:** Deploy the branch to dev — follow the same deployment procedure as `dev-workflow:testing-prs` Phase 3 (GitHub Actions, shell command, or other pattern).
 - **If not configured:** Run the service locally. Start it using whatever mechanism the project provides (Makefile, npm scripts, etc.).
 
 **Test:**
@@ -126,7 +126,7 @@ For each item from the Step 3 checklist, design and execute a focused test scena
 3. Collect evidence: logs, API responses, CLI output, screenshots
 4. Record PASS or FAIL with specific details
 
-Apply the accountability rules from `dev-workflow:test-pr`: if you see an error, it is a failure — do not rationalize it away.
+Apply the accountability rules from `dev-workflow:testing-prs`: if you see an error, it is a failure — do not rationalize it away.
 
 **Loop:**
 

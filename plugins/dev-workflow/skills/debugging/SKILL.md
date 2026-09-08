@@ -1,5 +1,5 @@
 ---
-name: dev-workflow:start-debugging
+name: dev-workflow:debugging
 description: "Three-mode unified skill for debugging bugs, standalone story implementation, and addressing PR review feedback (rework). Mode is auto-detected from arguments: no args = debug mode (investigate a reported bug), story-id only = development mode (implement a story), story-id + --rework = rework mode (address reviewer feedback). Use whenever a bug needs systematic investigation, review changes need addressing, or a story needs implementing without the full developer workflow."
 ---
 
@@ -112,7 +112,7 @@ The adversarial agent verifies the fix actually addresses the identified root ca
 1. Read `~/.claude/dev-workflow/config.json` for `pm_adapter` and `notes_adapter`
 2. Load PM adapter per procedure in `skills/shared/adapter-loading.md` → fetch story by ID
 3. Load notes adapter per procedure in `skills/shared/adapter-loading.md` → read Claude Instructions spec
-4. **If spec not found:** STOP and ask user to invoke the Writer skill (`dev-workflow:write-spec`) with this story ID first. Never create a story, ticket, or issue to fill the gap
+4. **If spec not found:** STOP and ask user to invoke the Writer skill (`dev-workflow:writing-specs`) with this story ID first. Never create a story, ticket, or issue to fill the gap
 
 ### Step 1.5: Write Implementation Plan
 
@@ -182,7 +182,7 @@ Read and follow the adversarial review procedure in `skills/shared/adversarial-r
 
 The adversarial agent verifies the implementation satisfies all spec requirements and story acceptance criteria.
 
-**Worktree cleanup is manual when Development Mode runs standalone.** When dispatched by `full-cycle`/`epic`, those orchestrators own reclamation (see `full-cycle/SKILL.md`'s Termination section / `epic/SKILL.md`'s `awaiting-merge → done` transition). A human running `start-debugging <story-id>` directly has no such reclamation point — look up the worktree live via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is this story's feature branch), and once the PR is merged the human should run `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree prune` (or delegate to `superpowers:finishing-a-development-branch`).
+**Worktree cleanup is manual when Development Mode runs standalone.** When dispatched by `full-cycle`/`epic`, those orchestrators own reclamation (see `full-cycle/SKILL.md`'s Termination section / `epic/SKILL.md`'s `awaiting-merge → done` transition). A human running `debugging <story-id>` directly has no such reclamation point — look up the worktree live via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is this story's feature branch), and once the PR is merged the human should run `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree prune` (or delegate to `superpowers:finishing-a-development-branch`).
 
 ---
 
@@ -285,7 +285,7 @@ Read and follow the adversarial review procedure in `skills/shared/adversarial-r
 
 The adversarial agent verifies each rework item from the checklist was properly addressed.
 
-**Worktree cleanup is manual when Rework Mode runs standalone.** When dispatched by `full-cycle`/`epic`'s review or test fix loop, those orchestrators own reclamation (see `full-cycle/SKILL.md`'s Termination section / `epic/SKILL.md`'s `awaiting-merge → done` transition). A human running `start-debugging <story-id> --rework` directly has no such reclamation point — look up the worktree live via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is this story's feature branch), and once the PR is merged the human should run `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree prune` (or delegate to `superpowers:finishing-a-development-branch`).
+**Worktree cleanup is manual when Rework Mode runs standalone.** When dispatched by `full-cycle`/`epic`'s review or test fix loop, those orchestrators own reclamation (see `full-cycle/SKILL.md`'s Termination section / `epic/SKILL.md`'s `awaiting-merge → done` transition). A human running `debugging <story-id> --rework` directly has no such reclamation point — look up the worktree live via `git -C <repo root> worktree list --porcelain` (matching the entry whose branch is this story's feature branch), and once the PR is merged the human should run `git -C <repo root> worktree remove <path>` followed by `git -C <repo root> worktree prune` (or delegate to `superpowers:finishing-a-development-branch`).
 
 ---
 

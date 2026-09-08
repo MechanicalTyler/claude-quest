@@ -1,7 +1,7 @@
 """Tests for reflection_session_start.py — hooks.json registers this script
 twice under SessionStart: once with no matcher (fires on every source) to
 emit the base watch-and-log instructions, and once with matcher "startup" to
-emit a conditional /reflect nudge. Each registration passes a distinct
+emit a conditional /reflecting nudge. Each registration passes a distinct
 --mode flag, and the script itself no longer inspects the SessionStart
 payload's source field — the matcher in hooks.json is what restricts the
 nudge registration to the startup event; resume, clear, compact, and fork
@@ -156,7 +156,7 @@ class TestInstructionsMode:
 
 
 class TestNudgeMode:
-    """The matcher: "startup" registration: emits the /reflect nudge only
+    """The matcher: "startup" registration: emits the /reflecting nudge only
     when the log has an open entry, and never emits the base instructions
     (those come from the other registration)."""
 
@@ -174,7 +174,7 @@ class TestNudgeMode:
 
     def test_open_entry_nudges(self, session_start_hook, reflection_home, capsys):
         # Why: acceptance criterion — an explicitly open entry must produce
-        # a /reflect nudge.
+        # a /reflecting nudge.
         write_log(reflection_home, [OPEN_STATUS_ENTRY])
         output = run_main(session_start_hook, capsys, mode="nudge")
         context = output["hookSpecificOutput"]["additionalContext"]

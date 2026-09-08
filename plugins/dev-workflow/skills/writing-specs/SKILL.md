@@ -1,5 +1,5 @@
 ---
-name: dev-workflow:write-spec
+name: dev-workflow:writing-specs
 description: "Use when a developer needs a detailed technical spec before coding, when a user provides a story ID and asks for a spec, implementation plan, or Claude Instructions, or always before the Start Development skill when working from a PM story."
 ---
 
@@ -94,13 +94,13 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > the design summary below. This list is produced once, story-wide, here in Phase 4;
 > later phases resolve and re-assert it, they do not re-derive or re-open it.
 >
-> OVERRIDE: This invocation runs inside write-spec, whose SCOPE BOUNDARY forbids any
+> OVERRIDE: This invocation runs inside writing-specs, whose SCOPE BOUNDARY forbids any
 > file write or commit besides the spec itself. Keep the entire design discussion
 > in-conversation only — SKIP brainstorming's checklist step 6 (writing a design doc
 > to `docs/superpowers/specs/` and committing it). Write NO files and make NO commits.
 >
 > OVERRIDE: Do NOT checkout, create, or switch a git branch for any reason during
-> this invocation — branching belongs to `start-development`, not write-spec.
+> this invocation — branching belongs to `developing`, not writing-specs.
 >
 > OVERRIDE: After brainstorming completes, do NOT invoke `superpowers:writing-plans`.
 > Return to Phase 5 (ULTRATHINK) — the brainstorming output informs that analysis.
@@ -130,7 +130,7 @@ Before the ULTRATHINK deep-dive, invoke brainstorming to surface unclear require
 > For each iteration:
 > - Run the Phase 2 existing-spec check for this repo first. If the user chooses to skip the repo, move to the next iteration without spec'ing it.
 > - Set the active repo root to that repo's directory.
-> - Filter acceptance criteria and testing instructions **by repo tag only**, treating repo tags and environment tags (`[dev]`/`[prod]`, per `create-story/SKILL.md`'s "Multi-environment stories" subsection) as independent tag classes: keep an item whenever its repo-tag component is `[{repo-name}]`, `[all]`, or absent — regardless of whether it also carries an environment tag, and including a bare `[dev]`/`[prod]` item with no repo-tag component at all. Never drop an item for carrying only an environment tag; that tag class is not this filter's concern.
+> - Filter acceptance criteria and testing instructions **by repo tag only**, treating repo tags and environment tags (`[dev]`/`[prod]`, per `creating-stories/SKILL.md`'s "Multi-environment stories" subsection) as independent tag classes: keep an item whenever its repo-tag component is `[{repo-name}]`, `[all]`, or absent — regardless of whether it also carries an environment tag, and including a bare `[dev]`/`[prod]` item with no repo-tag component at all. Never drop an item for carrying only an environment tag; that tag class is not this filter's concern.
 > - The notes adapter resolves `repo_root` to the repo currently being specced.
 > - Phase 4's Viability List (see above) is resolved once, story-wide, using the
 >   first repo's Phase 5/6 investigation in loop order — even when a listed
@@ -250,7 +250,7 @@ After deep research, assess whether you have enough information to write a spec 
 entry to one of two states:
 - `confirmed` — investigation supports building it as requested; proceed normally.
 - `descoped` — a deliberate decision that the capability should not be built. This is
-  a genuine scope change, not an implementation detail, and write-spec never makes
+  a genuine scope change, not an implementation detail, and writing-specs never makes
   that call unilaterally:
   - **Interactive mode:** treat a candidate descope as an unresolved gap under the
     Decision block below — take it back to the user and get explicit confirmation
@@ -305,7 +305,7 @@ Analyze from four perspectives sequentially:
 > **Terraform/configmap exception (do not remove):** when Phase 5 classified this
 > repo's change scope as **terraform/configmap-only**, the verification mechanism
 > is `terraform plan`/`apply` — not a written regression/unit test. Without this
-> branch, write-spec asked for regression tests on terraform-only stories and
+> branch, writing-specs asked for regression tests on terraform-only stories and
 > produced an incorrect, hand-corrected acceptance criterion on sc-1234. This
 > note exists so the exception cannot silently regress.
 
@@ -527,7 +527,7 @@ If the PM adapter does not support comments or updates — note this to the user
 
 **"Ready for Dev" transition and `claude-written` label:** Fire these **ONCE** on the single story after all specs are linked. State transitions and labels are applied once per run, not per repo.
 
-**State ownership:** write-spec owns the "Ready for Dev" transition; start-development owns the "In Development" transition. Each skill fires only its own transition — never the other's.
+**State ownership:** writing-specs owns the "Ready for Dev" transition; developing owns the "In Development" transition. Each skill fires only its own transition — never the other's.
 
 ---
 

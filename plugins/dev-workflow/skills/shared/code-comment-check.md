@@ -1,7 +1,7 @@
 # Code Comment Compliance Check
 
-Shared procedure, referenced by `start-development/SKILL.md` (Pre-Completion Verification) and
-`address-pr-comments/SKILL.md` (Step 5: Verify) — mirrors how `skills/shared/adversarial-review.md`
+Shared procedure, referenced by `developing/SKILL.md` (Pre-Completion Verification) and
+`addressing-pr-comments/SKILL.md` (Step 5: Verify) — mirrors how `skills/shared/adversarial-review.md`
 is a single procedure file invoked by reference from multiple call sites rather than copy-pasted.
 
 Run this as a mechanical grep, not a prose reminder — it backstops the "Code Comments" rule in
@@ -140,9 +140,9 @@ it rather than bypass the check).
 
 ## Execution scope
 
-- **Single-repo path** (`address-pr-comments`; single-repo `start-development`): runs once, from
+- **Single-repo path** (`addressing-pr-comments`; single-repo `developing`): runs once, from
   the repo root, as part of the calling skill's own verification step.
-- **Multi-repo path** (`start-development` Step 3 dispatch): runs *inside each per-repo sub-agent,
+- **Multi-repo path** (`developing` Step 3 dispatch): runs *inside each per-repo sub-agent,
   from that sub-agent's own repo root*, as part of its own self-review before it reports back to
   the main agent (mirroring how "Internal Code Review" is already scoped per-repo in that path).
   The main agent never runs this check itself from the multi-repo workspace parent. The per-repo

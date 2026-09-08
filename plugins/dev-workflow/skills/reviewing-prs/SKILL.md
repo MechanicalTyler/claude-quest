@@ -1,5 +1,5 @@
 ---
-name: dev-workflow:review-pr
+name: dev-workflow:reviewing-prs
 description: "Comprehensive multi-perspective PR review (Product Manager, Developer, QA, and Architect lenses) that compares implementation against story requirements and CI/CD results. Includes automatic first-review vs re-review mode detection. Always use this when a user asks to review a PR, check a pull request, or validate an implementation against requirements."
 ---
 
@@ -107,7 +107,7 @@ Also check PR title if not found in body.
 2. Load PM adapter per procedure in `skills/shared/adapter-loading.md` → fetch story by ID
 3. Detect service name: `git rev-parse --show-toplevel | xargs basename`
 4. Load notes adapter per procedure in `skills/shared/adapter-loading.md` → read Claude Instructions spec
-5. **If spec not found:** ERROR and ask user to invoke the Writer skill (`dev-workflow:write-spec`) with this story ID first
+5. **If spec not found:** ERROR and ask user to invoke the Writer skill (`dev-workflow:writing-specs`) with this story ID first
 
 ---
 

@@ -16,14 +16,14 @@ The superpowers plugin provides core methodology skills (TDD, systematic debuggi
 
 | Command | Skill | Purpose |
 |---------|-------|---------|
-| `/start start-development [story-id]` | start-development | Branch, implement with TDD, commit, create PR |
-| `/start write-spec story-id` | write-spec | Fetch story → analyze codebase → write Claude Instructions spec |
-| `/start review-pr PR` | review-pr | Multi-perspective PR review against story requirements |
-| `/start test-pr PR` | test-pr | Functional testing with evidence gathering |
-| `/start start-debugging` | start-debugging | Debug-first workflow (describe bug → investigate → TDD fix) |
-| `/start start-debugging story-id --rework` | start-debugging | Read story comments as rework items → fix → new PR |
-| `/start create-story` | create-story | Interview user → draft story → submit to PM tool |
-| `/start full-cycle [story-id\|description]` | full-cycle | Drive the whole lifecycle end to end: create-story → write-spec → start-development → review-pr → test-pr, looping until tests pass |
+| `/start developing [story-id]` | developing | Branch, implement with TDD, commit, create PR |
+| `/start writing-specs story-id` | writing-specs | Fetch story → analyze codebase → write Claude Instructions spec |
+| `/start reviewing-prs PR` | reviewing-prs | Multi-perspective PR review against story requirements |
+| `/start testing-prs PR` | testing-prs | Functional testing with evidence gathering |
+| `/start debugging` | debugging | Debug-first workflow (describe bug → investigate → TDD fix) |
+| `/start debugging story-id --rework` | debugging | Read story comments as rework items → fix → new PR |
+| `/start creating-stories` | creating-stories | Interview user → draft story → submit to PM tool |
+| `/start full-cycle [story-id\|description]` | full-cycle | Drive the whole lifecycle end to end: creating-stories → writing-specs → developing → reviewing-prs → testing-prs, looping until tests pass |
 
 ## Configuration
 
@@ -53,10 +53,10 @@ Create `~/.claude/dev-workflow/config.json`:
     "reasoning": "opus",
     "review": "opus",
     "stages": {
-      "start-development": "sonnet",
-      "review-pr": "opus",
-      "test-pr": "opus",
-      "address-pr-comments": "sonnet",
+      "developing": "sonnet",
+      "reviewing-prs": "opus",
+      "testing-prs": "opus",
+      "addressing-pr-comments": "sonnet",
       "entry-detection": "sonnet",
       "pr-number-read": "sonnet",
       "decision-read": "sonnet"
@@ -76,15 +76,18 @@ The `models` section is optional. When absent, all dispatches use the built-in d
 | `models.implementation` | `sonnet` | All coding/implementation subagents (implementers, TDD cycles) |
 | `models.reasoning` | `opus` | All reasoning/planning subagents (brainstorming, architecture) |
 | `models.review` | `opus` | All review/testing subagents (review board, adversarial review, test agents) |
-| `models.stages.start-development` | `sonnet` | full-cycle's start-development stage subagent |
-| `models.stages.review-pr` | `opus` | full-cycle's review-pr stage subagent |
-| `models.stages.test-pr` | `opus` | full-cycle's test-pr stage subagent |
-| `models.stages.address-pr-comments` | `sonnet` | full-cycle's fix subagent in the review and test loops |
+| `models.stages.writing-specs` | `sonnet` | full-cycle's writing-specs stage subagent (autonomous path only) |
+| `models.stages.developing` | `sonnet` | full-cycle's developing stage subagent |
+| `models.stages.reviewing-prs` | `opus` | full-cycle's reviewing-prs stage subagent |
+| `models.stages.testing-prs` | `opus` | full-cycle's testing-prs stage subagent |
+| `models.stages.addressing-pr-comments` | `sonnet` | full-cycle's fix subagent in the review and test loops |
 | `models.stages.entry-detection` | `sonnet` | full-cycle's resume/entry-detection subagent |
-| `models.stages.pr-number-read` | `sonnet` | full-cycle's post-start-development PR-number resolution subagent |
+| `models.stages.pr-number-read` | `sonnet` | full-cycle's post-developing PR-number resolution subagent |
 | `models.stages.decision-read` | `sonnet` | full-cycle's authoritative review/test decision-read subagent |
 
 **Resolution order** for any dispatch: `models.stages.<stage-key>` → `models.<task-type>` → built-in default. Stage-level keys take priority over task-type keys. Users who never add the `models` section see no change in behavior.
+
+**Migration note:** the `models.stages.*` keys were renamed to match the sc-1623 skill rename (`start-development` → `developing`, `review-pr` → `reviewing-prs`, `test-pr` → `testing-prs`, `address-pr-comments` → `addressing-pr-comments`). If your `settings.json` has an existing `models.stages.start-development`-style entry under one of these four old names, rename it manually to the new key — the old key silently stops applying (falls through to `models.implementation`/`models.review`/default instead of erroring) rather than failing loudly. `entry-detection`, `pr-number-read`, and `decision-read` are unaffected.
 
 ### CI / Deploy Gate Exemptions
 
@@ -92,8 +95,8 @@ Two optional arrays let specific repos opt out of the otherwise-mandatory CI gat
 
 | Key | Governs | Effect when a repo is listed |
 |-----|---------|------------------------------|
-| `ci_gate_exempt_repos` | `review-pr`'s dev build CI gate | The review may APPROVE without a passing dev build CI run. The review body states the gate was skipped by exemption. |
-| `deploy_gate_exempt_repos` | `test-pr`'s dev deploy CI gate | The test may APPROVE without a successful dev deploy CI run. The test report states functional dev testing was skipped by exemption. |
+| `ci_gate_exempt_repos` | `reviewing-prs`'s dev build CI gate | The review may APPROVE without a passing dev build CI run. The review body states the gate was skipped by exemption. |
+| `deploy_gate_exempt_repos` | `testing-prs`'s dev deploy CI gate | The test may APPROVE without a successful dev deploy CI run. The test report states functional dev testing was skipped by exemption. |
 
 Each is an array of repository names (matching `git rev-parse --show-toplevel | xargs basename`). The two gates are independent — a repo may be exempt from one and not the other.
 
