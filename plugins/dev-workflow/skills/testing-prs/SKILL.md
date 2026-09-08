@@ -17,6 +17,8 @@ Read `skills/shared/standards.md` — these mandatory rules govern this entire s
 
 Read `skills/shared/adapter-loading.md` — adapter loading procedures referenced in Phase 0 and Phase 2.
 
+Read `skills/shared/checkpoint-seeding.md` — checkpoint seeding procedure referenced in Phase 2 and Phase 7.
+
 ---
 
 ## Phase 0: Resolve Input to PR Number
@@ -98,12 +100,18 @@ Parse PR body for story reference using the PM adapter's "Story Reference in PRs
 1. Read `~/.claude/dev-workflow/config.json` for `pm_adapter` and `notes_adapter`
 2. Load PM adapter per procedure in `skills/shared/adapter-loading.md` → fetch story by ID
 3. Detect service name: `git rev-parse --show-toplevel | xargs basename`
-4. Load notes adapter per procedure in `skills/shared/adapter-loading.md` → read Claude Instructions spec
-5. Use acceptance criteria and Manual Testing section as test scenarios
+4. Call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh Stage" with the resolved
+   story ID, the detected service name, stage `"reviewing-prs"`, and this PR's number — this
+   is what makes a standalone `testing-prs` run visible to attention-hub immediately, without
+   waiting for `full-cycle` to write anything. Must not touch `review_loop_count`/
+   `test_loop_count` — that stays exclusively the orchestrator's bookkeeping.
+5. Load notes adapter per procedure in `skills/shared/adapter-loading.md` → read Claude Instructions spec
+6. Use acceptance criteria and Manual Testing section as test scenarios
 
 **If story ID not found:**
 - Note the limitation in the test report
 - Design test scenarios based on PR description only
+- Proceed without writing a checkpoint — this is best-effort telemetry, never a functional gate
 
 ---
 
@@ -352,3 +360,8 @@ On a failing run (`REQUEST_CHANGES`):
 ```bash
 gh pr edit {PR_NUMBER} --add-label "tests-failing" --remove-label "tested-in-dev"
 ```
+
+**On a PASS verdict** (the `APPROVE` branch above), and a story ID was resolved in Phase 2:
+call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh Stage" once more, advancing
+this repo's entry to stage `"done"`. On a FAIL verdict, make no additional call — stage
+stays at `"reviewing-prs"` from the Phase 2 seed.

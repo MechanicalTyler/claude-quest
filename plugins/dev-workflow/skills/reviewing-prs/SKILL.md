@@ -17,6 +17,8 @@ Read `skills/shared/standards.md` — these mandatory rules govern this entire s
 
 Read `skills/shared/adapter-loading.md` — adapter loading procedures referenced in Phase 0 and Phase 2.
 
+Read `skills/shared/checkpoint-seeding.md` — checkpoint seeding procedure referenced in Phase 2.
+
 ---
 
 ## Phase 0: Resolve Input to PR Number
@@ -106,8 +108,13 @@ Also check PR title if not found in body.
 1. Read `~/.claude/dev-workflow/config.json` to get `pm_adapter` and `notes_adapter`
 2. Load PM adapter per procedure in `skills/shared/adapter-loading.md` → fetch story by ID
 3. Detect service name: `git rev-parse --show-toplevel | xargs basename`
-4. Load notes adapter per procedure in `skills/shared/adapter-loading.md` → read Claude Instructions spec
-5. **If spec not found:** ERROR and ask user to invoke the Writer skill (`dev-workflow:writing-specs`) with this story ID first
+4. Call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh Stage" with the resolved
+   story ID, the detected service name, stage `"reviewing-prs"`, and this PR's number — this
+   is what makes a standalone `reviewing-prs` run visible to attention-hub immediately,
+   without waiting for `full-cycle` to write anything. Must not touch `review_loop_count`/
+   `test_loop_count` — that stays exclusively the orchestrator's bookkeeping.
+5. Load notes adapter per procedure in `skills/shared/adapter-loading.md` → read Claude Instructions spec
+6. **If spec not found:** ERROR and ask user to invoke the Writer skill (`dev-workflow:writing-specs`) with this story ID first
 
 ---
 

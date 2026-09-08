@@ -119,6 +119,16 @@ top-level field:
 The checkpoint **complements** GitHub/PM state — it stores what GitHub cannot: loop counts and
 the orchestrator's next intended action. GitHub/PM remain authoritative for resume detection.
 
+**Standalone self-seeding.** Every stage skill (`creating-stories`, `writing-specs`,
+`developing`, `reviewing-prs`, `testing-prs`, `addressing-pr-comments`) also writes/refreshes
+this same checkpoint on its own, at the start of its own execution, when invoked standalone —
+outside `full-cycle`/`epic` — per `checkpoint-seeding.md`'s "Seed or Refresh Stage" procedure.
+That procedure shares the exact merge-upsert semantics described above (upsert only the fields
+it's given; never touch `review_loop_count`, `test_loop_count`, `approval_text`, or
+`approval_timestamp`), so a dispatched subagent's own standalone self-seed and full-cycle's own
+post-return write to the same repo entry can never clobber each other's fields, regardless of
+which one runs first or last within the same pipeline execution.
+
 ### Checkpoint write failure
 
 If a write fails (disk full, permissions), surface the error to the user and continue.

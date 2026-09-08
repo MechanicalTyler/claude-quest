@@ -705,6 +705,23 @@ def test_stage_newer_non_matching_checkpoint_does_not_shadow_older_match(tmp_pat
             == "my-project:review\nother-repo:testing")
 
 
+def test_stage_stale_checkpoint_shadowed_by_fresh_init_seed(tmp_path):
+    # Why: a standalone stage skill seeds a fresh "init" checkpoint entry so
+    # the dashboard never shows a stale stage left by an earlier, unrelated
+    # run for the same repo — this locks in the freshest-mtime-wins behavior
+    # that seeding depends on, proving "init" is treated like any other
+    # non-terminal stage rather than specially excluded.
+    client, state_dir = make_stage_client(tmp_path)
+    stale = write_checkpoint(state_dir, "story-old.json",
+                             {"repos": {"my-project": {"stage": "developing"}}})
+    fresh_init = write_checkpoint(state_dir, ".pending-123-456.json",
+                                  {"repos": {"my-project": {"stage": "init"}}})
+    now = time.time()
+    os.utime(stale, (now - 604800, now - 604800))
+    os.utime(fresh_init, (now, now))
+    assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:init"
+
+
 def test_payload_always_includes_stage_key():
     # Why: the store treats stage as non-sticky, so every payload must carry
     # the key — even "" — or a stale stage would linger on the card.
