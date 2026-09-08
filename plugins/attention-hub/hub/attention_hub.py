@@ -420,7 +420,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .subtitle { color: #8b939e; font-size: .85rem; overflow: hidden; text-overflow: ellipsis;
               white-space: nowrap; }
-  .stage { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stage { white-space: pre-line; }
   .state { min-width: 10rem; font-size: .9rem; }
   .red .state { color: #e5534b; }
   .yellow .state { color: #d4a72c; }
@@ -607,10 +607,7 @@ function render(sessions) {
     const title = document.createElement("div");
     title.className = "title";
     title.textContent = s.session_name || s.session_id;
-    const subtitle = document.createElement("div");
-    subtitle.className = "subtitle";
-    subtitle.textContent = s.project;
-    who.append(title, subtitle);
+    who.append(title);
     if (typeof s.stage === "string" && s.stage) {
       const stage = document.createElement("div");
       stage.className = "subtitle stage";

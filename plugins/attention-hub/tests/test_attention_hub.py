@@ -108,12 +108,10 @@ def test_load_sanitizes_session_name(tmp_path):
 
 
 def test_dashboard_title_is_session_name_with_id_fallback(tmp_path):
-    # Why: the card hierarchy is session-first — the title must be the session
-    # name, falling back to the session ID when unnamed, with the project as
-    # the subtitle. Guards the dashboard JS actually consuming both fields.
+    # Why: the title must be the session name, falling back to the session ID
+    # when unnamed. Guards the dashboard JS actually consuming the field.
     hub = load_hub()
     assert "s.session_name || s.session_id" in hub.DASHBOARD_HTML
-    assert "subtitle.textContent = s.project" in hub.DASHBOARD_HTML
 
 
 # --- Store: upsert / list / delete ---
@@ -1044,7 +1042,7 @@ def test_dashboard_stage_element_is_appended_to_who():
     # never attaches it to the DOM, which stays invisible while every other
     # stage test (textContent, title, CSS) keeps passing.
     hub = load_hub()
-    assert "who.append(title, subtitle);" in hub.DASHBOARD_HTML
+    assert "who.append(title);" in hub.DASHBOARD_HTML
     assert "who.append(stage);" in hub.DASHBOARD_HTML
 
 
@@ -1068,15 +1066,15 @@ def test_dashboard_who_has_fixed_flex_basis_not_shrinkable():
     assert "min-width: 0" in body
 
 
-def test_dashboard_stage_has_ellipsis_overflow():
-    # Why: a long multi-repo stage value must truncate with an ellipsis
-    # rather than overflow the row or force it to wrap.
+def test_dashboard_stage_preserves_line_breaks():
+    # Why: a multi-repo stage value is newline-joined and must render as
+    # separate visual lines, not collapse onto one nowrap line.
     hub = load_hub()
     body = css_rule_body(hub.DASHBOARD_HTML, ".stage")
     assert body is not None
-    assert "overflow: hidden" in body
-    assert "text-overflow: ellipsis" in body
-    assert "white-space: nowrap" in body
+    assert "white-space: pre-line" in body
+    assert "nowrap" not in body
+    assert "text-overflow: ellipsis" not in body
 
 
 def test_dashboard_title_has_ellipsis_overflow():
@@ -1092,8 +1090,9 @@ def test_dashboard_title_has_ellipsis_overflow():
 
 
 def test_dashboard_subtitle_has_ellipsis_overflow():
-    # Why: same defect as .title — the host/session subtitle line must
-    # ellipsize instead of wrapping once .who's width is constrained.
+    # Why: same defect as .title — the shared .subtitle base class (used by
+    # the stage element) must ellipsize instead of wrapping once .who's width
+    # is constrained. .stage layers pre-line on top for its own line breaks.
     hub = load_hub()
     body = css_rule_body(hub.DASHBOARD_HTML, ".subtitle")
     assert body is not None
