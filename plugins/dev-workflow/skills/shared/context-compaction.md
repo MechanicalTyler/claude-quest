@@ -46,8 +46,12 @@ whose branch equals that repo's feature branch), exactly as `agents/dev-workflow
 already does — see `skills/shared/standards.md` → "Workspace Isolation". Nothing here
 caches it, so there is no staleness or cross-repo-mixup class of bug to guard against.
 
-**Stage vocabulary.** `stage` reaches exactly four values in practice: `"writing-specs"`,
-`"developing"`, `"reviewing-prs"`, and `"done"`. `stage` advances to `"reviewing-prs"` once
+**Stage vocabulary.** The write points below produce four values: `"writing-specs"`,
+`"developing"`, `"reviewing-prs"`, and `"done"`. This is not necessarily every value a
+`repos[].stage` field can hold — checkpoints from other or older code paths (e.g. a
+`"finished"` or `"blocked-environment"` entry) may exist on disk; a reader must not
+assume the field is limited to these four and should treat any other value as opaque
+rather than erroring. `stage` advances to `"reviewing-prs"` once
 a PR exists and stays there through *both* the review loop and the test loop that follow
 it — `review_loop_count` and `test_loop_count` are what distinguish which loop a repo is
 currently in while `stage` reads `"reviewing-prs"`. `stage` advances to its terminal `"done"`
