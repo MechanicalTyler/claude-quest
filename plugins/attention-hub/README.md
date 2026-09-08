@@ -101,7 +101,7 @@ Reports (creates or updates) a session's state. Body is a JSON object:
 |-------|----------|---------|
 | `session_id` | yes | Stable identifier for the session; keys the dashboard row |
 | `state` | yes | One of `waiting`, `needs_input`, `done`, `working` |
-| `project` | no | Project/repo name; stored but not shown on the card |
+| `project` | no | Project/repo name; stored, returned by the API, and shown in the card's expanded detail panel — not on the collapsed row |
 | `host` | no | Machine/host name |
 | `message` | no | Short status message shown on the card (truncated to 200 chars) |
 | `stage` | no | Dev-workflow stage line (`repo:stage`, newline-joined); shown as a second card line when non-empty; not sticky — an event omitting it clears the stored value |
@@ -126,7 +126,7 @@ Returns `{"sessions": [...]}` — every tracked session with computed `state_sec
 
 ## Security
 
-The hub has **no authentication or TLS** and is intended for a trusted private network only (localhost, LAN, VPN/tailnet). Dashboard rows expose session names and message snippets. The stage line discloses the dev-workflow story most recently active for this repo, which may not be the story this session is working on — including, for a multi-repo story, the names and pipeline stages of its other repos. If remote machines do not need direct access, bind to localhost (`--bind 127.0.0.1`) or a VPN interface.
+The hub has **no authentication or TLS** and is intended for a trusted private network only (localhost, LAN, VPN/tailnet). Dashboard rows expose session names, project names, and message snippets. The unauthenticated `GET /api/sessions` endpoint returns each session record verbatim — including `project`, `host`, `session_id`, full state `history`, and `active_work` labels — regardless of what the card renders. The stage line discloses the dev-workflow story most recently active for this repo, which may not be the story this session is working on — including, for a multi-repo story, the names and pipeline stages of its other repos. If remote machines do not need direct access, bind to localhost (`--bind 127.0.0.1`) or a VPN interface.
 
 ## Requirements
 

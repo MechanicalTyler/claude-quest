@@ -1027,6 +1027,15 @@ def test_dashboard_renders_active_work_entry():
     assert "buildActiveWorkList" in hub.DASHBOARD_HTML
 
 
+def test_dashboard_detail_renders_project():
+    # Why: project is computed, transmitted, and persisted end to end but was
+    # dropped from the always-visible row so the row could stay dense; it
+    # must still surface somewhere or an ad-hoc session with no session_name
+    # degrades to a bare session ID with no context at all.
+    hub = load_hub()
+    assert 'detailField(dl, "project", s.project)' in hub.DASHBOARD_HTML
+
+
 # --- Dev-workflow stage field ---
 
 def test_dashboard_renders_stage_line():
@@ -1047,8 +1056,9 @@ def test_dashboard_stage_element_is_appended_to_who():
 
 
 def test_dashboard_stage_has_tooltip():
-    # Why: .stage is ellipsis-truncated, so the full value must stay
-    # reachable via the title tooltip or long stage lines lose information.
+    # Why: .stage clamps to a bounded number of lines with ellipsis, so the
+    # full value must stay reachable via the title tooltip or a long/many-repo
+    # stage line loses information past the clamp.
     hub = load_hub()
     assert "stage.title = s.stage" in hub.DASHBOARD_HTML
 
@@ -1066,15 +1076,20 @@ def test_dashboard_who_has_fixed_flex_basis_not_shrinkable():
     assert "min-width: 0" in body
 
 
-def test_dashboard_stage_preserves_line_breaks():
+def test_dashboard_stage_preserves_line_breaks_and_is_bounded():
     # Why: a multi-repo stage value is newline-joined and must render as
-    # separate visual lines, not collapse onto one nowrap line.
+    # separate visual lines without letting a long or many-repo value (an
+    # honest many-repo epic, or a hostile POST to /api/events) grow the card
+    # unbounded — a line-clamp caps the rendered height regardless of input
+    # size, with ellipsis marking the truncation.
     hub = load_hub()
     body = css_rule_body(hub.DASHBOARD_HTML, ".stage")
     assert body is not None
     assert "white-space: pre-line" in body
     assert "nowrap" not in body
-    assert "text-overflow: ellipsis" not in body
+    assert "overflow: hidden" in body
+    assert "text-overflow: ellipsis" in body
+    assert re.search(r"-webkit-line-clamp:\s*\d", body)
 
 
 def test_dashboard_title_has_ellipsis_overflow():
@@ -1089,16 +1104,16 @@ def test_dashboard_title_has_ellipsis_overflow():
     assert "white-space: nowrap" in body
 
 
-def test_dashboard_subtitle_has_ellipsis_overflow():
-    # Why: same defect as .title — the shared .subtitle base class (used by
-    # the stage element) must ellipsize instead of wrapping once .who's width
-    # is constrained. .stage layers pre-line on top for its own line breaks.
+def test_dashboard_stage_element_uses_single_class():
+    # Why: .subtitle and .stage previously sat at equal CSS specificity, so
+    # pre-line only won because .stage was declared after .subtitle in source
+    # order — reordering those rules would have silently collapsed the
+    # feature while every other test stayed green. Folding .subtitle's
+    # properties into .stage and dropping the now-dead .subtitle class
+    # removes that ordering dependency entirely.
     hub = load_hub()
-    body = css_rule_body(hub.DASHBOARD_HTML, ".subtitle")
-    assert body is not None
-    assert "overflow: hidden" in body
-    assert "text-overflow: ellipsis" in body
-    assert "white-space: nowrap" in body
+    assert 'stage.className = "stage"' in hub.DASHBOARD_HTML
+    assert css_rule_body(hub.DASHBOARD_HTML, ".subtitle") is None
 
 
 def test_upsert_stores_stage_and_round_trips(tmp_path):
