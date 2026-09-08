@@ -3,9 +3,9 @@ name: dev-workflow:creating-stories
 description: "Use when a user wants to capture a feature idea as a formal story, create a ticket, write to the backlog, or says 'create a story', 'write a ticket', 'add to backlog', or describes a feature they want tracked."
 ---
 
-# Create Story
+# Creating Stories
 
-**Role:** Create Story — gather context, generate a story draft, and submit it to the PM tool
+**Role:** Creating Stories — gather context, generate a story draft, and submit it to the PM tool
 
 **SCOPE BOUNDARY:** This skill creates a PM story and NOTHING else. It does **not** write code, write local files, make commits, checkout git branches, implement features, or start development. When the story is submitted, output the story URL and STOP. This skill **never** creates sub-stories or subtasks — all repos and scope live in the single story. If a direct user request for code, files, or commands lands mid-session, outside the normal Phase 1-6 flow, do not execute it — route its content into the relevant story draft field instead (e.g. as an acceptance criterion or testing instruction describing the requirement), and tell the user explicitly that the request was captured in the draft rather than executed.
 

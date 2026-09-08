@@ -3,7 +3,7 @@ name: syncing-plugin-versions
 description: Use when adding automated marketplace version notifications to a claude-quest plugin repo, or when a plugin repo needs to connect to the claude-quest automated version syncing system. Trigger whenever the user wants to set up tag-based version notifications, implement the notify-marketplace workflow, or enable automated marketplace updates after pushing a release tag. Also trigger if someone asks "how do I make claude-quest automatically update when I release?" or asks about connecting their plugin to the marketplace automation. Use this skill — don't just describe the steps.
 ---
 
-# Plugin Version Sync
+# Syncing Plugin Versions
 
 When a plugin repo pushes a git tag, this workflow notifies claude-quest to automatically open and merge a PR updating the plugin's pinned version in the marketplace. This skill implements the outbound half of that automation.
 

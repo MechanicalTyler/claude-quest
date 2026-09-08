@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**dev-workflow** is a Claude plugin that provides action-based development workflow orchestration with pluggable PM and notes adapters. It enables specialized workflows (Start Development, Story to Spec, Review PR, Test PR, Start Debugging, Create Story, Full Cycle) through structured, quality-gated stages.
+**dev-workflow** is a Claude plugin that provides action-based development workflow orchestration with pluggable PM and notes adapters. It enables specialized workflows (Developing, Writing Specs, Reviewing PRs, Testing PRs, Debugging, Creating Stories, Full Cycle) through structured, quality-gated stages.
 
 **Dependency:** Requires the `superpowers` plugin to be installed — it provides core methodology skills (TDD, debugging, brainstorming, subagent orchestration, verification). Also requires `guardrails-git` >= 1.2.0 — every autonomous implement/fix stage now works inside an isolated git worktree (see `skills/shared/standards.md` → "Workspace Isolation"), and older `guardrails-git` versions hard-block `git worktree` commands outright.
 

@@ -3,7 +3,7 @@ name: reflection:reflecting
 description: "Use when the user wants to review what went wrong in recent sessions, asks why the agent keeps getting corrected on the same thing, or says '/reflecting', 'review how this session went,' or 'what problems came up.'"
 ---
 
-# Reflect
+# Reflecting
 
 **Role:** Read the reflection log, catch up on anything not yet captured, synthesize recurring problems with a specific root cause for each, and write the findings as a self-contained HTML report.
 

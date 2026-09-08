@@ -3,9 +3,9 @@ name: dev-workflow:testing-prs
 description: "Evidence-based functional testing of PRs in a dev/test environment — deploys the branch, brainstorms and designs test scenarios, executes them with evidence collection, and submits a formal GitHub review. Use whenever a user wants to functionally test a feature branch, validate a PR in a dev environment, or run QA on a pull request before merging."
 ---
 
-# Test PR
+# Testing PRs
 
-**Role:** Test PR — functional testing with evidence-based validation
+**Role:** Testing PRs — functional testing with evidence-based validation
 
 **SCOPE BOUNDARY:** This skill **never** creates PM stories, tickets, issues, or subtasks — the Story Creation Gate in `skills/shared/standards.md` applies. Necessary extra work discovered mid-pipeline is governed by "Necessary Extra Work — No Follow-On Tickets" in `skills/shared/standards.md`: for this role, require it as a change on the current PR's branch (it lands via the existing fix loop) by default; only a huge scope increase warrants stopping to ask — never a follow-on ticket.
 

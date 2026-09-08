@@ -57,6 +57,16 @@ entry-detection `prs=` tuple's `stage` field (`finished` / `testing-prs` / `revi
 from a parsed tuple, map the tuple's `stage` to the checkpoint's: `finished` → `"done"`,
 `testing-prs` or `reviewing-prs` → `"reviewing-prs"`.
 
+**Legacy stage values (pre-rename checkpoints).** A checkpoint written before the
+dev-workflow skill rename (sc-1623) may still hold the old stage vocabulary:
+`"write-spec"`, `"start-development"`, or `"review-pr"`. `stage` is a persisted, on-disk
+identifier, not a skill name — it does not get a hard cutover. Whenever a checkpoint's
+`stage` field is read (at "Checkpoint initialization on resume" in `full-cycle/SKILL.md`
+and anywhere else a checkpoint entry's `stage` is consulted), treat these as aliases and
+translate on read: `"write-spec"` → `"writing-specs"`, `"start-development"` →
+`"developing"`, `"review-pr"` → `"reviewing-prs"`. Never write a legacy value back —
+the next checkpoint write for that entry always uses the current vocabulary.
+
 ### Write points
 
 full-cycle writes the checkpoint at **every** stage boundary and loop iteration. Every

@@ -1,11 +1,11 @@
 ---
 name: dev-workflow:writing-specs
-description: "Use when a developer needs a detailed technical spec before coding, when a user provides a story ID and asks for a spec, implementation plan, or Claude Instructions, or always before the Start Development skill when working from a PM story."
+description: "Use when a developer needs a detailed technical spec before coding, when a user provides a story ID and asks for a spec, implementation plan, or Claude Instructions, or always before the `developing` skill when working from a PM story."
 ---
 
-# Write Spec
+# Writing Specs
 
-**Role:** Write Spec — transform a story into a comprehensive Claude Instructions implementation spec
+**Role:** Writing Specs — transform a story into a comprehensive Claude Instructions implementation spec
 
 **SCOPE BOUNDARY:** This skill writes a spec file and NOTHING else. It does **not** write code, write any other local files, make commits, checkout git branches, implement features, or begin development. It **never** creates PM stories, tickets, issues, or subtasks — the Story Creation Gate in `skills/shared/standards.md` applies. When the spec file is saved, output the path and STOP.
 
@@ -519,7 +519,7 @@ Use the PM adapter to add a comment or description update to the story. The comm
   > **Implementation Specs Written**
   > - `[api]` Spec: `{resolved-spec-path}` — Covers: [1-2 sentence summary]
   > - `[web]` Spec: `{resolved-spec-path}` — Covers: [1-2 sentence summary]
-  > Written by: Claude Write Spec workflow
+  > Written by: Claude Writing Specs workflow
 
 If the PM adapter supports attaching files or adding external links, prefer adding one external link per repo spec (not per story). If it supports only one external link, add a comment instead with all paths.
 

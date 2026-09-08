@@ -167,7 +167,9 @@ evaluated independently per repo. Raw PM/GitHub output never enters the main orc
 context.
 
 **Checkpoint initialization on resume.** Before running any stage, check the story's
-checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`). If it has no `repos` map yet,
+checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`). If an existing entry's `stage`
+holds a pre-rename legacy value, translate it per `context-compaction.md`'s "Legacy stage
+values" note before using it. If it has no `repos` map yet,
 or is missing an entry for a repo named in the story's "Repos to modify" field, seed one
 entry per such repo from that field now — `pr_number: null`, `stage` set from
 `story_state` (`"writing-specs"` for row 2, `"developing"` for row 3),

@@ -3,7 +3,7 @@ name: dev-workflow:addressing-pr-comments
 description: "Address PR review feedback in the current session — reads new comments, file-level inline comments, and review decisions since the last commit, then implements the required changes and replies to the PR with a summary of fixes. Use when a user asks to address PR comments, respond to review feedback, fix review notes, or iterate on a PR."
 ---
 
-# Address PR Comments
+# Addressing PR Comments
 
 **Role:** Address review feedback on the current PR — read, implement, and respond
 
