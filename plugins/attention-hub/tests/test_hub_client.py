@@ -483,13 +483,14 @@ def test_stage_single_repo_checkpoint(tmp_path):
 
 def test_stage_multi_repo_checkpoint_lists_all_repos(tmp_path):
     # Why: a multi-repo story's card should show the whole pipeline picture,
-    # not just this session's own repo — every entry joins in insertion order.
+    # not just this session's own repo — every entry joins in insertion order,
+    # one per line so the dashboard can render each repo's state separately.
     client, state_dir = make_stage_client(tmp_path)
     write_checkpoint(state_dir, "story-1.json",
                      {"repos": {"my-project": {"stage": "review"},
                                 "other-repo": {"stage": "testing"}}})
     assert (client.get_dev_workflow_stage("/home/user/my-project")
-            == "my-project:review, other-repo:testing")
+            == "my-project:review\nother-repo:testing")
 
 
 def test_stage_no_matching_checkpoint_returns_empty(tmp_path):
@@ -701,7 +702,7 @@ def test_stage_newer_non_matching_checkpoint_does_not_shadow_older_match(tmp_pat
     os.utime(matching_older, (now - 20, now - 20))
     os.utime(even_older_match, (now - 30, now - 30))
     assert (client.get_dev_workflow_stage("/home/user/my-project")
-            == "my-project:review, other-repo:testing")
+            == "my-project:review\nother-repo:testing")
 
 
 def test_payload_always_includes_stage_key():

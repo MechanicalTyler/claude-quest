@@ -418,9 +418,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
          cursor: pointer; }
   .who { flex: 0 0 16rem; min-width: 0; }
   .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .subtitle { color: #8b939e; font-size: .85rem; overflow: hidden; text-overflow: ellipsis;
-              white-space: nowrap; }
-  .stage { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stage { color: #8b939e; font-size: .85rem; white-space: pre-line; overflow: hidden;
+           text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3;
+           -webkit-box-orient: vertical; }
   .state { min-width: 10rem; font-size: .9rem; }
   .red .state { color: #e5534b; }
   .yellow .state { color: #d4a72c; }
@@ -556,6 +556,7 @@ function buildDetail(s) {
   const dl = document.createElement("dl");
   const hostField = detailField(dl, "host", s.host);
   if (s.is_container) hostField.append(makeBadge("container"));
+  detailField(dl, "project", s.project);
   detailField(dl, "session id", s.session_id);
   detailField(dl, "message", s.message || "—");
   detailField(dl, "last update", fmtDuration(s.age_seconds) + " ago");
@@ -607,13 +608,10 @@ function render(sessions) {
     const title = document.createElement("div");
     title.className = "title";
     title.textContent = s.session_name || s.session_id;
-    const subtitle = document.createElement("div");
-    subtitle.className = "subtitle";
-    subtitle.textContent = s.project;
-    who.append(title, subtitle);
+    who.append(title);
     if (typeof s.stage === "string" && s.stage) {
       const stage = document.createElement("div");
-      stage.className = "subtitle stage";
+      stage.className = "stage";
       stage.textContent = s.stage;
       stage.title = s.stage;
       who.append(stage);

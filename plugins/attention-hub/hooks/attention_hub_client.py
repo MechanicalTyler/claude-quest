@@ -485,7 +485,7 @@ def get_dev_workflow_stage(cwd):
                     continue
             except Exception:
                 continue
-            return ", ".join(
+            return "\n".join(
                 f"{repo}:{entry['stage']}" for repo, entry in repos.items()
                 if isinstance(entry, dict) and isinstance(entry.get("stage"), str)
             )
