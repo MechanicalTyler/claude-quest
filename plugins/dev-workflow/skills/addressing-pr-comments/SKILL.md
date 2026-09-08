@@ -11,6 +11,8 @@ description: "Address PR review feedback in the current session — reads new co
 
 Read `skills/shared/standards.md` — these mandatory rules govern this entire session.
 
+Read `skills/shared/adapter-loading.md` — adapter loading procedures referenced in Step 1.
+
 Read `skills/shared/checkpoint-seeding.md` — checkpoint seeding procedure referenced in Step 1.
 
 Compact the conversation before continuing — you are about to iterate on existing work.
@@ -27,15 +29,21 @@ gh pr status --json currentBranch
 
 Use the current branch's open PR. If no PR is open, ask the user for the PR number.
 
-Once the PR is resolved, parse its body and title for a story reference using the PM
-adapter's "Story Reference in PRs" format (this skill has no such parse today — the other
-stage skills already do this in their own Phase 2). If a story ID is found, call
-`skills/shared/checkpoint-seeding.md`'s "Seed or Refresh Stage" with that story ID, this
-repo's service name, stage `"reviewing-prs"`, and this PR's number — its fix work always
-happens inside an already-open review or test loop window, so it reuses that same stage
-value rather than introducing a new one. If no story ID is found, skip the checkpoint call
-silently and continue exactly as today — this is best-effort telemetry and must not become
-a new hard requirement for a skill that currently tolerates no PM linkage.
+Once the PR is resolved:
+
+1. Read `~/.claude/dev-workflow/config.json` to get `pm_adapter`
+2. Load PM adapter per procedure in `skills/shared/adapter-loading.md`
+3. Parse the PR's body and title for a story reference using the loaded adapter's "Story
+   Reference in PRs" format (the same parse `reviewing-prs`/`testing-prs` perform in their
+   own Phase 2)
+4. Detect service name: `git rev-parse --show-toplevel | xargs basename`
+5. **If a story ID is found:** call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh
+   Stage" with that story ID, the detected service name, stage `"reviewing-prs"`, and this
+   PR's number — its fix work always happens inside an already-open review or test loop
+   window, so it reuses that same stage value rather than introducing a new one.
+6. **If no story ID is found:** skip the checkpoint call silently and continue exactly as
+   today — this is best-effort telemetry and must not become a new hard requirement for a
+   skill that currently tolerates no PM linkage.
 
 ---
 

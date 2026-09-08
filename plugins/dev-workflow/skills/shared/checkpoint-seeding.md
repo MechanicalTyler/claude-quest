@@ -4,8 +4,12 @@ Shared procedure for a stage skill to seed or refresh its own entry in the dev-w
 checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`, schema defined in
 `context-compaction.md`) when invoked standalone — outside `full-cycle`/`epic`, which
 already write this file at their own stage boundaries (see `context-compaction.md` →
-"Write points"). Every stage skill listed in that file's Write points table calls one of
-the two procedures below at the point in its own flow noted there.
+"Write points"). Each stage skill that calls one of the two procedures below documents the
+exact point in its own flow where that call happens — see that skill's own preamble/phase
+text (`reviewing-prs` Phase 2, `testing-prs` Phase 2 and Phase 7, `writing-specs` Phase 3
+and Phase 12, `developing` PM Context and PR Creation Requirements, `addressing-pr-comments`
+Step 1, `creating-stories` Phase 0 and Phase 6) rather than a single shared table — this
+file only defines what the call does, not where each caller places it.
 
 Both procedures are **best-effort telemetry, never a functional gate.** A failure at any
 step — an unresolved story ID, an unwritable state directory, a malformed existing file —
@@ -21,16 +25,48 @@ skill exactly as if this procedure had not been called.
 **Inputs:** a story ID (or none), a list of repo names, a stage value, and optionally a PR
 number.
 
-1. **No story ID resolved:** no-op silently. Do not write anything, do not warn, do not
-   block. This is the expected outcome whenever the caller cannot resolve a story ID (e.g.
-   `reviewing-prs`/`testing-prs`/`addressing-pr-comments` on a PR with no linked story) —
-   proceed with the rest of the skill unchanged.
-2. **Read the existing checkpoint**, if any, at `~/.claude/dev-workflow/state/{story-id}.json`.
+1. **No story ID resolved, or the story ID fails validation:** no-op silently. Do not write
+   anything, do not warn, do not block.
+   - No story ID resolved is the expected outcome whenever the caller cannot resolve one
+     (e.g. `reviewing-prs`/`testing-prs`/`addressing-pr-comments` on a PR with no linked
+     story) — proceed with the rest of the skill unchanged.
+   - **Validate the story ID before it touches any path.** It must match
+     `^[A-Za-z0-9_-]+$` (letters, digits, underscore, hyphen only — this also rejects any
+     `/` or `..` path-traversal payload). This matters because in `reviewing-prs`,
+     `testing-prs`, and `addressing-pr-comments` the story ID is parsed by an LLM out of a
+     PR's title/body text, which anyone opening a PR controls — the adapter's "Story
+     Reference in PRs" format is prose the agent is trusted to follow, not something
+     re-checked before the value becomes a path component in steps 2 and 5 below. A
+     non-matching value is treated exactly like "no story ID resolved": a silent no-op,
+     never an error surfaced to the user.
+2. **Acquire an exclusive lock** on this story's checkpoint before reading it. Multiple
+   callers can legitimately target the same `{story-id}.json` at once — most notably
+   `developing`'s "one sub-agent per repo, concurrently" dispatch (see its Step 3), where
+   every sub-agent in a level calls this procedure for its own repo entry in the same file
+   at roughly the same time. Without a lock, two concurrent read-whole-file /
+   modify / write-whole-file executions can each read the file before the other's `mv`
+   lands, so the second `mv` silently discards the first writer's repo entry (a lost
+   update) — the atomic `mv` in step 6 only guarantees a reader never sees a torn file, it
+   does not serialize two writers.
+   - Lock path: `~/.claude/dev-workflow/state/.lock-{story-id}` — a **directory**, not a
+     file. `mkdir` is atomic on every POSIX filesystem (unlike creating or checking a plain
+     file, which is not), so "the `mkdir` succeeded" is a reliable signal that this caller
+     now holds the lock.
+   - Attempt `mkdir ~/.claude/dev-workflow/state/.lock-{story-id}`. Success means the lock
+     is held — proceed to step 3.
+   - On failure (the directory already exists): check its mtime. If it is older than 30
+     seconds, treat it as abandoned by a caller that crashed or was killed while holding
+     it — remove it (`rmdir`) and retry the `mkdir` once. Otherwise, sleep briefly (around
+     200ms) and retry, up to a 10-second total budget.
+   - **If the lock cannot be acquired within the 10-second budget:** this is a step 2-6
+     failure — handle it per step 7 below (surface-and-continue) rather than blocking the
+     caller's real work waiting on a checkpoint lock.
+3. **Read the existing checkpoint**, if any, at `~/.claude/dev-workflow/state/{story-id}.json`.
    - If the file exists and parses as a JSON object, use it as the base.
    - If the file does not exist, or exists but fails to parse as a JSON object, start from
      a fresh `{"story_id": "{story-id}", "repos": {}}` shape — a malformed existing file is
      never a reason to stop; treat it the same as absent.
-3. **Upsert each named repo's entry** in the `repos` map:
+4. **Upsert each named repo's entry** in the `repos` map:
    - If the repo has no existing entry, create one: `{"stage": "{stage}", "pr_number":
      null, "review_loop_count": 0, "test_loop_count": 0}`, then set `stage` to the given
      value and `pr_number` to the given PR number if one was supplied.
@@ -40,23 +76,34 @@ number.
      never touch `review_loop_count`, `test_loop_count`, or `next_action` — those fields
      are full-cycle/epic's own bookkeeping and this procedure is a merge-upsert, not a
      replace.
-4. **Update the top-level `updated_at`** to the current ISO-8601 UTC timestamp.
-5. **Write atomically.** Write the full updated JSON to a temp file in the same directory
+5. **Update the top-level `updated_at`** to the current ISO-8601 UTC timestamp.
+6. **Write atomically.** Write the full updated JSON to a temp file in the same directory
    (e.g. `~/.claude/dev-workflow/state/.tmp-{story-id}-{unix-timestamp}-{pid}.json`), then
    `mv` it onto the real path — a plain rename on the same filesystem, so a concurrent
    reader (e.g. attention-hub's `get_dev_workflow_stage`) never observes a partially
    written file.
-6. **On any failure in steps 2-5** (permission error, disk full, or any other write
-   failure): surface the error to the user per `context-compaction.md` → "Checkpoint write
-   failure", and continue — never block or abort the caller's real work over a checkpoint
-   write failure.
+7. **Release the lock:** `rmdir ~/.claude/dev-workflow/state/.lock-{story-id}`. Always run
+   this — including when any of steps 3-6 fails — so a failure mid-write doesn't wedge
+   every later caller beyond step 2's own 30-second staleness backstop.
+8. **On any failure in steps 2-6** (lock timeout, permission error, disk full, or any other
+   write failure): surface the error to the user per `context-compaction.md` → "Checkpoint
+   write failure", and continue — never block or abort the caller's real work over a
+   checkpoint write failure.
 
 This procedure never touches `review_loop_count`, `test_loop_count`, `approval_text`, or
 `approval_timestamp` — those remain exclusively full-cycle/epic's own writes (see
 `context-compaction.md` → "Write points"). A dispatched subagent's own standalone self-seed
 (this procedure) and full-cycle's post-return write to the same repo entry can therefore
 never clobber each other's fields, regardless of which one runs first or last within the
-same pipeline execution.
+same pipeline execution. The lock in step 2 additionally protects the case field
+disjointness alone does not cover: two sibling subagents each writing a *different* repo
+entry in the same file, where each write is a full read-modify-write of the whole JSON
+document — the lock, not field disjointness, is what prevents one subagent's `mv` from
+silently discarding another's.
+
+This procedure's inputs and outputs (a story ID, repo names, a stage, an optional PR
+number; no return value) are unchanged by the locking added above — it is purely internal
+to this procedure's implementation, so no caller of "Seed or Refresh Stage" needs updating.
 
 ---
 
@@ -67,21 +114,49 @@ same pipeline execution.
 Used only by `creating-stories` Phase 0, for the window between repo discovery and story
 creation where no story ID exists yet to key a checkpoint by.
 
-1. Build a `repos` map with one entry per candidate repo, each `{"stage": "init",
+`"init"` is never terminal (`STAGE_TERMINAL_STAGES` is `{"done", "finished"}`), so an
+orphaned placeholder — one left behind by an interview that was abandoned or interrupted
+without ever reaching a Phase 0/5/6 cleanup trigger, a routine outcome for a long
+interactive interview, not just a crash — would otherwise keep shadowing real checkpoints
+for the same repo indefinitely, reintroducing the exact stale-shadow bug this story exists
+to fix. Two defenses, mirroring the `.compact-request` sentinel's own staleness handling
+(`hooks/compact-injector.sh`'s `STALE_SECONDS=600`):
+
+- **Reader-side staleness (primary defense):** `get_dev_workflow_stage` applies a stricter
+  age cutoff to `.pending-*.json` files specifically —
+  `PENDING_PLACEHOLDER_MAX_AGE_SECONDS = 3600` (one hour) in `attention_hub_client.py`,
+  versus the general `STAGE_MAX_AGE_SECONDS` (7 days) applied to every other checkpoint.
+  One hour comfortably covers a live interactive interview (these typically finish in
+  minutes) while bounding an abandoned placeholder's exposure to a small fraction of the
+  general 7-day window, rather than the full week. A `.pending-*.json` older than this is
+  skipped by the lookup exactly as if it did not exist — it is telemetry, so going stale
+  mid-interview only means attention-hub temporarily stops showing "init" for that repo,
+  never a functional break in `creating-stories` itself.
+- **Writer-side sweep (defense-in-depth):** before writing its own placeholder (step 2
+  below), this procedure lists the state directory for existing `.pending-*.json` files and
+  deletes any whose mtime is older than the same `PENDING_PLACEHOLDER_MAX_AGE_SECONDS`
+  threshold — cleaning up a genuinely abandoned prior run's leftover file proactively,
+  rather than waiting on the reader-side cutoff above. A pending file younger than the
+  threshold is left alone (it may belong to a concurrently running interview).
+
+1. **Sweep stale pending files.** List `~/.claude/dev-workflow/state/.pending-*.json`; for
+   each whose mtime is older than `PENDING_PLACEHOLDER_MAX_AGE_SECONDS` (3600 seconds),
+   delete it. Failures here are non-fatal — skip a file that can't be removed and continue.
+2. Build a `repos` map with one entry per candidate repo, each `{"stage": "init",
    "pr_number": null, "review_loop_count": 0, "test_loop_count": 0}`.
-2. Write this to a uniquely named file in the checkpoint state directory:
+3. Write this to a uniquely named file in the checkpoint state directory:
    `~/.claude/dev-workflow/state/.pending-{unix-timestamp}-{pid}.json` — the leading dot
    matches the existing `.compact-request` sentinel's dot-prefixed convention for
    non-story runtime state in this directory. The `stage: "init"` entries are the freshest
    file on disk as soon as they're written, so they shadow any stale prior-story checkpoint
    for the same repo in `get_dev_workflow_stage`'s freshest-mtime-wins lookup — see
    `context-compaction.md`'s Legacy stage values note for how a reader treats an unrecognized
-   stage value as opaque; `"init"` is simply never terminal (`STAGE_TERMINAL_STAGES` is
-   `{"done", "finished"}`), so it always matches.
-3. Return the placeholder file's path to the caller — `creating-stories` needs it to delete
+   stage value as opaque; `"init"` is simply never terminal, so it always matches (subject to
+   the reader-side staleness cutoff documented above).
+4. Return the placeholder file's path to the caller — `creating-stories` needs it to delete
    the file later (see its own Phase 0/Phase 6 instructions for the exact cleanup trigger
    points).
-4. **On any write failure:** surface the error to the user and continue — same
+5. **On any write failure:** surface the error to the user and continue — same
    best-effort posture as "Seed or Refresh Stage" above. Proceed with the rest of
    `creating-stories` unchanged; the interview and story creation do not depend on this
    placeholder existing.
