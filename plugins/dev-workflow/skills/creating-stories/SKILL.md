@@ -50,9 +50,12 @@ The Phase 5 draft-approval gate is unchanged and still applies on every path.
 2a. **Seed the pre-story checkpoint placeholder.** Immediately after step 2 finds candidate
     repos — before any story ID exists — call `skills/shared/checkpoint-seeding.md`'s "Seed
     Pending Pre-Story Placeholder" procedure with those repo names. Hold onto the returned
-    placeholder file path; it is deleted as part of Phase 6's own success handling, once the
-    real checkpoint entry replacing it has been written (or sooner, on a Phase 5 cancel or a
-    Phase 6 failure — see Phase 6 below). If step 2
+    placeholder file path; on story-creation success it stays in place through the end of
+    this skill's run and is deleted later, by writing-specs' own Phase 3 self-seed, once that
+    seed writes the real `{story-id}.json` entry that supersedes it (see Phase 6 below). On
+    any abandonment path instead — the Phase 2 adapter-lacks-Create-Story stop, a Phase 5
+    user cancel, or a Phase 6 creation failure — this skill deletes it immediately, since no
+    story will ever reach writing-specs to supersede it. If step 2
     found zero repos, skip this call — there is nothing to seed yet.
 3. **Git-host search for a named-but-not-locally-found repo.** Scan the request text — `$ARGUMENTS` when it is non-empty (this step's primary trigger point, run here at Phase 0) — for a specific repo, service, or codebase name that step 2's local discovery did not find. When one is named:
    - Resolve the org to search: in the single-repo case (Path 1), from that repo's own git remote (extract the owner segment from `git remote get-url origin`); in the workspace-parent case (Path 2), from any one already-discovered child repo's remote (they are normally the same org) — if the discovered repos span more than one org, ask the user which to search.
@@ -205,18 +208,18 @@ Type **yes** to submit this story to {pm_adapter}, or describe what to change.
 Use the PM adapter's **Create Story** operation (capability #5) with all draft fields.
 
 On success:
-1. Call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh Stage" with the new
-   story's real ID, its "Repos to modify" list, and stage `"init"` — creating-stories' own
-   current stage, since it has not yet handed off to writing-specs. `"init"` is
-   already-documented, never-terminal vocabulary (see that procedure's "Seed Pending
-   Pre-Story Placeholder" section), so this write anticipates nothing; writing-specs' own
-   Phase 3 self-seed is what advances the entry to `stage: "writing-specs"` when
-   writing-specs actually starts.
-2. Delete the Phase 0 step 2a placeholder file, if one was seeded — the real
-   `{story-id}.json` entry written in step 1 is now the freshest checkpoint for these
-   repos, so deleting the placeholder here leaves no window for a stale prior-story
-   checkpoint to resurface.
-3. Display —
+1. Leave the Phase 0 step 2a placeholder in place — do not write a real `{story-id}.json`
+   checkpoint entry here, and do not delete the placeholder yet. The placeholder already
+   shadows any stale prior-story checkpoint for these repos (keyed by repo name, per
+   `checkpoint-seeding.md`'s "Seed Pending Pre-Story Placeholder" section), and it carries
+   its own 1-hour reader-side staleness cutoff — a real, bounded improvement over writing
+   nothing, without introducing a new stage value into the real checkpoint schema.
+   writing-specs' own Phase 3 self-seed is what eventually supersedes it: immediately after
+   that self-seed writes `stage: "writing-specs"` for a repo, Phase 3 also deletes this
+   placeholder for that repo, since the real entry is now the freshest checkpoint. A story
+   that is created but never reaches writing-specs (left in the backlog) is bounded by the
+   placeholder's existing 1-hour cutoff rather than shadowing indefinitely.
+2. Display —
 ```
 Story created successfully!
 ID: {story-id}

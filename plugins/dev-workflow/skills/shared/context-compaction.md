@@ -120,15 +120,14 @@ full-cycle's own mid-pipeline writes no longer anticipate a stage that hasn't st
 Each stage's own self-seed (per `checkpoint-seeding.md`) is the sole writer of *its own
 stage's boundary-start value* under normal, non-resume operation — not the sole writer of
 `stage` overall. Counterexamples elsewhere in the pipeline: `testing-prs` and
-`addressing-pr-comments` write `"reviewing-prs"` on a repo's entry (the documented
-four-value tuple mapping described in `checkpoint-seeding.md`'s "Seed or Refresh Stage"
-inputs, not anticipation — that repo's review loop is already underway when either calls
-it), `testing-prs`' own Phase 7 self-seed writes the terminal `"done"`, and full-cycle
-itself still writes stage values above at the cold-resume bootstrap row (multiple values,
-including `"developing"` for a not-yet-started stage — legitimate there, since a cold
-resume by bare story ID has no self-seed to defer to and that path is out of this fix's
-scope) and at its own terminal `"done"` advance below, which fires only after that outcome
-has actually occurred.
+`addressing-pr-comments` write `"reviewing-prs"` on a repo's entry (the loop-back value from
+`context-compaction.md`'s Stage vocabulary note, not anticipation — that repo's review loop
+is already underway when either calls it), `testing-prs`' own Phase 7 self-seed writes the
+terminal `"done"`, and full-cycle itself still writes stage values above at the cold-resume
+bootstrap row (multiple values, including `"developing"` for a not-yet-started stage —
+legitimate there, since a cold resume by bare story ID has no self-seed to defer to) and at
+its own terminal `"done"` advance above, which fires only after that outcome has actually
+occurred.
 
 The checkpoint **complements** GitHub/PM state — it stores what GitHub cannot: loop counts and
 the orchestrator's next intended action. GitHub/PM remain authoritative for resume detection:
@@ -143,18 +142,23 @@ at `reviewing-prs`, not `developing`.
 **Self-seeding.** Every stage skill also writes/refreshes this same checkpoint at its own
 stage boundary, independent of whether `full-cycle`/`epic` is driving the pipeline — see
 "Write points" above for what full-cycle's own writes still cover; every other stage
-boundary's `stage` value is written solely by that stage's own self-seed. `writing-specs`,
-`developing`, `reviewing-prs`, `testing-prs`, and `addressing-pr-comments` do this at the
-start of their own execution, per `checkpoint-seeding.md`'s "Seed or Refresh Stage"
-procedure. `creating-stories` writes twice: a pre-story placeholder at Phase 0
-(`checkpoint-seeding.md`'s "Seed Pending Pre-Story Placeholder", before a story ID exists),
-and, on story-creation success at Phase 6, the real `{story-id}.json` entry via "Seed or
-Refresh Stage" with stage `"init"` — its own current stage, since it has not yet handed off
-to writing-specs. "Seed or Refresh Stage" shares the exact merge-upsert semantics described
-above (upsert only the fields it's given; never touch `review_loop_count`,
-`test_loop_count`, `approval_text`, or `approval_timestamp`), so a stage's own self-seed and
-full-cycle's own writes to the same repo entry can never clobber each other's fields,
-regardless of which one runs first or last within the same pipeline execution.
+boundary's `stage` value is written solely by that stage's own self-seed, per
+`checkpoint-seeding.md`'s "Seed or Refresh Stage" procedure. Most stages call it once, at
+their own start: `writing-specs` (Phase 3), `reviewing-prs` (Phase 2), and
+`addressing-pr-comments` (Step 1). Two stages call it twice, at two distinct points within
+their own execution: `developing` at PM Context (before implementation starts) and again at
+PR Creation Requirements (once the PR exists, carrying the PR number); `testing-prs` at
+Phase 2 (before testing starts) and again at Phase 7 (its own terminal `"done"` write).
+`creating-stories` writes only once, and not into a real `{story-id}.json` entry at all — a
+pre-story placeholder at Phase 0, via "Seed Pending Pre-Story Placeholder", before a story ID
+exists. It deliberately does not write a real checkpoint entry at Phase 6 on story-creation
+success; `writing-specs`' own Phase 3 self-seed is what eventually supersedes the placeholder,
+once a real entry exists to replace it. "Seed or Refresh Stage" shares the exact merge-upsert
+semantics described above (upsert only the fields it's given; never touch
+`review_loop_count`, `test_loop_count`, `approval_text`, or `approval_timestamp`), so a
+stage's own self-seed and full-cycle's own writes to the same repo entry can never clobber
+each other's fields, regardless of which one runs first or last within the same pipeline
+execution.
 
 ### Checkpoint write failure
 
@@ -188,7 +192,11 @@ When the context meter has reported ≥75% and full-cycle reaches a stage bounda
 
 ### Inside tmux (`$TMUX` is set)
 
-1. Write the checkpoint (see Write points above).
+1. Confirm the checkpoint is current — the stage now in progress already self-seeded its
+   own `stage` value at its own start (per `checkpoint-seeding.md`), and any
+   full-cycle-owned field due at this exact boundary (approval evidence, a loop counter)
+   was already written by its own entry in "Write points" above. No separate write happens
+   here.
 2. Write the sentinel file with the resume command.
 3. Announce to the user:
 
@@ -198,7 +206,11 @@ When the context meter has reported ≥75% and full-cycle reaches a stage bounda
 
 ### Outside tmux (`$TMUX` is not set)
 
-1. Write the checkpoint.
+1. Confirm the checkpoint is current — the stage now in progress already self-seeded its
+   own `stage` value at its own start (per `checkpoint-seeding.md`), and any
+   full-cycle-owned field due at this exact boundary (approval evidence, a loop counter)
+   was already written by its own entry in "Write points" above. No separate write happens
+   here.
 2. Do **not** write the sentinel.
 3. End the turn with this exact message (substitute the actual story ID):
 

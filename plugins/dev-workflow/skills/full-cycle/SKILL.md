@@ -192,6 +192,11 @@ PR's actual GitHub state — never the checkpoint field — is what correctly re
 at `reviewing-prs`, not `developing`. State each repo's detected entry stage to the user
 before proceeding — not a single story-wide stage.
 
+Rows 1-3 resolve the same way, from `story_state` rather than the `prs=` tuple (see "How to
+gather each signal" above) — they are not an exception to the "not the checkpoint field"
+rule above; the checkpoint's `repos[repo].stage` is never a resume-decision source for any
+row.
+
 ### testing-prs label requirement
 
 This skill depends on testing-prs labeling its outcome. testing-prs is updated in this change to **always** add `tested-in-dev` on a passing run and `tests-failing` on a failing run (previously optional). If you run full-cycle against a build of testing-prs that omits the labels, cold resume cannot distinguish "approved, not yet tested" from "approved and passed" — in that case it defaults to row 7 (re-test) and announces the re-test, which is safe but may repeat a passing test.
@@ -447,15 +452,14 @@ full-cycle's own mid-pipeline writes no longer anticipate a stage that hasn't st
 Each stage's own self-seed (per `checkpoint-seeding.md`) is the sole writer of *its own
 stage's boundary-start value* under normal, non-resume operation — not the sole writer of
 `stage` overall. Counterexamples elsewhere in the pipeline: `testing-prs` and
-`addressing-pr-comments` write `"reviewing-prs"` on a repo's entry (the documented
-four-value tuple mapping described in `checkpoint-seeding.md`'s "Seed or Refresh Stage"
-inputs, not anticipation — that repo's review loop is already underway when either calls
-it), `testing-prs`' own Phase 7 self-seed writes the terminal `"done"`, and full-cycle
-itself still writes stage values above at the cold-resume bootstrap row (multiple values,
-including `"developing"` for a not-yet-started stage — legitimate there, since a cold
-resume by bare story ID has no self-seed to defer to and that path is out of this fix's
-scope) and at its own terminal `"done"` advance below, which fires only after that outcome
-has actually occurred.
+`addressing-pr-comments` write `"reviewing-prs"` on a repo's entry (the loop-back value from
+`context-compaction.md`'s Stage vocabulary note, not anticipation — that repo's review loop
+is already underway when either calls it), `testing-prs`' own Phase 7 self-seed writes the
+terminal `"done"`, and full-cycle itself still writes stage values above at the cold-resume
+bootstrap row (multiple values, including `"developing"` for a not-yet-started stage —
+legitimate there, since a cold resume by bare story ID has no self-seed to defer to) and at
+its own terminal `"done"` advance above, which fires only after that outcome has actually
+occurred.
 
 If a checkpoint write fails, surface the error to the user and continue — do not abort.
 

@@ -78,6 +78,15 @@ Refresh Stage" once with this story's ID, every repo in scope, and stage `"writi
 — this is what makes a standalone `writing-specs` run visible to attention-hub immediately,
 without waiting for `full-cycle` to write anything.
 
+Immediately after that call succeeds, sweep and delete any `.pending-*.json` placeholder
+file (per `checkpoint-seeding.md`'s "Seed Pending Pre-Story Placeholder" section) whose
+`repos` list includes any repo just seeded above — the real `{story-id}.json` entry just
+written is now the freshest checkpoint for those repos and supersedes the placeholder.
+Check every repo in scope in this same pass, matching the seeding call's own "every repo in
+scope" shape rather than looping per repo. This is non-fatal on failure, same best-effort
+posture as the seeding procedures — a placeholder left behind still expires on its own
+1-hour cutoff.
+
 ---
 
 ## Phase 4: Brainstorm Ambiguities and Approach

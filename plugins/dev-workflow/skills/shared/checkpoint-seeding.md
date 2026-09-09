@@ -6,12 +6,14 @@ checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`, schema defined in
 primary writer of its `stage` field regardless of whether `full-cycle`/`epic` is driving the
 pipeline: `full-cycle`'s own writes (see `context-compaction.md` → "Write points") no longer
 duplicate a stage value at most boundaries — they cover the resume-bootstrap enrichment, the
-spec-approval top-level fields, loop-count increments, and the terminal `"done"` advance, and
-nothing else. Each stage skill that calls one of the two procedures below documents the
+spec-approval top-level fields, loop-count increments, and the terminal `"done"` advance.
+(`next_action` remains reserved to full-cycle/epic's own bookkeeping in the schema below, but
+no current write point populates it — a pre-existing gap, not something introduced or
+resolved here.) Each stage skill that calls one of the two procedures below documents the
 exact point in its own flow where that call happens — see that skill's own preamble/phase
 text (`reviewing-prs` Phase 2, `testing-prs` Phase 2 and Phase 7, `writing-specs` Phase 3,
 `developing` PM Context and PR Creation Requirements, `addressing-pr-comments`
-Step 1, `creating-stories` Phase 0 and Phase 6) rather than a single shared table — this
+Step 1, `creating-stories` Phase 0) rather than a single shared table — this
 file only defines what the call does, not where each caller places it.
 
 Both procedures are **best-effort telemetry, never a functional gate.** A failure at any
@@ -172,6 +174,16 @@ mirroring the `.compact-request` sentinel's own staleness handling
    placeholder existing.
 
 **Cleanup is the caller's responsibility, not this procedure's.** This procedure only
-creates the placeholder file and reports its path — see `creating-stories/SKILL.md`'s own
-instructions for when the placeholder must be deleted (every exit path: normal completion,
-a Phase 5 user cancel, and a Phase 6 creation failure).
+creates the placeholder file and reports its path. Deletion happens on one of two paths,
+neither of which is this procedure:
+
+- **`creating-stories` deletes it immediately** on any of its three abandonment paths — the
+  Phase 2 adapter-lacks-Create-Story stop, a Phase 5 user cancel, or a Phase 6 creation
+  failure — since none of these ever produces a story that could reach `writing-specs` to
+  supersede the placeholder.
+- **`writing-specs` deletes it on normal completion.** On a Phase 6 creation success,
+  `creating-stories` deliberately leaves the placeholder in place (see its own Phase 6
+  instructions) rather than deleting it or writing a real checkpoint entry itself.
+  `writing-specs`' Phase 3 self-seed is what supersedes it: once that self-seed writes the
+  real `{story-id}.json` entry, Phase 3 sweeps and deletes the now-redundant placeholder for
+  each repo it just seeded.
