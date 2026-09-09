@@ -255,11 +255,12 @@ When creating the PR:
 - NO AI-generated boilerplate or mentions of AI tools
 
 Once the PR is created and a story ID is in scope, call `skills/shared/checkpoint-seeding.md`'s
-"Seed or Refresh Stage" again for that repo, advancing stage to `"reviewing-prs"` and supplying
-the new PR number — this mirrors `full-cycle`'s existing "After the developing subagent returns"
-write point, now firing from inside `developing` itself so it also happens on a standalone run.
-In the multi-repo path (Step 4 below), each per-repo sub-agent makes this call itself for its
-own repo/PR before returning.
+"Seed or Refresh Stage" again for that repo, passing stage `"developing"` — developing's own
+current stage — and supplying the new PR number. This records the PR number as soon as it's
+known, without asserting review has begun; reviewing-prs' own Phase 2 self-seed is what advances
+the checkpoint to `stage: "reviewing-prs"` once reviewing-prs actually starts. In the multi-repo
+path (Step 4 below), each per-repo sub-agent makes this call itself for its own repo/PR before
+returning.
 
 ---
 

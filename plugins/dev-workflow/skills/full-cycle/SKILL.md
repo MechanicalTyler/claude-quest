@@ -425,13 +425,16 @@ map, using the stage and key facts at that moment:
 
 | Moment | Per-repo write | Notes |
 |--------|-----------------|-------|
-| After creating-stories returns | Initialize one `repos` entry per repo named in the story's "Repos to modify" field | each entry starts `pr_number: null, stage: "writing-specs", review_loop_count: 0, test_loop_count: 0` |
 | During entry-detection resume, before running any stage | If the `repos` map is missing an entry for a repo named in the story's "Repos to modify" field, seed it from that field; then, for any repo that has a linked PR, enrich/update its entry from the parsed `prs=` tuple | Seeded entries (rows 2/3, `prs=none`): `pr_number: null`, `stage` from `story_state` (`"writing-specs"` for row 2, `"developing"` for row 3). Tuple-enriched entries (rows 4-8): `pr_number` from the tuple's `pr`; `stage` mapped from the tuple's `stage` action (`finished`→`"done"`, `testing-prs`/`reviewing-prs`→`"reviewing-prs"` — see the stage-vocabulary note in `context-compaction.md`). Both start `review_loop_count: 0, test_loop_count: 0` since loop counts are not recoverable from GitHub on a cold resume. This is the only initialization path when creating-stories never ran this session; it now covers every resume row (2-8), not only rows with a linked PR; it fills gaps only and never overwrites an already-populated entry |
-| After spec approval gate | Update every existing repo entry's `stage` to `"developing"` | record top-level `approval_text`/`approval_timestamp`; still `pr_number: null` — no PR exists yet |
-| After developing subagent returns | For each `repo:pr` pair resolved, update that repo's entry's `pr_number` and advance `stage` to `"reviewing-prs"` | Nothing about the worktree is recorded — a later reader resolves it live via `git worktree list --porcelain`, per `context-compaction.md` → "No worktree path is ever stored in the checkpoint" |
+| After spec approval gate | Record top-level `approval_text`/`approval_timestamp` | no per-repo `stage` write — writing-specs' own Phase 3 self-seed already recorded `stage: "writing-specs"` when writing-specs started, and developing's own PM Context self-seed is what advances `stage` to `"developing"` once developing actually starts; still `pr_number: null` — no PR exists yet |
 | After each addressing-pr-comments + reviewing-prs iteration | Increment that PR's repo entry's `review_loop_count` | |
 | After each addressing-pr-comments + testing-prs iteration | Increment that PR's repo entry's `test_loop_count` | |
 | After testing-prs passes | Advance that repo's entry's `stage` to `"done"` | other repos' entries are untouched and continue independently — this repo's final checkpoint |
+
+full-cycle no longer writes a repo entry's `stage` field to anticipate a stage that hasn't
+started yet — each stage's own self-seed (per `checkpoint-seeding.md`) is the sole writer of
+its own `stage` value. The one remaining stage-value write above (the terminal `"done"`
+advance) fires only after that outcome has actually occurred.
 
 If a checkpoint write fails, surface the error to the user and continue — do not abort.
 

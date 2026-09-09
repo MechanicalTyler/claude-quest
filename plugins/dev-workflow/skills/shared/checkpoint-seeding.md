@@ -6,9 +6,9 @@ checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`, schema defined in
 already write this file at their own stage boundaries (see `context-compaction.md` →
 "Write points"). Each stage skill that calls one of the two procedures below documents the
 exact point in its own flow where that call happens — see that skill's own preamble/phase
-text (`reviewing-prs` Phase 2, `testing-prs` Phase 2 and Phase 7, `writing-specs` Phase 3
-and Phase 12, `developing` PM Context and PR Creation Requirements, `addressing-pr-comments`
-Step 1, `creating-stories` Phase 0 and Phase 6) rather than a single shared table — this
+text (`reviewing-prs` Phase 2, `testing-prs` Phase 2 and Phase 7, `writing-specs` Phase 3,
+`developing` PM Context and PR Creation Requirements, `addressing-pr-comments`
+Step 1, `creating-stories` Phase 0) rather than a single shared table — this
 file only defines what the call does, not where each caller places it.
 
 Both procedures are **best-effort telemetry, never a functional gate.** A failure at any

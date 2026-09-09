@@ -77,11 +77,6 @@ full-cycle writes the checkpoint at **every** stage boundary and loop iteration.
 write below updates the correct repo's entry in the `repos` map, except where noted as a
 top-level field:
 
-- **After creating-stories returns:** initialize one `repos` entry per repo named in the
-  story's "Repos to modify" field (per `repo-discovery.md`'s reconciliation rules — this
-  field is set at story creation, so it is available immediately, independent of any
-  later on-disk path resolution). Each entry starts as `pr_number: null, stage:
-  "writing-specs", review_loop_count: 0, test_loop_count: 0`.
 - **During entry-detection resume, before running any stage:** initialize or enrich the
   `repos` map from the entry-detection subagent's result — the case on every cold resume by
   a bare story ID, since creating-stories never runs on that path. First, if the checkpoint has
@@ -104,17 +99,20 @@ top-level field:
   and `approval_timestamp` (ISO-8601 time the approval was given). These two fields are
   the mechanical evidence that the spec-approval gate actually fired; full-cycle refuses
   to dispatch developing without them (see full-cycle's "Hard gate — recorded
-  approval"). Also update every existing repo entry's `stage` to `"developing"`
-  (still `pr_number: null` — no PR exists yet).
-- **After the developing subagent returns:** for each `repo:pr` pair the subagent
-  resolved, update that repo's entry with the real `pr_number` and advance `stage` to
-  `"reviewing-prs"`. Nothing about the worktree is recorded here — a later reader resolves it
-  live (see "No worktree path is ever stored in the checkpoint" above).
+  approval"). No per-repo `stage` write happens here — writing-specs' own Phase 3
+  self-seed already recorded `stage: "writing-specs"` when writing-specs started, and
+  developing's own PM Context self-seed is what advances `stage` to `"developing"` once
+  developing actually starts; still `pr_number: null` — no PR exists yet.
 - **After each review-loop / test-loop iteration:** increment that PR's repo entry's
   `review_loop_count` / `test_loop_count`.
 - **After a given PR's testing-prs passes:** advance that repo's entry's `stage` to `"done"`.
   Other repos' entries are untouched and continue independently — this is the terminal
   state a fully finished repo reaches while a sibling repo can still be mid-loop.
+
+full-cycle no longer writes a repo entry's `stage` field to anticipate a stage that hasn't
+started yet — each stage's own self-seed (per `checkpoint-seeding.md`) is the sole writer of
+its own `stage` value. The one remaining stage-value write above (the terminal `"done"`
+advance) fires only after that outcome has actually occurred.
 
 The checkpoint **complements** GitHub/PM state — it stores what GitHub cannot: loop counts and
 the orchestrator's next intended action. GitHub/PM remain authoritative for resume detection.
