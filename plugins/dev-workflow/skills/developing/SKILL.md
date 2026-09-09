@@ -15,6 +15,9 @@ Read `skills/shared/adapter-loading.md` — adapter loading procedures reference
 
 Read `skills/shared/repo-discovery.md` — repo discovery procedure referenced in Repo Discovery.
 
+Read `skills/shared/checkpoint-seeding.md` — checkpoint seeding procedure referenced in
+PM Context and PR Creation Requirements.
+
 Read the CLAUDE.md file in this repository before starting.
 
 ---
@@ -74,6 +77,12 @@ two-path detection — the orchestrator already resolved it. Only fall back to r
 procedure below (including its multi-repo per-repo loop) when no repo path was supplied.
 
 Otherwise, determine which checkout(s) to operate on per `skills/shared/repo-discovery.md` (two-path detection, the "Repos to modify" precedence rules, per-item repo tags, and the single-repo shortcut). Each Path-2 repo is its own checkout in its own sibling folder with its own feature branch.
+
+Once the repo(s) are resolved, call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh
+Stage" with this story's ID, every resolved repo, and stage `"developing"` — this is what
+makes a standalone `developing` run visible to attention-hub immediately, without waiting
+for `full-cycle` to write anything. (The "No Story ID Path" above makes no call — there is
+no story ID to key a checkpoint by.)
 
 **The worktree root supersedes the repo root once a worktree exists.** Whichever of the above
 resolved the "repo root" (a supplied `Repo path:`, or this section's own discovery), that value
@@ -244,6 +253,13 @@ When creating the PR:
   - **Story Reference**: Link using PM adapter's "Story Reference in PRs" format (omit this section if there is no story ID)
   - **How to Test**: Testing steps from Claude Instructions if available, otherwise based on changes made
 - NO AI-generated boilerplate or mentions of AI tools
+
+Once the PR is created and a story ID is in scope, call `skills/shared/checkpoint-seeding.md`'s
+"Seed or Refresh Stage" again for that repo, advancing stage to `"reviewing-prs"` and supplying
+the new PR number — this mirrors `full-cycle`'s existing "After the developing subagent returns"
+write point, now firing from inside `developing` itself so it also happens on a standalone run.
+In the multi-repo path (Step 4 below), each per-repo sub-agent makes this call itself for its
+own repo/PR before returning.
 
 ---
 

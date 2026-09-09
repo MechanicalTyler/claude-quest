@@ -30,6 +30,10 @@ COMPLETED_RETENTION_SECONDS = 5 * 60
 LABEL_MAX_CHARS = 256
 STAGE_TERMINAL_STAGES = frozenset({"done", "finished"})
 STAGE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60  # checkpoints idle across nights/weekends/review waits are still active
+# creating-stories' pre-story ".pending-*.json" placeholder has no story ID to key a real
+# checkpoint by, so nothing prunes it except this cutoff and its own writer-side sweep —
+# an abandoned interview would otherwise shadow real checkpoints for the full week above.
+PENDING_PLACEHOLDER_MAX_AGE_SECONDS = 60 * 60
 
 # Container-detection signals (module-level so tests can redirect them).
 CONTAINER_MARKER_FILES = ("/.dockerenv", "/run/.containerenv")
@@ -452,14 +456,19 @@ def get_dev_workflow_stage(cwd):
                 if parts[i - 1] not in candidates:
                     candidates.append(parts[i - 1])
         state_dir = Path.home() / ".claude" / "dev-workflow" / "state"
-        cutoff = time.time() - STAGE_MAX_AGE_SECONDS
+        now = time.time()
+        cutoff = now - STAGE_MAX_AGE_SECONDS
+        pending_cutoff = now - PENDING_PLACEHOLDER_MAX_AGE_SECONDS
         dated_paths = []
         for checkpoint_path in state_dir.glob("*.json"):
             try:
                 mtime = checkpoint_path.stat().st_mtime
             except OSError:
                 continue
-            if mtime < cutoff:
+            if checkpoint_path.name.startswith(".pending-"):
+                if mtime < pending_cutoff:
+                    continue
+            elif mtime < cutoff:
                 continue
             dated_paths.append((mtime, checkpoint_path))
         dated_paths.sort(key=lambda item: item[0], reverse=True)

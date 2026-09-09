@@ -705,6 +705,46 @@ def test_stage_newer_non_matching_checkpoint_does_not_shadow_older_match(tmp_pat
             == "my-project:review\nother-repo:testing")
 
 
+def test_stage_stale_checkpoint_shadowed_by_fresh_init_seed(tmp_path):
+    # Why: a standalone stage skill seeds a fresh "init" checkpoint entry so
+    # the dashboard never shows a stale stage left by an earlier, unrelated
+    # run for the same repo — this locks in the freshest-mtime-wins behavior
+    # that seeding depends on, proving "init" is treated like any other
+    # non-terminal stage rather than specially excluded. The stale checkpoint
+    # is set to 1 day old (well inside STAGE_MAX_AGE_SECONDS' 7-day window),
+    # not exactly 7 days, so the age filter can never be what drops it —
+    # only mtime-ordering can, which is the behavior this test exists to prove.
+    client, state_dir = make_stage_client(tmp_path)
+    stale = write_checkpoint(state_dir, "story-old.json",
+                             {"repos": {"my-project": {"stage": "developing"}}})
+    fresh_init = write_checkpoint(state_dir, ".pending-123-456.json",
+                                  {"repos": {"my-project": {"stage": "init"}}})
+    now = time.time()
+    os.utime(stale, (now - 86400, now - 86400))
+    os.utime(fresh_init, (now, now))
+    assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:init"
+
+
+def test_stage_stale_pending_placeholder_is_ignored_even_within_stage_window(tmp_path):
+    # Why: an abandoned creating-stories interview leaves its ".pending-*.json"
+    # placeholder behind with no story ID to key a real checkpoint by, and
+    # nothing else prunes it — so a pending file must go stale on its own,
+    # tighter cutoff (PENDING_PLACEHOLDER_MAX_AGE_SECONDS) well before the
+    # general 7-day STAGE_MAX_AGE_SECONDS window would otherwise let it keep
+    # shadowing a real, older-but-still-live checkpoint for a full week.
+    client, state_dir = make_stage_client(tmp_path)
+    real = write_checkpoint(state_dir, "story-real.json",
+                            {"repos": {"my-project": {"stage": "developing"}}})
+    orphaned_pending = write_checkpoint(state_dir, ".pending-999-111.json",
+                                        {"repos": {"my-project": {"stage": "init"}}})
+    now = time.time()
+    # Older than PENDING_PLACEHOLDER_MAX_AGE_SECONDS (1 hour) but still newer
+    # than "real" and well inside the general 7-day window.
+    os.utime(orphaned_pending, (now - 7200, now - 7200))
+    os.utime(real, (now - 86400, now - 86400))
+    assert client.get_dev_workflow_stage("/home/user/my-project") == "my-project:developing"
+
+
 def test_payload_always_includes_stage_key():
     # Why: the store treats stage as non-sticky, so every payload must carry
     # the key — even "" — or a stale stage would linger on the card.

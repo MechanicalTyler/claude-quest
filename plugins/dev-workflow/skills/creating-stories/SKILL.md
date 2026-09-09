@@ -25,6 +25,9 @@ Read `skills/shared/adapter-loading.md` — adapter loading procedure referenced
 
 Read `skills/shared/repo-discovery.md` — repo discovery procedure referenced in Phase 0.
 
+Read `skills/shared/checkpoint-seeding.md` — checkpoint seeding procedures referenced in
+Phase 0 and Phase 6.
+
 ---
 
 ## Pre-Gate: Invocation Provenance
@@ -44,6 +47,12 @@ The Phase 5 draft-approval gate is unchanged and still applies on every path.
 
 1. Determine the workspace root — use the current working directory
 2. Find repos using the two-path detection in `skills/shared/repo-discovery.md` (Path 1 → one repo; Path 2 → all discovered repos)
+2a. **Seed the pre-story checkpoint placeholder.** Immediately after step 2 finds candidate
+    repos — before any story ID exists — call `skills/shared/checkpoint-seeding.md`'s "Seed
+    Pending Pre-Story Placeholder" procedure with those repo names. Hold onto the returned
+    placeholder file path; it is deleted once Phase 6 seeds the real checkpoint (or sooner,
+    on a Phase 5 cancel or a Phase 6 failure — see Phase 6 below). If step 2 found zero
+    repos, skip this call — there is nothing to seed yet.
 3. **Git-host search for a named-but-not-locally-found repo.** Scan the request text — `$ARGUMENTS` when it is non-empty (this step's primary trigger point, run here at Phase 0) — for a specific repo, service, or codebase name that step 2's local discovery did not find. When one is named:
    - Resolve the org to search: in the single-repo case (Path 1), from that repo's own git remote (extract the owner segment from `git remote get-url origin`); in the workspace-parent case (Path 2), from any one already-discovered child repo's remote (they are normally the same org) — if the discovered repos span more than one org, ask the user which to search.
    - **Probe directly — do not enumerate the org.** Run `gh repo view {org}/{name-from-request}` for the named repo. Do not call `gh repo list` first: it defaults to 30 results, and on any org with more repos than that the named repo can be silently absent from the list even though it exists, degrading the outcome to `[Inference]` with no error. A direct `gh repo view` probe has no such limit.
@@ -86,7 +95,7 @@ The Phase 5 draft-approval gate is unchanged and still applies on every path.
 1. Read `~/.claude/dev-workflow/config.json`
 2. Note the `pm_adapter` value
 3. Load PM adapter per procedure in `skills/shared/adapter-loading.md`
-4. Confirm the adapter implements **Create Story** (capability #5) by checking for a `## Create Story` heading in the loaded adapter file. If not found: STOP — "This PM adapter does not support Create Story. Please update ~/.claude/skills/pm-adapter/{name}.md with a Create Story section."
+4. Confirm the adapter implements **Create Story** (capability #5) by checking for a `## Create Story` heading in the loaded adapter file. If not found: delete the Phase 0 step 2a placeholder file, if one was seeded, then STOP — "This PM adapter does not support Create Story. Please update ~/.claude/skills/pm-adapter/{name}.md with a Create Story section."
 5. Check whether the loaded adapter has pre-flight requirements (e.g., Linear requires `teamId`, Jira requires `PROJECT_KEY` if not yet established in session). Surface any such requirements to the user **before** starting the interview in Phase 3, so they don't interrupt Phase 6.
 
 ---
@@ -186,7 +195,7 @@ Type **yes** to submit this story to {pm_adapter}, or describe what to change.
 - If user says "yes" (case-insensitive): proceed to Phase 6
 - If user asks a question that does not itself imply a desired change: answer the question directly, using the same codebase/context investigation Phase 3 already permits, scoped to codebase/context reads only — this does **not** extend to Phase 3's live infra/deployment-state carve-out; a Phase 5 question never triggers a live SSM/Kubernetes/service-health check. Then re-present the draft with the same approval prompt: re-present it identical and unmodified, unless answering the question revealed the draft itself is factually wrong, in which case re-present a corrected draft instead of knowingly re-presenting an incorrect one, and state what changed and why. This does not count as a revision cycle — do not increment the 3-revision-cycle counter used by the feedback branch below. **Tie-break:** if the question itself implies a desired change (e.g. it reads as "why isn't this scoped to X" where the intent is "scope this to X"), treat it as feedback under the branch below instead, even though it is phrased as a question.
 - If user provides feedback (including a question found, per the tie-break above, to imply a desired change): incorporate the feedback, return to Phase 4 and re-emit an updated draft. After 3 revision cycles without approval, suggest the user cancel and restart with a clearer description.
-- If user says "stop", "quit", "cancel", or "exit": STOP — "Story creation cancelled."
+- If user says "stop", "quit", "cancel", or "exit": if Phase 0 step 2a seeded a placeholder, delete it now, then STOP — "Story creation cancelled."
 
 ---
 
@@ -194,11 +203,17 @@ Type **yes** to submit this story to {pm_adapter}, or describe what to change.
 
 Use the PM adapter's **Create Story** operation (capability #5) with all draft fields.
 
-On success: display —
+On success:
+1. Call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh Stage" with the new
+   story's real ID, its "Repos to modify" list, and stage `"writing-specs"` — matching
+   `full-cycle`'s own "After creating-stories returns" write point exactly.
+2. Delete the Phase 0 step 2a placeholder file, if one was seeded.
+3. Display —
 ```
 Story created successfully!
 ID: {story-id}
 URL: {story-url}
 ```
 
-On failure: STOP with the error — do not retry silently.
+On failure: delete the Phase 0 step 2a placeholder file, if one was seeded, then STOP with
+the error — do not retry silently.

@@ -23,6 +23,9 @@ Read `skills/shared/adapter-loading.md` — adapter loading procedures reference
 
 Read `skills/shared/repo-discovery.md` — repo discovery procedure referenced in Phase 3.
 
+Read `skills/shared/checkpoint-seeding.md` — checkpoint seeding procedure referenced in
+Phase 3 and Phase 12.
+
 ---
 
 ## Phase 1: Load Adapters
@@ -69,6 +72,11 @@ If the story contains screenshots, mockup images, or visual attachments you cann
 ### Repo Discovery
 
 Determine the repo set per `skills/shared/repo-discovery.md` (two-path detection, the "Repos to modify" precedence rules, per-item repo tags, and the single-repo shortcut). Use the per-item repo tags in Phases 5–10 to filter scope per repo.
+
+Once the repo set is determined, call `skills/shared/checkpoint-seeding.md`'s "Seed or
+Refresh Stage" once with this story's ID, every repo in scope, and stage `"writing-specs"`
+— this is what makes a standalone `writing-specs` run visible to attention-hub immediately,
+without waiting for `full-cycle` to write anything.
 
 ---
 
@@ -528,6 +536,8 @@ If the PM adapter does not support comments or updates — note this to the user
 **"Ready for Dev" transition and `claude-written` label:** Fire these **ONCE** on the single story after all specs are linked. State transitions and labels are applied once per run, not per repo.
 
 **State ownership:** writing-specs owns the "Ready for Dev" transition; developing owns the "In Development" transition. Each skill fires only its own transition — never the other's.
+
+Immediately after the "Ready for Dev" transition fires, call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh Stage" once, advancing every repo in scope to stage `"developing"` — this mirrors `full-cycle`'s own existing write point ("After the user approves the spec in writing-specs", per `context-compaction.md` → "Write points"), which advances the checkpoint at spec approval, before `developing` is even dispatched, so a standalone run produces the same checkpoint timing as an orchestrated one.
 
 ---
 
