@@ -180,10 +180,22 @@ linked PR, enrich/update its entry from the parsed `prs=` tuples the same way, b
 proceeding. This is the only initialization path when creating-stories never ran in this
 session — it now covers every resume row (2-8), not only the rows with a linked PR.
 
-When a repo's entry stage is mid-pipeline, run that stage for that repo, then continue
-forward through the remaining stages for that repo in normal order; skip any repo already
-at `finished`. State each repo's detected entry stage to the user before proceeding — not
-a single story-wide stage.
+When a repo's entry stage — as determined by the Resume / Entry Detection table above
+(rows 4-8, evaluated from the `prs=` tuple's live GitHub review/label state), not the
+checkpoint's own `stage` field — is mid-pipeline, run that stage for that repo, then
+continue forward through the remaining stages for that repo in normal order; skip any repo
+already at `finished`. The checkpoint's `repos[repo].stage` is a display/telemetry mirror
+for attention-hub, not a second resume-decision source: a session that dies between PR
+creation and `reviewing-prs`' own Phase 2 self-seed leaves that field reading `"developing"`
+with `pr_number` already set, but the Resume table's row 8/7/6/5 evaluation against the
+PR's actual GitHub state — never the checkpoint field — is what correctly resumes that repo
+at `reviewing-prs`, not `developing`. State each repo's detected entry stage to the user
+before proceeding — not a single story-wide stage.
+
+Rows 1-3 resolve the same way, from `story_state` rather than the `prs=` tuple (see "How to
+gather each signal" above) — they are not an exception to the "not the checkpoint field"
+rule above; the checkpoint's `repos[repo].stage` is never a resume-decision source for any
+row.
 
 ### testing-prs label requirement
 
@@ -268,8 +280,10 @@ After it returns, **dispatch the Agent tool** with `subagent_type: dev-workflow-
 >
 > `pr_numbers=<repo:pr,repo:pr,...>` (or `pr_numbers=none` when no PR was found)
 
-Read that one line and parse each `repo:pr` pair — the repo name is what keys the
-checkpoint's `repos` map entry for that PR. Do not rely solely on the subagent's
+Read that one line and parse each `repo:pr` pair — the repo name is what identifies each PR
+to dispatch reviewing-prs against next (see below), not a checkpoint write: developing's own
+PR Creation Requirements self-seed already recorded that repo's `pr_number` in the
+checkpoint before this subagent was even dispatched. Do not rely solely on the subagent's
 self-reported PR number, and never let raw PM/GitHub JSON enter the main orchestrator
 context.
 
@@ -419,31 +433,17 @@ message wording. This section describes when full-cycle calls those procedures.
 
 ### Checkpoint writes
 
-Write the checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`) at every stage
-boundary and loop iteration. Each write updates the correct repo's entry in the `repos`
-map, using the stage and key facts at that moment:
-
-| Moment | Per-repo write | Notes |
-|--------|-----------------|-------|
-| After creating-stories returns | Initialize one `repos` entry per repo named in the story's "Repos to modify" field | each entry starts `pr_number: null, stage: "writing-specs", review_loop_count: 0, test_loop_count: 0` |
-| During entry-detection resume, before running any stage | If the `repos` map is missing an entry for a repo named in the story's "Repos to modify" field, seed it from that field; then, for any repo that has a linked PR, enrich/update its entry from the parsed `prs=` tuple | Seeded entries (rows 2/3, `prs=none`): `pr_number: null`, `stage` from `story_state` (`"writing-specs"` for row 2, `"developing"` for row 3). Tuple-enriched entries (rows 4-8): `pr_number` from the tuple's `pr`; `stage` mapped from the tuple's `stage` action (`finished`→`"done"`, `testing-prs`/`reviewing-prs`→`"reviewing-prs"` — see the stage-vocabulary note in `context-compaction.md`). Both start `review_loop_count: 0, test_loop_count: 0` since loop counts are not recoverable from GitHub on a cold resume. This is the only initialization path when creating-stories never ran this session; it now covers every resume row (2-8), not only rows with a linked PR; it fills gaps only and never overwrites an already-populated entry |
-| After spec approval gate | Update every existing repo entry's `stage` to `"developing"` | record top-level `approval_text`/`approval_timestamp`; still `pr_number: null` — no PR exists yet |
-| After developing subagent returns | For each `repo:pr` pair resolved, update that repo's entry's `pr_number` and advance `stage` to `"reviewing-prs"` | Nothing about the worktree is recorded — a later reader resolves it live via `git worktree list --porcelain`, per `context-compaction.md` → "No worktree path is ever stored in the checkpoint" |
-| After each addressing-pr-comments + reviewing-prs iteration | Increment that PR's repo entry's `review_loop_count` | |
-| After each addressing-pr-comments + testing-prs iteration | Increment that PR's repo entry's `test_loop_count` | |
-| After testing-prs passes | Advance that repo's entry's `stage` to `"done"` | other repos' entries are untouched and continue independently — this repo's final checkpoint |
-
-If a checkpoint write fails, surface the error to the user and continue — do not abort.
+See `context-compaction.md`'s "Write points" for the authoritative list of what full-cycle
+writes directly to the checkpoint (the resume-bootstrap enrichment, the spec-approval gate,
+loop-count increments, and the terminal `"done"` advance), and its "Self-seeding" section for
+what each stage's own self-seed covers instead. See that file's "Checkpoint write failure"
+for how to handle a failed write.
 
 ### High-context handoff
 
 When the context meter (PostToolUse hook) has reported ≥75% usage and full-cycle
-reaches a stage boundary, follow the high-context handoff procedure defined in
-`skills/shared/context-compaction.md`:
-
-- **Inside tmux (`$TMUX` is set):** write checkpoint, write sentinel, announce, end turn.
-- **Outside tmux:** write checkpoint, emit the exact manual-fallback message with the
-  actual story ID substituted, end turn. Do not write a sentinel.
+reaches a stage boundary, follow `context-compaction.md`'s "High-Context Handoff Procedure"
+exactly, for both the inside-tmux and outside-tmux cases — do not restate the steps here.
 
 The context meter's `additionalContext` message is the trigger signal — act on it at
 the next stage boundary after receiving it, not mid-stage.

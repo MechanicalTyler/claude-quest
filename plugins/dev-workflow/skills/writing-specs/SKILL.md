@@ -24,7 +24,7 @@ Read `skills/shared/adapter-loading.md` — adapter loading procedures reference
 Read `skills/shared/repo-discovery.md` — repo discovery procedure referenced in Phase 3.
 
 Read `skills/shared/checkpoint-seeding.md` — checkpoint seeding procedure referenced in
-Phase 3 and Phase 12.
+Phase 3.
 
 ---
 
@@ -77,6 +77,28 @@ Once the repo set is determined, call `skills/shared/checkpoint-seeding.md`'s "S
 Refresh Stage" once with this story's ID, every repo in scope, and stage `"writing-specs"`
 — this is what makes a standalone `writing-specs` run visible to attention-hub immediately,
 without waiting for `full-cycle` to write anything.
+
+Immediately after that call succeeds, sweep and delete any `.pending-*.json` placeholder
+file (per `checkpoint-seeding.md`'s "Seed Pending Pre-Story Placeholder" section) whose
+`repos` list includes any repo just seeded above — the real `{story-id}.json` entry just
+written is now the freshest checkpoint for those repos and supersedes the placeholder.
+Check every repo in scope in this same pass, matching the seeding call's own "every repo in
+scope" shape rather than looping per repo. This is non-fatal on failure, same best-effort
+posture as the seeding procedures — a placeholder left behind still expires on its own
+1-hour cutoff.
+
+This sweep has no age guard and no story-ID scoping (the placeholder carries no story ID to
+scope by), so it can delete a placeholder belonging to a different, concurrently running
+`creating-stories` interview that happens to name one of the same repos — unlike
+`checkpoint-seeding.md`'s own writer-side sweep in "Seed Pending Pre-Story Placeholder", which
+leaves a pending file alone if it's younger than the staleness threshold because it "may
+belong to a concurrently running interview." This sweep deliberately does not apply that same
+caution: this is best-effort telemetry, never a functional gate, so the collateral cost of
+deleting a concurrent, unrelated interview's placeholder is that interview's `init` display
+disappearing until it reaches its own Phase 6 (or, since Phase 6 success no longer deletes it,
+until `writing-specs` runs for it) — never a functional break. Two concurrent
+`creating-stories` interviews for the exact same repo is rare enough that adding scoping
+machinery (an age guard or path-matching) here is not justified.
 
 ---
 
@@ -536,8 +558,6 @@ If the PM adapter does not support comments or updates — note this to the user
 **"Ready for Dev" transition and `claude-written` label:** Fire these **ONCE** on the single story after all specs are linked. State transitions and labels are applied once per run, not per repo.
 
 **State ownership:** writing-specs owns the "Ready for Dev" transition; developing owns the "In Development" transition. Each skill fires only its own transition — never the other's.
-
-Immediately after the "Ready for Dev" transition fires, call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh Stage" once, advancing every repo in scope to stage `"developing"` — this mirrors `full-cycle`'s own existing write point ("After the user approves the spec in writing-specs", per `context-compaction.md` → "Write points"), which advances the checkpoint at spec approval, before `developing` is even dispatched, so a standalone run produces the same checkpoint timing as an orchestrated one.
 
 ---
 

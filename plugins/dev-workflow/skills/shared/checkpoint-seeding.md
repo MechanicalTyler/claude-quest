@@ -2,13 +2,18 @@
 
 Shared procedure for a stage skill to seed or refresh its own entry in the dev-workflow
 checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`, schema defined in
-`context-compaction.md`) when invoked standalone — outside `full-cycle`/`epic`, which
-already write this file at their own stage boundaries (see `context-compaction.md` →
-"Write points"). Each stage skill that calls one of the two procedures below documents the
+`context-compaction.md`) at its own stage boundary. Each stage's own self-seed is now the
+primary writer of its `stage` field regardless of whether `full-cycle`/`epic` is driving the
+pipeline: `full-cycle`'s own writes (see `context-compaction.md` → "Write points") no longer
+duplicate a stage value at most boundaries — they cover the resume-bootstrap enrichment, the
+spec-approval top-level fields, loop-count increments, and the terminal `"done"` advance.
+(`next_action` remains reserved to full-cycle/epic's own bookkeeping in the schema below, but
+no current write point populates it — a pre-existing gap, not something introduced or
+resolved here.) Each stage skill that calls one of the two procedures below documents the
 exact point in its own flow where that call happens — see that skill's own preamble/phase
-text (`reviewing-prs` Phase 2, `testing-prs` Phase 2 and Phase 7, `writing-specs` Phase 3
-and Phase 12, `developing` PM Context and PR Creation Requirements, `addressing-pr-comments`
-Step 1, `creating-stories` Phase 0 and Phase 6) rather than a single shared table — this
+text (`reviewing-prs` Phase 2, `testing-prs` Phase 2 and Phase 7, `writing-specs` Phase 3,
+`developing` PM Context and PR Creation Requirements, `addressing-pr-comments`
+Step 1, `creating-stories` Phase 0) rather than a single shared table — this
 file only defines what the call does, not where each caller places it.
 
 Both procedures are **best-effort telemetry, never a functional gate.** A failure at any
@@ -16,7 +21,13 @@ step — an unresolved story ID, an unwritable state directory, a malformed exis
 is never surfaced as an error to the user and never blocks the caller's real work. Silently
 skip (for an unresolved story ID) or surface-and-continue (for a write failure, per
 `context-compaction.md` → "Checkpoint write failure") and proceed with the rest of the
-skill exactly as if this procedure had not been called.
+skill exactly as if this procedure had not been called. Because `full-cycle` no longer
+backfills a skipped mid-pipeline self-seed, a skipped or failed call now has a concrete
+(non-functional) cost: that repo's checkpoint `stage` goes stale or absent for
+attention-hub's display until the next stage's own self-seed succeeds. GitHub/PM state
+remains the resume authority regardless (see `context-compaction.md` → "Checkpoint write
+failure"), so this never blocks or misdirects the pipeline itself — only its telemetry
+display.
 
 ---
 
@@ -114,30 +125,52 @@ to this procedure's implementation, so no caller of "Seed or Refresh Stage" need
 Used only by `creating-stories` Phase 0, for the window between repo discovery and story
 creation where no story ID exists yet to key a checkpoint by.
 
-`"init"` is never terminal (`STAGE_TERMINAL_STAGES` is `{"done", "finished"}`), so an
-orphaned placeholder — one left behind by an interview that was abandoned or interrupted
-without ever reaching a Phase 0/5/6 cleanup trigger, a routine outcome for a long
-interactive interview, not just a crash — would otherwise keep shadowing real checkpoints
-for the same repo indefinitely, reintroducing the exact stale-shadow bug this story exists
-to fix. Two defenses, mirroring the `.compact-request` sentinel's own staleness handling
-(`hooks/compact-injector.sh`'s `STALE_SECONDS=600`):
+`"init"` is never terminal (`STAGE_TERMINAL_STAGES` is `{"done", "finished"}`), so a
+placeholder that survives past the interview itself — which, since a Phase 6 creation success
+now deliberately leaves it in place rather than superseding it immediately (see "Cleanup is
+the caller's responsibility" below), is the normal post-success case and not only an
+abandoned/interrupted one — would otherwise keep shadowing real checkpoints for the same repo
+indefinitely: attention-hub would keep displaying that placeholder's `"init"` stage for the
+repo instead of its actual current checkpoint entry. The placeholder's actual required
+lifetime is therefore the interview plus story creation plus however long until
+`writing-specs` runs and its Phase 3 self-seed supersedes it — seconds, in an interactive
+`full-cycle` run where `writing-specs` starts immediately after; unbounded, on the standalone
+`creating-stories` path, where a created story can sit in the backlog for any length of time
+before someone runs `writing-specs` against it. Two defenses, mirroring the `.compact-request`
+sentinel's own staleness handling (`hooks/compact-injector.sh`'s `STALE_SECONDS=600`):
 
 - **Reader-side staleness (primary defense):** `get_dev_workflow_stage` applies a stricter
   age cutoff to `.pending-*.json` files specifically —
   `PENDING_PLACEHOLDER_MAX_AGE_SECONDS = 3600` (one hour) in `attention_hub_client.py`,
-  versus the general `STAGE_MAX_AGE_SECONDS` (7 days) applied to every other checkpoint.
-  One hour comfortably covers a live interactive interview (these typically finish in
-  minutes) while bounding an abandoned placeholder's exposure to a small fraction of the
-  general 7-day window, rather than the full week. A `.pending-*.json` older than this is
-  skipped by the lookup exactly as if it did not exist — it is telemetry, so going stale
-  mid-interview only means attention-hub temporarily stops showing "init" for that repo,
-  never a functional break in `creating-stories` itself.
+  versus the general `STAGE_MAX_AGE_SECONDS` (7 days) applied to every other checkpoint. This
+  bound was sized for a live interactive interview (these typically finish in minutes); it is
+  not fully protective against the longer lifetime named above, since a standalone
+  `creating-stories` run can leave the gap to `writing-specs` open far past an hour. Past the
+  one-hour mark, the `.pending-*.json` file is skipped by the lookup exactly as if it did not
+  exist, and `get_dev_workflow_stage` falls through to whatever prior checkpoint is freshest
+  for that repo — genuinely stale-shadowing again, if a non-terminal entry from an unrelated
+  prior story exists within the general 7-day `STAGE_MAX_AGE_SECONDS` window. This is
+  genuinely better than the pre-fix unbounded case (bounded to at most 7 days rather than
+  indefinitely), but it is not a fully bounded exposure, and this file's job is to say so
+  rather than imply otherwise. The constant stays at 3600 rather than being raised: a longer
+  cutoff would trade away its interview-abandonment protection without closing the gap for a
+  backlogged story of any length.
 - **Writer-side sweep (defense-in-depth):** before writing its own placeholder (step 2
   below), this procedure lists the state directory for existing `.pending-*.json` files and
   deletes any whose mtime is older than the same `PENDING_PLACEHOLDER_MAX_AGE_SECONDS`
   threshold — cleaning up a genuinely abandoned prior run's leftover file proactively,
   rather than waiting on the reader-side cutoff above. A pending file younger than the
-  threshold is left alone (it may belong to a concurrently running interview).
+  threshold is left alone here (it may belong to a concurrently running interview).
+  `writing-specs`' own Phase 3 sweep (see that file's "Repo Discovery" section) is a separate,
+  later deletion path with no age guard and no story-ID scoping (the placeholder carries no
+  story ID to scope by), and it deliberately does not apply this same "may belong to a
+  concurrent interview" caution: this is best-effort telemetry, never a functional gate, so
+  the collateral cost of deleting a concurrent, unrelated `creating-stories` interview's
+  placeholder is that interview's `init` display disappearing until it reaches its own Phase 6
+  (or, since Phase 6 success no longer deletes it, until `writing-specs` runs for it) — never a
+  functional break. Two concurrent `creating-stories` interviews for the exact same repo is
+  rare enough that adding scoping machinery (an age guard or path-matching) to that sweep is
+  not justified.
 
 1. **Sweep stale pending files.** List `~/.claude/dev-workflow/state/.pending-*.json`; for
    each whose mtime is older than `PENDING_PLACEHOLDER_MAX_AGE_SECONDS` (3600 seconds),
@@ -153,15 +186,32 @@ to fix. Two defenses, mirroring the `.compact-request` sentinel's own staleness 
    `context-compaction.md`'s Legacy stage values note for how a reader treats an unrecognized
    stage value as opaque; `"init"` is simply never terminal, so it always matches (subject to
    the reader-side staleness cutoff documented above).
-4. Return the placeholder file's path to the caller — `creating-stories` needs it to delete
-   the file later (see its own Phase 0/Phase 6 instructions for the exact cleanup trigger
-   points).
+4. Return the placeholder file's path to the caller. `creating-stories` uses this returned
+   path to delete the file immediately on its three abandonment paths (the Phase 2
+   adapter-lacks-Create-Story stop, a Phase 5 user cancel, or a Phase 6 creation failure — see
+   "Cleanup is the caller's responsibility, not this procedure's" below). On the story-creation
+   success path, `creating-stories` does not use the returned path at all: it leaves the
+   placeholder in place, and `writing-specs`' Phase 3 self-seed is what later discovers and
+   deletes it, via its own independent glob sweep over `.pending-*.json` — not via this
+   returned path, which by then belongs to a different (already-exited) caller.
 5. **On any write failure:** surface the error to the user and continue — same
    best-effort posture as "Seed or Refresh Stage" above. Proceed with the rest of
    `creating-stories` unchanged; the interview and story creation do not depend on this
    placeholder existing.
 
 **Cleanup is the caller's responsibility, not this procedure's.** This procedure only
-creates the placeholder file and reports its path — see `creating-stories/SKILL.md`'s own
-instructions for when the placeholder must be deleted (every exit path: normal completion,
-a Phase 5 user cancel, and a Phase 6 creation failure).
+creates the placeholder file and reports its path. Deletion happens on one of two paths,
+neither of which is this procedure:
+
+- **`creating-stories` deletes it immediately** on any of its three abandonment paths — the
+  Phase 2 adapter-lacks-Create-Story stop, a Phase 5 user cancel, or a Phase 6 creation
+  failure — since none of these ever produces a story that could reach `writing-specs` to
+  supersede the placeholder.
+- **`writing-specs` deletes it on normal completion.** On a Phase 6 creation success,
+  `creating-stories` deliberately leaves the placeholder in place (see its own Phase 6
+  instructions) rather than deleting it or writing a real checkpoint entry itself.
+  `writing-specs`' Phase 3 self-seed is what supersedes it: once that self-seed writes the
+  real `{story-id}.json` entry, Phase 3 sweeps in a single pass over every `.pending-*.json`
+  file and deletes any whose `repos` list is now superseded by the repos it just seeded — not
+  a per-repo deletion, since the placeholder is one file holding a `repos` map that can cover
+  several repos.

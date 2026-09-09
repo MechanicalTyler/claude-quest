@@ -110,9 +110,10 @@ Also check PR title if not found in body.
 3. Detect service name: `git rev-parse --show-toplevel | xargs basename`
 4. Call `skills/shared/checkpoint-seeding.md`'s "Seed or Refresh Stage" with the resolved
    story ID, the detected service name, stage `"reviewing-prs"`, and this PR's number — this
-   is what makes a standalone `reviewing-prs` run visible to attention-hub immediately,
-   without waiting for `full-cycle` to write anything. Must not touch `review_loop_count`/
-   `test_loop_count` — that stays exclusively the orchestrator's bookkeeping.
+   self-seed is the primary writer of this repo's `stage` value regardless of whether
+   `full-cycle` is driving the pipeline (see `checkpoint-seeding.md`'s opening paragraph).
+   Must not touch `review_loop_count`/`test_loop_count` — that stays exclusively the
+   orchestrator's bookkeeping.
 5. Load notes adapter per procedure in `skills/shared/adapter-loading.md` → read Claude Instructions spec
 6. **If spec not found:** ERROR and ask user to invoke the Writer skill (`dev-workflow:writing-specs`) with this story ID first
 
