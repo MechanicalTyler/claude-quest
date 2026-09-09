@@ -180,10 +180,17 @@ linked PR, enrich/update its entry from the parsed `prs=` tuples the same way, b
 proceeding. This is the only initialization path when creating-stories never ran in this
 session — it now covers every resume row (2-8), not only the rows with a linked PR.
 
-When a repo's entry stage is mid-pipeline, run that stage for that repo, then continue
-forward through the remaining stages for that repo in normal order; skip any repo already
-at `finished`. State each repo's detected entry stage to the user before proceeding — not
-a single story-wide stage.
+When a repo's entry stage — as determined by the Resume / Entry Detection table above
+(rows 4-8, evaluated from the `prs=` tuple's live GitHub review/label state), not the
+checkpoint's own `stage` field — is mid-pipeline, run that stage for that repo, then
+continue forward through the remaining stages for that repo in normal order; skip any repo
+already at `finished`. The checkpoint's `repos[repo].stage` is a display/telemetry mirror
+for attention-hub, not a second resume-decision source: a session that dies between PR
+creation and `reviewing-prs`' own Phase 2 self-seed leaves that field reading `"developing"`
+with `pr_number` already set, but the Resume table's row 8/7/6/5 evaluation against the
+PR's actual GitHub state — never the checkpoint field — is what correctly resumes that repo
+at `reviewing-prs`, not `developing`. State each repo's detected entry stage to the user
+before proceeding — not a single story-wide stage.
 
 ### testing-prs label requirement
 
@@ -268,8 +275,10 @@ After it returns, **dispatch the Agent tool** with `subagent_type: dev-workflow-
 >
 > `pr_numbers=<repo:pr,repo:pr,...>` (or `pr_numbers=none` when no PR was found)
 
-Read that one line and parse each `repo:pr` pair — the repo name is what keys the
-checkpoint's `repos` map entry for that PR. Do not rely solely on the subagent's
+Read that one line and parse each `repo:pr` pair — the repo name is what identifies each PR
+to dispatch reviewing-prs against next (see below), not a checkpoint write: developing's own
+PR Creation Requirements self-seed already recorded that repo's `pr_number` in the
+checkpoint before this subagent was even dispatched. Do not rely solely on the subagent's
 self-reported PR number, and never let raw PM/GitHub JSON enter the main orchestrator
 context.
 
@@ -419,9 +428,12 @@ message wording. This section describes when full-cycle calls those procedures.
 
 ### Checkpoint writes
 
-Write the checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`) at every stage
-boundary and loop iteration. Each write updates the correct repo's entry in the `repos`
-map, using the stage and key facts at that moment:
+Write the checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`) at select stage
+boundaries and loop iterations — the resume-bootstrap enrichment, the spec-approval gate,
+loop-count increments, and the terminal `"done"` advance. Every other stage-to-stage
+transition is each stage's own self-seed (see `context-compaction.md` → "Self-seeding").
+Each write below updates the correct repo's entry in the `repos` map, using the stage and
+key facts at that moment, except where noted as a top-level field:
 
 | Moment | Per-repo write | Notes |
 |--------|-----------------|-------|
@@ -431,10 +443,19 @@ map, using the stage and key facts at that moment:
 | After each addressing-pr-comments + testing-prs iteration | Increment that PR's repo entry's `test_loop_count` | |
 | After testing-prs passes | Advance that repo's entry's `stage` to `"done"` | other repos' entries are untouched and continue independently — this repo's final checkpoint |
 
-full-cycle no longer writes a repo entry's `stage` field to anticipate a stage that hasn't
-started yet — each stage's own self-seed (per `checkpoint-seeding.md`) is the sole writer of
-its own `stage` value. The one remaining stage-value write above (the terminal `"done"`
-advance) fires only after that outcome has actually occurred.
+full-cycle's own mid-pipeline writes no longer anticipate a stage that hasn't started yet.
+Each stage's own self-seed (per `checkpoint-seeding.md`) is the sole writer of *its own
+stage's boundary-start value* under normal, non-resume operation — not the sole writer of
+`stage` overall. Counterexamples elsewhere in the pipeline: `testing-prs` and
+`addressing-pr-comments` write `"reviewing-prs"` on a repo's entry (the documented
+four-value tuple mapping described in `checkpoint-seeding.md`'s "Seed or Refresh Stage"
+inputs, not anticipation — that repo's review loop is already underway when either calls
+it), `testing-prs`' own Phase 7 self-seed writes the terminal `"done"`, and full-cycle
+itself still writes stage values above at the cold-resume bootstrap row (multiple values,
+including `"developing"` for a not-yet-started stage — legitimate there, since a cold
+resume by bare story ID has no self-seed to defer to and that path is out of this fix's
+scope) and at its own terminal `"done"` advance below, which fires only after that outcome
+has actually occurred.
 
 If a checkpoint write fails, surface the error to the user and continue — do not abort.
 

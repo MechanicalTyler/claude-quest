@@ -51,18 +51,23 @@ caches it, so there is no staleness or cross-repo-mixup class of bug to guard ag
 `repos[].stage` field can hold — checkpoints from other or older code paths (e.g. a
 `"finished"` or `"blocked-environment"` entry) may exist on disk; a reader must not
 assume the field is limited to these four and should treat any other value as opaque
-rather than erroring. `stage` advances to `"reviewing-prs"` once
-a PR exists and stays there through *both* the review loop and the test loop that follow
-it — `review_loop_count` and `test_loop_count` are what distinguish which loop a repo is
-currently in while `stage` reads `"reviewing-prs"`. `stage` advances to its terminal `"done"`
-only when that repo's testing-prs passes. This is a distinct, smaller vocabulary from the
+rather than erroring. PR creation records `pr_number` on that repo's entry while `stage`
+stays `"developing"` — developing's own PR Creation Requirements self-seed retimes only the
+PR number at that point, not the stage. `pr_number` populated together with
+`stage: "developing"` is therefore a valid, expected combination, not a bug signal — it is
+the state between PR creation and `reviewing-prs` actually starting. `stage` advances to
+`"reviewing-prs"` only when `reviewing-prs`' own Phase 2 self-seed runs, and stays there
+through *both* the review loop and the test loop that follow it — `review_loop_count` and
+`test_loop_count` are what distinguish which loop a repo is currently in while `stage` reads
+`"reviewing-prs"`. `stage` advances to its terminal `"done"` only when that repo's
+testing-prs passes. This is a distinct, smaller vocabulary from the
 entry-detection `prs=` tuple's `stage` field (`finished` / `testing-prs` / `reviewing-prs`, see
 `full-cycle/SKILL.md`'s Resume / Entry Detection); when initializing a checkpoint entry
 from a parsed tuple, map the tuple's `stage` to the checkpoint's: `finished` → `"done"`,
 `testing-prs` or `reviewing-prs` → `"reviewing-prs"`.
 
 **Legacy stage values (pre-rename checkpoints).** A checkpoint written before the
-dev-workflow skill rename (sc-1623) may still hold the old stage vocabulary:
+dev-workflow skill rename may still hold the old stage vocabulary:
 `"write-spec"`, `"start-development"`, or `"review-pr"`. `stage` is a persisted, on-disk
 identifier, not a skill name — it does not get a hard cutover. Whenever a checkpoint's
 `stage` field is read (at "Checkpoint initialization on resume" in `full-cycle/SKILL.md`
@@ -73,9 +78,11 @@ the next checkpoint write for that entry always uses the current vocabulary.
 
 ### Write points
 
-full-cycle writes the checkpoint at **every** stage boundary and loop iteration. Every
-write below updates the correct repo's entry in the `repos` map, except where noted as a
-top-level field:
+full-cycle writes the checkpoint at select stage boundaries and loop iterations — the
+resume-bootstrap enrichment, the spec-approval gate, loop-count increments, and the terminal
+`"done"` advance. Every other stage-to-stage transition is each stage's own self-seed (see
+"Self-seeding" below). Every write below updates the correct repo's entry in the `repos`
+map, except where noted as a top-level field:
 
 - **During entry-detection resume, before running any stage:** initialize or enrich the
   `repos` map from the entry-detection subagent's result — the case on every cold resume by
@@ -109,23 +116,45 @@ top-level field:
   Other repos' entries are untouched and continue independently — this is the terminal
   state a fully finished repo reaches while a sibling repo can still be mid-loop.
 
-full-cycle no longer writes a repo entry's `stage` field to anticipate a stage that hasn't
-started yet — each stage's own self-seed (per `checkpoint-seeding.md`) is the sole writer of
-its own `stage` value. The one remaining stage-value write above (the terminal `"done"`
-advance) fires only after that outcome has actually occurred.
+full-cycle's own mid-pipeline writes no longer anticipate a stage that hasn't started yet.
+Each stage's own self-seed (per `checkpoint-seeding.md`) is the sole writer of *its own
+stage's boundary-start value* under normal, non-resume operation — not the sole writer of
+`stage` overall. Counterexamples elsewhere in the pipeline: `testing-prs` and
+`addressing-pr-comments` write `"reviewing-prs"` on a repo's entry (the documented
+four-value tuple mapping described in `checkpoint-seeding.md`'s "Seed or Refresh Stage"
+inputs, not anticipation — that repo's review loop is already underway when either calls
+it), `testing-prs`' own Phase 7 self-seed writes the terminal `"done"`, and full-cycle
+itself still writes stage values above at the cold-resume bootstrap row (multiple values,
+including `"developing"` for a not-yet-started stage — legitimate there, since a cold
+resume by bare story ID has no self-seed to defer to and that path is out of this fix's
+scope) and at its own terminal `"done"` advance below, which fires only after that outcome
+has actually occurred.
 
 The checkpoint **complements** GitHub/PM state — it stores what GitHub cannot: loop counts and
-the orchestrator's next intended action. GitHub/PM remain authoritative for resume detection.
+the orchestrator's next intended action. GitHub/PM remain authoritative for resume detection:
+a repo's checkpoint `stage` field is a display/telemetry mirror for attention-hub, not a
+second resume-decision source. For example, a session that dies between PR creation and
+`reviewing-prs`' own Phase 2 self-seed leaves that repo's checkpoint `stage` reading
+`"developing"` with `pr_number` already set (see the Stage vocabulary note above) —
+`full-cycle`'s Resume / Entry Detection table (rows 4-8, evaluated from the PR's actual
+GitHub review/label state), not this checkpoint field, is what correctly resumes that repo
+at `reviewing-prs`, not `developing`.
 
-**Standalone self-seeding.** Every stage skill (`creating-stories`, `writing-specs`,
-`developing`, `reviewing-prs`, `testing-prs`, `addressing-pr-comments`) also writes/refreshes
-this same checkpoint on its own, at the start of its own execution, when invoked standalone —
-outside `full-cycle`/`epic` — per `checkpoint-seeding.md`'s "Seed or Refresh Stage" procedure.
-That procedure shares the exact merge-upsert semantics described above (upsert only the fields
-it's given; never touch `review_loop_count`, `test_loop_count`, `approval_text`, or
-`approval_timestamp`), so a dispatched subagent's own standalone self-seed and full-cycle's own
-post-return write to the same repo entry can never clobber each other's fields, regardless of
-which one runs first or last within the same pipeline execution.
+**Self-seeding.** Every stage skill also writes/refreshes this same checkpoint at its own
+stage boundary, independent of whether `full-cycle`/`epic` is driving the pipeline — see
+"Write points" above for what full-cycle's own writes still cover; every other stage
+boundary's `stage` value is written solely by that stage's own self-seed. `writing-specs`,
+`developing`, `reviewing-prs`, `testing-prs`, and `addressing-pr-comments` do this at the
+start of their own execution, per `checkpoint-seeding.md`'s "Seed or Refresh Stage"
+procedure. `creating-stories` writes twice: a pre-story placeholder at Phase 0
+(`checkpoint-seeding.md`'s "Seed Pending Pre-Story Placeholder", before a story ID exists),
+and, on story-creation success at Phase 6, the real `{story-id}.json` entry via "Seed or
+Refresh Stage" with stage `"init"` — its own current stage, since it has not yet handed off
+to writing-specs. "Seed or Refresh Stage" shares the exact merge-upsert semantics described
+above (upsert only the fields it's given; never touch `review_loop_count`,
+`test_loop_count`, `approval_text`, or `approval_timestamp`), so a stage's own self-seed and
+full-cycle's own writes to the same repo entry can never clobber each other's fields,
+regardless of which one runs first or last within the same pipeline execution.
 
 ### Checkpoint write failure
 

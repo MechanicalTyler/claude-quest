@@ -2,13 +2,16 @@
 
 Shared procedure for a stage skill to seed or refresh its own entry in the dev-workflow
 checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`, schema defined in
-`context-compaction.md`) when invoked standalone — outside `full-cycle`/`epic`, which
-already write this file at their own stage boundaries (see `context-compaction.md` →
-"Write points"). Each stage skill that calls one of the two procedures below documents the
+`context-compaction.md`) at its own stage boundary. Each stage's own self-seed is now the
+primary writer of its `stage` field regardless of whether `full-cycle`/`epic` is driving the
+pipeline: `full-cycle`'s own writes (see `context-compaction.md` → "Write points") no longer
+duplicate a stage value at most boundaries — they cover the resume-bootstrap enrichment, the
+spec-approval top-level fields, loop-count increments, and the terminal `"done"` advance, and
+nothing else. Each stage skill that calls one of the two procedures below documents the
 exact point in its own flow where that call happens — see that skill's own preamble/phase
 text (`reviewing-prs` Phase 2, `testing-prs` Phase 2 and Phase 7, `writing-specs` Phase 3,
 `developing` PM Context and PR Creation Requirements, `addressing-pr-comments`
-Step 1, `creating-stories` Phase 0) rather than a single shared table — this
+Step 1, `creating-stories` Phase 0 and Phase 6) rather than a single shared table — this
 file only defines what the call does, not where each caller places it.
 
 Both procedures are **best-effort telemetry, never a functional gate.** A failure at any
@@ -16,7 +19,13 @@ step — an unresolved story ID, an unwritable state directory, a malformed exis
 is never surfaced as an error to the user and never blocks the caller's real work. Silently
 skip (for an unresolved story ID) or surface-and-continue (for a write failure, per
 `context-compaction.md` → "Checkpoint write failure") and proceed with the rest of the
-skill exactly as if this procedure had not been called.
+skill exactly as if this procedure had not been called. Because `full-cycle` no longer
+backfills a skipped mid-pipeline self-seed, a skipped or failed call now has a concrete
+(non-functional) cost: that repo's checkpoint `stage` goes stale or absent for
+attention-hub's display until the next stage's own self-seed succeeds. GitHub/PM state
+remains the resume authority regardless (see `context-compaction.md` → "Checkpoint write
+failure"), so this never blocks or misdirects the pipeline itself — only its telemetry
+display.
 
 ---
 
@@ -118,8 +127,9 @@ creation where no story ID exists yet to key a checkpoint by.
 orphaned placeholder — one left behind by an interview that was abandoned or interrupted
 without ever reaching a Phase 0/5/6 cleanup trigger, a routine outcome for a long
 interactive interview, not just a crash — would otherwise keep shadowing real checkpoints
-for the same repo indefinitely, reintroducing the exact stale-shadow bug this story exists
-to fix. Two defenses, mirroring the `.compact-request` sentinel's own staleness handling
+for the same repo indefinitely: attention-hub would keep displaying that stale placeholder's
+`"init"` stage for the repo instead of its actual current checkpoint entry. Two defenses,
+mirroring the `.compact-request` sentinel's own staleness handling
 (`hooks/compact-injector.sh`'s `STALE_SECONDS=600`):
 
 - **Reader-side staleness (primary defense):** `get_dev_workflow_stage` applies a stricter
