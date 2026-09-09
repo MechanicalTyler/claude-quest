@@ -145,10 +145,11 @@ stage boundary, independent of whether `full-cycle`/`epic` is driving the pipeli
 boundary's `stage` value is written solely by that stage's own self-seed, per
 `checkpoint-seeding.md`'s "Seed or Refresh Stage" procedure. Most stages call it once, at
 their own start: `writing-specs` (Phase 3), `reviewing-prs` (Phase 2), and
-`addressing-pr-comments` (Step 1). Two stages call it twice, at two distinct points within
-their own execution: `developing` at PM Context (before implementation starts) and again at
-PR Creation Requirements (once the PR exists, carrying the PR number); `testing-prs` at
-Phase 2 (before testing starts) and again at Phase 7 (its own terminal `"done"` write).
+`addressing-pr-comments` (Step 1). `developing` and `testing-prs` each call it twice, at two
+distinct points within their own execution: `developing` at PM Context (before implementation
+starts) and again at PR Creation Requirements (once the PR exists, carrying the PR number);
+`testing-prs` at Phase 2 (before testing starts) and again at Phase 7 (its own terminal
+`"done"` write).
 `creating-stories` writes only once, and not into a real `{story-id}.json` entry at all — a
 pre-story placeholder at Phase 0, via "Seed Pending Pre-Story Placeholder", before a story ID
 exists. It deliberately does not write a real checkpoint entry at Phase 6 on story-creation
@@ -200,7 +201,7 @@ When the context meter has reported ≥75% and full-cycle reaches a stage bounda
 2. Write the sentinel file with the resume command.
 3. Announce to the user:
 
-   > **Compacting at stage handoff.** Context has reached a high-usage threshold. Writing checkpoint and requesting /compact — the pipeline will resume automatically after compaction.
+   > **Compacting at stage handoff.** Context has reached a high-usage threshold. Confirming checkpoint state and requesting /compact — the pipeline will resume automatically after compaction.
 
 4. End the turn. The compact-injector Stop hook fires next.
 
@@ -219,7 +220,7 @@ When the context meter has reported ≥75% and full-cycle reaches a stage bounda
    > 1. `/compact`
    > 2. `/start full-cycle {story-id}`
    >
-   > The checkpoint has been written — the pipeline will re-enter at the correct stage.
+   > The checkpoint is current — the pipeline will re-enter at the correct stage.
 
 ---
 

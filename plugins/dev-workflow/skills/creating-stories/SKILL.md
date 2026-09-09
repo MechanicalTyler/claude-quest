@@ -215,10 +215,18 @@ On success:
    its own 1-hour reader-side staleness cutoff — a real, bounded improvement over writing
    nothing, without introducing a new stage value into the real checkpoint schema.
    writing-specs' own Phase 3 self-seed is what eventually supersedes it: immediately after
-   that self-seed writes `stage: "writing-specs"` for a repo, Phase 3 also deletes this
-   placeholder for that repo, since the real entry is now the freshest checkpoint. A story
-   that is created but never reaches writing-specs (left in the backlog) is bounded by the
-   placeholder's existing 1-hour cutoff rather than shadowing indefinitely.
+   that self-seed writes the real entries for the repos in scope, Phase 3 sweeps in a single
+   pass over every `.pending-*.json` file and deletes any whose `repos` list is now
+   superseded — not a per-repo deletion, since the placeholder is one file holding a `repos`
+   map that can cover several repos. For the first hour past story creation, the placeholder
+   correctly shows `init` for these repos. If `writing-specs` has still not run by then, the
+   placeholder's reader-side 1-hour cutoff (`checkpoint-seeding.md`'s "Seed Pending Pre-Story
+   Placeholder" section) makes it stop matching, and that repo's checkpoint display reverts to
+   whatever prior-story checkpoint (if any) is freshest for that repo, until `writing-specs`
+   actually runs and writes the real entry — the same class of stale display this placeholder
+   exists to prevent, but now bounded to at most the general 7-day checkpoint window rather
+   than shadowing indefinitely: a bounded, honestly-disclosed version of the pre-fix problem,
+   not an eliminated one.
 2. Display —
 ```
 Story created successfully!

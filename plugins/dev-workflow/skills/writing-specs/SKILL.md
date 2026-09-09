@@ -87,6 +87,19 @@ scope" shape rather than looping per repo. This is non-fatal on failure, same be
 posture as the seeding procedures — a placeholder left behind still expires on its own
 1-hour cutoff.
 
+This sweep has no age guard and no story-ID scoping (the placeholder carries no story ID to
+scope by), so it can delete a placeholder belonging to a different, concurrently running
+`creating-stories` interview that happens to name one of the same repos — unlike
+`checkpoint-seeding.md`'s own writer-side sweep in "Seed Pending Pre-Story Placeholder", which
+leaves a pending file alone if it's younger than the staleness threshold because it "may
+belong to a concurrently running interview." This sweep deliberately does not apply that same
+caution: this is best-effort telemetry, never a functional gate, so the collateral cost of
+deleting a concurrent, unrelated interview's placeholder is that interview's `init` display
+disappearing until it reaches its own Phase 6 (or, since Phase 6 success no longer deletes it,
+until `writing-specs` runs for it) — never a functional break. Two concurrent
+`creating-stories` interviews for the exact same repo is rare enough that adding scoping
+machinery (an age guard or path-matching) here is not justified.
+
 ---
 
 ## Phase 4: Brainstorm Ambiguities and Approach

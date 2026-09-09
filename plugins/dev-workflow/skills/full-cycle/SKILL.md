@@ -433,45 +433,17 @@ message wording. This section describes when full-cycle calls those procedures.
 
 ### Checkpoint writes
 
-Write the checkpoint (`~/.claude/dev-workflow/state/{story-id}.json`) at select stage
-boundaries and loop iterations — the resume-bootstrap enrichment, the spec-approval gate,
-loop-count increments, and the terminal `"done"` advance. Every other stage-to-stage
-transition is each stage's own self-seed (see `context-compaction.md` → "Self-seeding").
-Each write below updates the correct repo's entry in the `repos` map, using the stage and
-key facts at that moment, except where noted as a top-level field:
-
-| Moment | Per-repo write | Notes |
-|--------|-----------------|-------|
-| During entry-detection resume, before running any stage | If the `repos` map is missing an entry for a repo named in the story's "Repos to modify" field, seed it from that field; then, for any repo that has a linked PR, enrich/update its entry from the parsed `prs=` tuple | Seeded entries (rows 2/3, `prs=none`): `pr_number: null`, `stage` from `story_state` (`"writing-specs"` for row 2, `"developing"` for row 3). Tuple-enriched entries (rows 4-8): `pr_number` from the tuple's `pr`; `stage` mapped from the tuple's `stage` action (`finished`→`"done"`, `testing-prs`/`reviewing-prs`→`"reviewing-prs"` — see the stage-vocabulary note in `context-compaction.md`). Both start `review_loop_count: 0, test_loop_count: 0` since loop counts are not recoverable from GitHub on a cold resume. This is the only initialization path when creating-stories never ran this session; it now covers every resume row (2-8), not only rows with a linked PR; it fills gaps only and never overwrites an already-populated entry |
-| After spec approval gate | Record top-level `approval_text`/`approval_timestamp` | the repo entry itself is untouched by this write — writing-specs' own Phase 3 self-seed already recorded `stage: "writing-specs"` when writing-specs started, and developing's own PM Context self-seed is what advances `stage` to `"developing"` once developing actually starts |
-| After each addressing-pr-comments + reviewing-prs iteration | Increment that PR's repo entry's `review_loop_count` | |
-| After each addressing-pr-comments + testing-prs iteration | Increment that PR's repo entry's `test_loop_count` | |
-| After testing-prs passes | Advance that repo's entry's `stage` to `"done"` | other repos' entries are untouched and continue independently — this repo's final checkpoint |
-
-full-cycle's own mid-pipeline writes no longer anticipate a stage that hasn't started yet.
-Each stage's own self-seed (per `checkpoint-seeding.md`) is the sole writer of *its own
-stage's boundary-start value* under normal, non-resume operation — not the sole writer of
-`stage` overall. Counterexamples elsewhere in the pipeline: `testing-prs` and
-`addressing-pr-comments` write `"reviewing-prs"` on a repo's entry (the loop-back value from
-`context-compaction.md`'s Stage vocabulary note, not anticipation — that repo's review loop
-is already underway when either calls it), `testing-prs`' own Phase 7 self-seed writes the
-terminal `"done"`, and full-cycle itself still writes stage values above at the cold-resume
-bootstrap row (multiple values, including `"developing"` for a not-yet-started stage —
-legitimate there, since a cold resume by bare story ID has no self-seed to defer to) and at
-its own terminal `"done"` advance above, which fires only after that outcome has actually
-occurred.
-
-If a checkpoint write fails, surface the error to the user and continue — do not abort.
+See `context-compaction.md`'s "Write points" for the authoritative list of what full-cycle
+writes directly to the checkpoint (the resume-bootstrap enrichment, the spec-approval gate,
+loop-count increments, and the terminal `"done"` advance), and its "Self-seeding" section for
+what each stage's own self-seed covers instead. See that file's "Checkpoint write failure"
+for how to handle a failed write.
 
 ### High-context handoff
 
 When the context meter (PostToolUse hook) has reported ≥75% usage and full-cycle
-reaches a stage boundary, follow the high-context handoff procedure defined in
-`skills/shared/context-compaction.md`:
-
-- **Inside tmux (`$TMUX` is set):** write checkpoint, write sentinel, announce, end turn.
-- **Outside tmux:** write checkpoint, emit the exact manual-fallback message with the
-  actual story ID substituted, end turn. Do not write a sentinel.
+reaches a stage boundary, follow `context-compaction.md`'s "High-Context Handoff Procedure"
+exactly, for both the inside-tmux and outside-tmux cases — do not restate the steps here.
 
 The context meter's `additionalContext` message is the trigger signal — act on it at
 the next stage boundary after receiving it, not mid-stage.
