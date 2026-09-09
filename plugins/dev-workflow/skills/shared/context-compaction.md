@@ -99,10 +99,10 @@ top-level field:
   and `approval_timestamp` (ISO-8601 time the approval was given). These two fields are
   the mechanical evidence that the spec-approval gate actually fired; full-cycle refuses
   to dispatch developing without them (see full-cycle's "Hard gate — recorded
-  approval"). No per-repo `stage` write happens here — writing-specs' own Phase 3
+  approval"). The repo entry itself is untouched by this write — writing-specs' own Phase 3
   self-seed already recorded `stage: "writing-specs"` when writing-specs started, and
   developing's own PM Context self-seed is what advances `stage` to `"developing"` once
-  developing actually starts; still `pr_number: null` — no PR exists yet.
+  developing actually starts.
 - **After each review-loop / test-loop iteration:** increment that PR's repo entry's
   `review_loop_count` / `test_loop_count`.
 - **After a given PR's testing-prs passes:** advance that repo's entry's `stage` to `"done"`.
