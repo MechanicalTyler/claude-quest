@@ -316,7 +316,7 @@ For each agent, craft a prompt that embeds:
 ```
 ---
 WORKSPACE RULE:
-This review is read-only. If you run any local command against the PR's code (build, lint, test, plan), run it only inside a git worktree already checked out on the PR's branch — locate it with `git -C <repo root> worktree list --porcelain`, skipping the first entry, which is the primary checkout. Never check out a branch in, switch branches in, or modify the primary checkout, and do not create a worktree yourself; if no linked worktree exists, report that local verification was not possible and review from the diff instead. Leave the repository exactly as you found it.
+This review is read-only. If you run any local command against the PR's code (build, lint, test, plan), run it only inside a git worktree already checked out on the PR's branch — locate it with `git -C <repo root> worktree list --porcelain`, skipping the first entry, which is the primary checkout. If no entry's `branch` line matches the PR's branch, also check for an entry whose `HEAD <sha>` equals the PR's head commit SHA — a detached scratch worktree the parent created has no `branch` line at all (it reports `detached` instead), so this is the only way to find it. Never check out a branch in, switch branches in, or modify the primary checkout, and do not create a worktree yourself; if neither match succeeds, report that local verification was not possible and review from the diff instead. Leave the repository exactly as you found it.
 
 STORY REQUIREMENTS:
 [Story title, description, and all acceptance criteria from Phase 2]

@@ -288,8 +288,11 @@ If Phase 5 produced **3 or more independent test failures** across different sub
 > Every dispatched agent's prompt must carry this workspace rule: any local command against
 > the PR's code runs only inside a git worktree already checked out on the PR's branch —
 > locate it with `git -C <repo root> worktree list --porcelain`, skipping the first entry,
-> which is the primary checkout. Never check out or switch branches in the primary checkout,
-> and do not create a worktree; if no linked worktree exists, report that and investigate
+> which is the primary checkout. If no entry's `branch` line matches the PR's branch, also
+> check for an entry whose `HEAD <sha>` equals the PR's head commit SHA — a detached scratch
+> worktree the parent created has no `branch` line at all (it reports `detached` instead), so
+> this is the only way to find it. Never check out or switch branches in the primary checkout,
+> and do not create a worktree; if neither match succeeds, report that and investigate
 > from logs and evidence instead. Leave the repository exactly as found.
 >
 > If fewer than 3 independent failures exist, skip this step and proceed to Phase 6.
