@@ -42,6 +42,8 @@ Parse the argument from `$ARGUMENTS`.
 - Load original story requirements first
 - **Trigger and monitor CI/CD checks** — it is the reviewer's job to ensure all checks run
 - **NEVER run terraform apply** — only `terraform plan` is allowed for validation
+- **Before running any local verification command (build, lint, test) against the PR's code**, follow `skills/shared/standards.md` → "Workspace Isolation": look up a live worktree for the PR's branch, and if none exists, use a scratch worktree — never the primary checkout
+- **When this PR bumps a plugin version, check `plugins/dev-workflow/CLAUDE.md`'s version-bump rule** (bump `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` in the same PR as the behavior change) before flagging placement as a convention violation — read the written rule rather than inferring a "separate PR" convention from git history
 - Be critical but constructive with specific examples and file:line references
 - Score objectively (1-10) with clear justification
 - Verify no tests have been disabled, commented out, or mocked to always pass

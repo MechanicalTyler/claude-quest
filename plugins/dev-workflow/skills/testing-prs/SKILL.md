@@ -44,6 +44,7 @@ Parse the argument from `$ARGUMENTS`.
 - Document every test step with clear pass/fail criteria
 - Provide evidence for every assertion (logs, screenshots, API responses)
 - **CRITICAL:** Never approve if any test fails
+- **Before running any local verification command (build, lint, test) against the PR's code**, follow `skills/shared/standards.md` → "Workspace Isolation": look up a live worktree for the PR's branch, and if none exists, use a scratch worktree — never the primary checkout
 
 ### Your Accountability as Tester
 
