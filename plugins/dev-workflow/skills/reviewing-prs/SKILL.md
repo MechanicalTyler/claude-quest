@@ -42,6 +42,8 @@ Parse the argument from `$ARGUMENTS`.
 - Load original story requirements first
 - **Trigger and monitor CI/CD checks** — it is the reviewer's job to ensure all checks run
 - **NEVER run terraform apply** — only `terraform plan` is allowed for validation
+- **Before running any local verification command (build, lint, test, `terraform plan`) against the PR's code**, follow `skills/shared/standards.md` → "Workspace Isolation": look up a live linked worktree for the PR's branch (the first `worktree list` entry is the primary checkout and never counts), and if none exists, use a scratch worktree created once for this review and removed at its end — never the primary checkout
+- **When the repo under review is this plugin's own marketplace repo (its checkout contains `plugins/dev-workflow/CLAUDE.md`) and the PR bumps a plugin version, check that file's version-bump rule** (a behavior change bumps `.claude-plugin/plugin.json` and the matching `.claude-plugin/marketplace.json` entry in the same PR) before flagging placement as a convention violation — read the written rule rather than inferring a "separate PR" convention from git history. Other repos with a `plugin.json` bump have no such file; do not go looking for it there
 - Be critical but constructive with specific examples and file:line references
 - Score objectively (1-10) with clear justification
 - Verify no tests have been disabled, commented out, or mocked to always pass
@@ -220,7 +222,7 @@ Check the results for any workflow whose name contains the word "terraform" (cas
 
 - **CI terraform run found and failed:** The CI gate has not passed — **submit a formal REQUEST_CHANGES review** naming the failed terraform workflow and stating that CI did not pass on current HEAD, then **STOP**. Do not proceed with the code review until the CI check passes. Never APPROVE on a failed terraform CI result.
 
-- **No CI terraform run found (fallback):** Run `terraform plan` directly. Check for `tf/` first, then `terraform/`, then fall back to the directory of the changed `.tf` files. For example, if `tf/` exists:
+- **No CI terraform run found (fallback):** Run `terraform plan` directly — this is a local verification command, so it runs from the PR-branch worktree resolved per `skills/shared/standards.md` → "Workspace Isolation" (see the Reviewer-Specific Rules above), never from the primary checkout; `-chdir` paths below are relative to that worktree. Check for `tf/` first, then `terraform/`, then fall back to the directory of the changed `.tf` files. For example, if `tf/` exists:
 
   ```bash
   terraform -chdir=tf/ plan
@@ -313,6 +315,9 @@ For each agent, craft a prompt that embeds:
 
 ```
 ---
+WORKSPACE RULE:
+This review is read-only. If you run any local command against the PR's code (build, lint, test, plan), run it only inside a git worktree already checked out on the PR's branch — locate it with `git -C <repo root> worktree list --porcelain`, skipping the first entry, which is the primary checkout. If no entry's `branch` line matches the PR's branch, also check for an entry whose `HEAD <sha>` equals the PR's head commit SHA — a detached scratch worktree the parent created has no `branch` line at all (it reports `detached` instead), so this is the only way to find it. Never check out a branch in, switch branches in, or modify the primary checkout, and do not create a worktree yourself; if neither match succeeds, report that local verification was not possible and review from the diff instead. Leave the repository exactly as you found it.
+
 STORY REQUIREMENTS:
 [Story title, description, and all acceptance criteria from Phase 2]
 

@@ -225,7 +225,7 @@ reported or aggregated — a later reader resolves each repo's worktree live, pe
 
 ## Debugging and Problem Solving
 
-- Never give up when debugging. If stuck, ask for help
+- Never give up when debugging. If stuck, ask for help — see `skills/shared/standards.md` → "Problem Solving" for the full principles (goal vs. mechanical exit condition, investigate before accepting a gap, verify subagent claims)
 - If unable to access a screenshot, mockup, or attachment referenced in requirements — STOP and ask the user. Do not proceed with incomplete data.
 - Use `gh api` instead of `gh pr` when reading PR comments and file comments
 - Always run `git status` after committing to ensure nothing was missed
@@ -406,7 +406,7 @@ Read and follow the adversarial review procedure in `skills/shared/adversarial-r
 
 ## Debugging and Problem Solving
 
-- Never give up when debugging. If stuck, ask for help
+- Never give up when debugging. If stuck, ask for help — see `skills/shared/standards.md` → "Problem Solving" for the full principles (goal vs. mechanical exit condition, investigate before accepting a gap, verify subagent claims)
 - If unable to access a screenshot, mockup, or attachment referenced in requirements — STOP and ask the user. Do not proceed with incomplete data.
 - Use `gh api` instead of `gh pr` when reading PR comments and file comments
 - Always run `git status` after committing to ensure nothing was missed

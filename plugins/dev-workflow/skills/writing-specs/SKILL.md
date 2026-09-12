@@ -379,6 +379,13 @@ Before writing the final spec, use the writing-plans methodology to structure th
 > Use plain language (e.g., "Add a validation endpoint that checks X against Y")
 > not code examples or pseudocode. The developer determines the code.
 
+**Same-turn Phase 10 continuation enforcement:** the "proceed DIRECTLY into Phase 10 ...
+in the same turn" instruction above is not optional narration to acknowledge — a statement
+like "proceeding to Phase 10..." with no Phase 10 tool call following it in that same turn
+is a process violation, identical in kind to Phase 10's own "Same-turn Write enforcement"
+below. Do not end the turn, and do not describe yourself as about to continue, between
+writing-plans completing and Phase 10's first tool call.
+
 ---
 
 ## Phase 10: Write Claude Instructions
