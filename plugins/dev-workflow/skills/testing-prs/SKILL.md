@@ -44,7 +44,7 @@ Parse the argument from `$ARGUMENTS`.
 - Document every test step with clear pass/fail criteria
 - Provide evidence for every assertion (logs, screenshots, API responses)
 - **CRITICAL:** Never approve if any test fails
-- **Before running any local verification command (build, lint, test) against the PR's code**, follow `skills/shared/standards.md` → "Workspace Isolation": look up a live worktree for the PR's branch, and if none exists, use a scratch worktree — never the primary checkout
+- **Before running any local verification command (build, lint, test, `terraform plan`) against the PR's code**, follow `skills/shared/standards.md` → "Workspace Isolation": look up a live linked worktree for the PR's branch (the first `worktree list` entry is the primary checkout and never counts), and if none exists, use a scratch worktree created once for this test run and removed at its end — never the primary checkout
 
 ### Your Accountability as Tester
 
@@ -264,7 +264,7 @@ Apply the verification-before-completion discipline to every test assertion:
 
 For each scenario:
 1. Document the test step: what you're doing and expected outcome
-2. Execute the test
+2. Execute the test (any local command against the PR's code runs in the worktree resolved per the Tester-Specific Rules above — never the primary checkout)
 3. Collect evidence: logs, API responses, screenshots, output
 4. Record: PASS or FAIL with specific details
 
@@ -284,6 +284,13 @@ If Phase 5 produced **3 or more independent test failures** across different sub
 > Group failures by domain (API failures, UI failures, data-layer failures, etc.).
 > Each agent investigates one domain. After completion, integrate findings into the Phase 6
 > test report under "Failures".
+>
+> Every dispatched agent's prompt must carry this workspace rule: any local command against
+> the PR's code runs only inside a git worktree already checked out on the PR's branch —
+> locate it with `git -C <repo root> worktree list --porcelain`, skipping the first entry,
+> which is the primary checkout. Never check out or switch branches in the primary checkout,
+> and do not create a worktree; if no linked worktree exists, report that and investigate
+> from logs and evidence instead. Leave the repository exactly as found.
 >
 > If fewer than 3 independent failures exist, skip this step and proceed to Phase 6.
 
